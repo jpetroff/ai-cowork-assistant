@@ -1,0 +1,30 @@
+fastapi
+websockets
+uvicorn
+pydantic
+python-multipart
+rich
+dotenv 
+
+# Llama Index for RAG
+llama-index
+llama-index-llms-ollama
+llama-index-llms-openai-like
+llama-index-embeddings-ollama
+llama-index-embeddings-openai-like
+llama-index-llms-gemini
+llama-index-vector-stores-qdrant
+qdrant-client
+llama-index-tools-duckduckgo
+json-repair
+llama-index-postprocessor-colbert-rerank
+llama-index-storage-docstore-mongodb
+
+# observability
+arize-phoenix
+arize-phoenix-otel
+openinference-instrumentation-llama-index
+
+#utils
+black
+pylint>=3.3.4
