@@ -54,8 +54,10 @@
     "react": "^19.1.0",
     "react-day-picker": "^9.13.2",
     "react-dom": "^19.1.0",
+    "react-router-dom": "^7.13.0",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss": "^4.1.18"
+    "tailwindcss": "^4.1.18",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
