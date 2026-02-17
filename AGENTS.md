@@ -19,7 +19,16 @@
 
 ### file scoped checks preferred
 
+#### Typescript full project check at ./src
+
 bunx tsc --noEmit
+
+#### Rust full check at ./src-tauri
+
+cargo check
+
+#### Linter checks
+
 bunx prettier --write path/to/file.tsx
 bunx eslint --fix path/to/file.tsx
 

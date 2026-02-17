@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ai-cowork-assistant",
+  "productName": "AI Cowork Lab",
   "version": "0.1.0",
-  "identifier": "com.epetrov.ai-cowork-assistant",
+  "identifier": "AI Cowork Lab",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ai-cowork-assistant",
+        "title": "AI Cowork Lab",
         "width": 400,
         "height": 280
       }
@@ -23,7 +23,7 @@
   },
   "plugins": {
     "sql": {
-      "preload": ["sqlite:cowork.db"]
+      "preload": ["sqlite:user_data.db"]
     }
   },
   "bundle": {

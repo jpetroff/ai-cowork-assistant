@@ -8,7 +8,7 @@ import {
 } from 'react-router-dom'
 import { useConfigStore } from '@/stores/config-store'
 import { SetupPage } from '@/pages/SetupPage'
-import { ConfigDisplayPage } from '@/pages/ConfigDisplayPage'
+import { Project } from '@/pages/Project'
 
 function RootLayout() {
   const loadFromDb = useConfigStore((s) => s.loadFromDb)
@@ -45,7 +45,7 @@ const router = createHashRouter([
     element: <RootLayout />,
     children: [
       { index: true, element: <SetupPage /> },
-      { path: 'app', element: <ConfigDisplayPage /> },
+      { path: 'app', element: <Project /> },
     ],
   },
 ])

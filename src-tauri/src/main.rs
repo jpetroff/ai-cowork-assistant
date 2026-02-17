@@ -3,11 +3,5 @@
 
 fn main() {
     let _ = fix_path_env::fix(); // https://github.com/tauri-apps/fix-path-env-rs
-
-    let mut builder = tauri::Builder::default();
-    #[cfg(debug_assertions)]
-    {
-        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
-    }
     ai_cowork_assistant_lib::run()
 }
