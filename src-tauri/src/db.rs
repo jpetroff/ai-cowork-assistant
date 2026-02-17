@@ -55,5 +55,15 @@ pub fn migrations() -> Vec<Migration> {
                  ALTER TABLE artifacts ADD COLUMN message_id TEXT;",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "add_indexes_for_performance",
+            sql: "CREATE INDEX IF NOT EXISTS idx_artifacts_chat_id ON artifacts(chat_id);
+                 CREATE INDEX IF NOT EXISTS idx_artifacts_updated_at ON artifacts(updated_at);
+                 CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+                 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+                 CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at);",
+            kind: MigrationKind::Up,
+        },
     ]
 }
