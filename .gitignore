@@ -25,3 +25,5 @@ dist-ssr
 
 .opencode
 .llm
+
+/src/generated/prisma
