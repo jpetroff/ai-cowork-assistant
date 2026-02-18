@@ -14,11 +14,11 @@ export type ArtifactRecord = {
   updated_at: number
 }
 
+export type ArtifactInput = Omit<ArtifactRecord, 'created_at' | 'updated_at'>
+
 export const artifactsTable = 'artifacts'
 
-export async function insert(
-  data: Omit<ArtifactRecord, 'created_at' | 'updated_at'>
-): Promise<void> {
+export async function insert(data: ArtifactInput): Promise<void> {
   const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
@@ -38,9 +38,7 @@ export async function insert(
   )
 }
 
-export async function upsert(
-  data: Omit<ArtifactRecord, 'created_at' | 'updated_at'>
-): Promise<void> {
+export async function upsert(data: ArtifactInput): Promise<void> {
   const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(

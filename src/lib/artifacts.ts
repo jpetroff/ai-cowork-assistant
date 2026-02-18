@@ -29,10 +29,10 @@ export async function loadArtifactById(
   return get(id)
 }
 
-export type UpsertArtifactInput = {
-  id: string
-  name: string
-  file_type: string
+export type UpsertArtifactInput = Pick<
+  ArtifactRecord,
+  'id' | 'name' | 'file_type'
+> & {
   content: string
   chat_id?: string
   message_id?: string
