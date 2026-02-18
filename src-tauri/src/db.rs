@@ -44,6 +44,6 @@ pub fn migrations() -> Vec<Migration> {
                   CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
                   CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at);",
             kind: MigrationKind::Up,
-        }
+        },
     ]
 }

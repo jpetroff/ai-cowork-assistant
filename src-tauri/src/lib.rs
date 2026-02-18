@@ -21,11 +21,9 @@ fn get_system_user_info() -> SystemUserInfo {
     }
 }
 
-
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_websocket::init())
         .plugin(tauri_plugin_fs::init())
@@ -36,8 +34,12 @@ pub fn run() {
                 .add_migrations(db::DB_NAME, db::migrations())
                 .build(),
         )
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_mcp_bridge::init())
+        .plugin(tauri_plugin_opener::init());
+
+    #[cfg(debug_assertions)]
+    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![get_system_user_info])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
