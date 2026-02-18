@@ -1,4 +1,4 @@
-import { getUserDataDb } from '../db'
+import { getLocalAppDb } from '../db'
 import { QueryBuilder } from '../query'
 import { Document } from '../schema'
 
@@ -19,7 +19,7 @@ export const artifactsTable = 'artifacts'
 export async function insert(
   data: Omit<ArtifactRecord, 'created_at' | 'updated_at'>
 ): Promise<void> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
     `INSERT INTO artifacts (id, name, file_type, content, file_path, chat_id, message_id, created_at, updated_at)
@@ -41,7 +41,7 @@ export async function insert(
 export async function upsert(
   data: Omit<ArtifactRecord, 'created_at' | 'updated_at'>
 ): Promise<void> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
     `INSERT INTO artifacts (id, name, file_type, content, file_path, chat_id, message_id, created_at, updated_at)
@@ -69,7 +69,7 @@ export async function upsert(
 }
 
 export async function get(id: string): Promise<ArtifactRecord | null> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<ArtifactRecord[]>(
     'SELECT id, name, file_type, content, file_path, chat_id, message_id, created_at, updated_at FROM artifacts WHERE id = $1',
     [id]
@@ -85,7 +85,7 @@ export function query(): QueryBuilder<ArtifactRecord> {
 export async function list(): Promise<
   Pick<ArtifactRecord, 'id' | 'name' | 'file_type' | 'updated_at'>[]
 > {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<
     Pick<ArtifactRecord, 'id' | 'name' | 'file_type' | 'updated_at'>[]
   >(
@@ -95,7 +95,7 @@ export async function list(): Promise<
 }
 
 export async function getMostRecent(): Promise<ArtifactRecord | null> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<ArtifactRecord[]>(
     'SELECT id, name, file_type, content, file_path, chat_id, message_id, created_at, updated_at FROM artifacts ORDER BY updated_at DESC LIMIT 1'
   )
@@ -106,7 +106,7 @@ export async function getMostRecent(): Promise<ArtifactRecord | null> {
 export async function getByChat(
   chatId: string
 ): Promise<ArtifactRecord | null> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<ArtifactRecord[]>(
     'SELECT id, name, file_type, content, file_path, chat_id, message_id, created_at, updated_at FROM artifacts WHERE chat_id = $1 ORDER BY updated_at DESC LIMIT 1',
     [chatId]
@@ -116,7 +116,7 @@ export async function getByChat(
 }
 
 export async function listByChat(chatId: string): Promise<ArtifactRecord[]> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<ArtifactRecord[]>(
     'SELECT id, name, file_type, content, file_path, chat_id, message_id, created_at, updated_at FROM artifacts WHERE chat_id = $1 ORDER BY updated_at DESC',
     [chatId]
@@ -125,6 +125,6 @@ export async function listByChat(chatId: string): Promise<ArtifactRecord[]> {
 }
 
 export async function remove(id: string): Promise<void> {
-  const db = await getUserDataDb()
+  const db = await getLocalAppDb()
   await db.execute('DELETE FROM artifacts WHERE id = $1', [id])
 }

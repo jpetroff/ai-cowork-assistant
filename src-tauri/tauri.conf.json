@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "AI Cowork Lab",
   "version": "0.1.0",
-  "identifier": "AI Cowork Lab",
+  "identifier": "asc.evgn.aicoworklab",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "AI Cowork Lab",

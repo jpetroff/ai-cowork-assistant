@@ -1,4 +1,4 @@
-import { getDb } from '../db'
+import { getLocalAppDb } from '../db'
 import { QueryBuilder } from '../query'
 
 export type ChatRecord = {
@@ -13,7 +13,7 @@ export const chatsTable = 'chats'
 export async function insert(
   data: Omit<ChatRecord, 'created_at' | 'updated_at'>
 ): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
     `INSERT INTO chats (id, name, created_at, updated_at)
@@ -25,7 +25,7 @@ export async function insert(
 export async function upsert(
   data: Omit<ChatRecord, 'created_at' | 'updated_at'>
 ): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
     `INSERT INTO chats (id, name, created_at, updated_at)
@@ -38,7 +38,7 @@ export async function upsert(
 }
 
 export async function get(id: string): Promise<ChatRecord | null> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<ChatRecord[]>(
     'SELECT id, name, created_at, updated_at FROM chats WHERE id = $1',
     [id]
@@ -52,7 +52,7 @@ export function query(): QueryBuilder<ChatRecord> {
 }
 
 export async function list(): Promise<ChatRecord[]> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<ChatRecord[]>(
     'SELECT id, name, created_at, updated_at FROM chats ORDER BY updated_at DESC'
   )
@@ -60,6 +60,6 @@ export async function list(): Promise<ChatRecord[]> {
 }
 
 export async function remove(id: string): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   await db.execute('DELETE FROM chats WHERE id = $1', [id])
 }

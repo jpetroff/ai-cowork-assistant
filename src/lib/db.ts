@@ -1,24 +1,16 @@
 import Database from '@tauri-apps/plugin-sql'
 import { QueryBuilder } from './query'
 
-const DB_NAME = 'sqlite:cowork.db'
-const USER_DATA_DB_NAME = 'sqlite:user_data.db'
+const DB_NAME = 'sqlite:app_data.db'
 
 let dbInstance: Database | null = null
 let userDataDbInstance: Database | null = null
 
-export async function getDb(): Promise<Database> {
+export async function getLocalAppDb(): Promise<Database> {
   if (!dbInstance) {
     dbInstance = await Database.load(DB_NAME)
   }
   return dbInstance
-}
-
-export async function getUserDataDb(): Promise<Database> {
-  if (!userDataDbInstance) {
-    userDataDbInstance = await Database.load(USER_DATA_DB_NAME)
-  }
-  return userDataDbInstance
 }
 
 export type Configuration = Record<string, string>
@@ -31,7 +23,7 @@ export const CONFIG_KEYS = {
 } as const
 
 export async function loadConfiguration(): Promise<Configuration> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<{ key: string; value: string }[]>(
     'SELECT key, value FROM configuration'
   )
@@ -46,7 +38,7 @@ export async function saveConfigurationEntry(
   key: string,
   value: string
 ): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   await db.execute(
     'INSERT INTO configuration (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = $2',
     [key, value]
@@ -54,7 +46,7 @@ export async function saveConfigurationEntry(
 }
 
 export async function saveConfiguration(config: Configuration): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   for (const [key, value] of Object.entries(config)) {
     await db.execute(
       'INSERT INTO configuration (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = $2',
@@ -68,7 +60,7 @@ export class DB {
     table: string,
     data: T
   ): Promise<string> {
-    const db = table === 'artifacts' ? await getUserDataDb() : await getDb()
+    const db = await getLocalAppDb()
     const id = this.generateId()
 
     const columns = ['id', ...Object.keys(data)] as const
@@ -86,7 +78,7 @@ export class DB {
   }
 
   async get<T>(table: string, id: string): Promise<T | null> {
-    const db = table === 'artifacts' ? await getUserDataDb() : await getDb()
+    const db = await getLocalAppDb()
     const rows = await db.select<T[]>(`SELECT * FROM ${table} WHERE id = $1`, [
       id,
     ])
@@ -98,7 +90,7 @@ export class DB {
     id: string,
     data: Partial<T>
   ): Promise<void> {
-    const db = table === 'artifacts' ? await getUserDataDb() : await getDb()
+    const db = await getLocalAppDb()
     const now = Date.now()
     const setClause = Object.keys(data)
       .map((key) => `${key} = ?`)
@@ -117,7 +109,7 @@ export class DB {
     id: string,
     data: T
   ): Promise<void> {
-    const db = table === 'artifacts' ? await getUserDataDb() : await getDb()
+    const db = await getLocalAppDb()
 
     const existing = await this.get<T>(table, id)
     if (!existing) {
@@ -141,7 +133,7 @@ export class DB {
   }
 
   async delete(table: string, id: string): Promise<void> {
-    const db = table === 'artifacts' ? await getUserDataDb() : await getDb()
+    const db = await getLocalAppDb()
     await db.execute(`DELETE FROM ${table} WHERE id = $1`, [id])
   }
 

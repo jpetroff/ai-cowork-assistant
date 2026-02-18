@@ -1,4 +1,4 @@
-import { getDb } from '../db'
+import { getLocalAppDb } from '../db'
 import { QueryBuilder } from '../query'
 
 export type MessageRecord = {
@@ -14,7 +14,7 @@ export const messagesTable = 'messages'
 export async function insert(
   data: Omit<MessageRecord, 'created_at'>
 ): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
     `INSERT INTO messages (id, chat_id, role, content, created_at)
@@ -26,7 +26,7 @@ export async function insert(
 export async function upsert(
   data: Omit<MessageRecord, 'created_at'>
 ): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const now = Date.now()
   await db.execute(
     `INSERT INTO messages (id, chat_id, role, content, created_at)
@@ -40,7 +40,7 @@ export async function upsert(
 }
 
 export async function get(id: string): Promise<MessageRecord | null> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<MessageRecord[]>(
     'SELECT id, chat_id, role, content, created_at FROM messages WHERE id = $1',
     [id]
@@ -54,7 +54,7 @@ export function query(): QueryBuilder<MessageRecord> {
 }
 
 export async function getByChat(chatId: string): Promise<MessageRecord[]> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<MessageRecord[]>(
     'SELECT id, chat_id, role, content, created_at FROM messages WHERE chat_id = $1 ORDER BY created_at ASC',
     [chatId]
@@ -63,7 +63,7 @@ export async function getByChat(chatId: string): Promise<MessageRecord[]> {
 }
 
 export async function list(): Promise<MessageRecord[]> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   const rows = await db.select<MessageRecord[]>(
     'SELECT id, chat_id, role, content, created_at FROM messages ORDER BY created_at DESC'
   )
@@ -71,6 +71,6 @@ export async function list(): Promise<MessageRecord[]> {
 }
 
 export async function remove(id: string): Promise<void> {
-  const db = await getDb()
+  const db = await getLocalAppDb()
   await db.execute('DELETE FROM messages WHERE id = $1', [id])
 }

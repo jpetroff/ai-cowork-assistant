@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql'
-import { getDb, getUserDataDb } from './db'
+import { getLocalAppDb } from './db'
 
 export type Operator = '=' | '!=' | '<' | '<=' | '>' | '>=' | 'LIKE' | 'IN'
 export type OrderDirection = 'asc' | 'desc'
@@ -50,7 +50,7 @@ export class QueryBuilder<T = unknown> {
     const query = this.buildQuery()
     const bindings = this.buildBindings()
     const database =
-      db || (this.table === 'artifacts' ? await getUserDataDb() : await getDb())
+      db || await getLocalAppDb()
     return database.select<T[]>(query, bindings)
   }
 
@@ -63,7 +63,7 @@ export class QueryBuilder<T = unknown> {
     const query = `SELECT COUNT(*) as count FROM ${this.table}${this.buildWhereClause()}`
     const bindings = this.buildBindings()
     const database =
-      db || (this.table === 'artifacts' ? await getUserDataDb() : await getDb())
+      db || await getLocalAppDb()
     const rows = await database.select<{ count: number }[]>(query, bindings)
     return rows[0]?.count ?? 0
   }
