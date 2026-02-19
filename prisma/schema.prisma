@@ -11,42 +11,54 @@ datasource db {
   provider = "sqlite"
 }
 
+model Project {
+  id            String  @id
+  name          String
+  output_folder String?
+  created_at    Int
+  updated_at    Int
+
+  @@map("projects")
+}
+
+model Chat {
+  id          String  @id
+  name        String
+  project_id  String?
+  created_at  Int
+  updated_at  Int
+
+  @@map("chats")
+}
+
+model Message {
+  id          String  @id
+  chat_id     String
+  role        String
+  content     String
+  created_at  Int
+
+  @@map("messages")
+}
+
 model Artifact {
-  id          String    @id
+  id          String  @id
   name        String
   file_type   String
   content     String?
   file_path   String?
   chat_id     String?
   message_id  String?
+  project_id  String?
   created_at  Int
   updated_at  Int
-  
+
   @@map("artifacts")
-}
-
-model Message {
-  id          String   @id
-  chat_id     String
-  role        String
-  content     String
-  created_at  Int
-  
-  @@map("messages")
-}
-
-model Chat {
-  id          String   @id
-  name        String
-  created_at  Int
-  updated_at  Int
-  
-  @@map("chats")
 }
 
 model Configuration {
   key    String  @id
   value  String
-  
+
   @@map("configuration")
 }

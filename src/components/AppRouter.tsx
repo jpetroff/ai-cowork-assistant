@@ -8,6 +8,7 @@ import {
 } from 'react-router-dom'
 import { useConfigStore } from '@/stores/config-store'
 import { SetupPage } from '@/pages/SetupPage'
+import { ProjectsPage } from '@/pages/ProjectsPage'
 import { Project } from '@/pages/Project'
 
 function RootLayout() {
@@ -22,10 +23,14 @@ function RootLayout() {
 
   useEffect(() => {
     if (!isHydrated) return
-    if (location.pathname === '/app' && !isConfigured) {
+    const isRoot = location.pathname === '/'
+    const isProjects = location.pathname === '/projects'
+    const isProjectPage = location.pathname.startsWith('/project/')
+
+    if (isRoot && isConfigured) {
+      navigate('/projects', { replace: true })
+    } else if ((isProjects || isProjectPage) && !isConfigured) {
       navigate('/', { replace: true })
-    } else if (location.pathname === '/' && isConfigured) {
-      navigate('/app', { replace: true })
     }
   }, [isHydrated, isConfigured, location.pathname, navigate])
 
@@ -45,7 +50,8 @@ const router = createHashRouter([
     element: <RootLayout />,
     children: [
       { index: true, element: <SetupPage /> },
-      { path: 'app', element: <Project /> },
+      { path: 'projects', element: <ProjectsPage /> },
+      { path: 'project/:projectId', element: <Project /> },
     ],
   },
 ])

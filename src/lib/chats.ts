@@ -50,6 +50,16 @@ export async function list(): Promise<Chat[]> {
 }
 
 /**
+ * List all chats for a specific project
+ */
+export async function listByProject(projectId: string): Promise<Chat[]> {
+  return db.select<Chat>(
+    'SELECT * FROM chats WHERE project_id = $1 ORDER BY updated_at DESC',
+    [projectId]
+  )
+}
+
+/**
  * Delete a chat by ID
  */
 export async function remove(id: string): Promise<void> {

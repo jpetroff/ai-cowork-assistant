@@ -22,6 +22,7 @@ export type UpsertArtifactInput = Pick<
   content: string
   chat_id?: string
   message_id?: string
+  project_id?: string
 }
 
 /**
@@ -62,6 +63,7 @@ export async function upsertArtifact(input: UpsertArtifactInput): Promise<void> 
     file_path: null,
     chat_id: input.chat_id ?? null,
     message_id: input.message_id ?? null,
+    project_id: input.project_id ?? null,
   })
 }
 
@@ -122,6 +124,13 @@ export async function listByChat(chatId: string): Promise<Artifact[]> {
   return db.select<Artifact>(
     'SELECT * FROM artifacts WHERE chat_id = $1 ORDER BY updated_at DESC',
     [chatId]
+  )
+}
+
+export async function listByProject(projectId: string): Promise<Artifact[]> {
+  return db.select<Artifact>(
+    'SELECT * FROM artifacts WHERE project_id = $1 ORDER BY updated_at DESC',
+    [projectId]
   )
 }
 

@@ -4,7 +4,12 @@ import type { QueryBuilder } from './query-builder'
  * Database types and shared definitions
  */
 
-export type TableName = 'artifacts' | 'messages' | 'chats' | 'configuration'
+export type TableName =
+  | 'artifacts'
+  | 'messages'
+  | 'chats'
+  | 'configuration'
+  | 'projects'
 
 export interface DbConfig {
   name: string
