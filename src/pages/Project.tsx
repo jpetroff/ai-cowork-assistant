@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useConfigStore } from '@/stores/config-store'
 import { useProjectStore } from '@/stores/project-store'
 import { ProjectEditor } from '@/components/ProjectEditor'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatDistanceToNow } from 'date-fns'
@@ -19,16 +19,78 @@ const MOCK_MESSAGES = [
   {
     id: '2',
     role: 'assistant' as const,
-    content: 'I’ll help. Share the project name and main goals.',
+    content: "I'll help. Share the project name and main goals.",
     createdAt: Date.now() - 30000,
   },
 ]
 
-function ChatSidebar() {
+const CHAT_MIN_WIDTH = 200
+const RESIZE_HANDLE_WIDTH = 4
+
+function useResizablePanel(
+  initialWidth: number,
+  minWidth: number,
+  maxWidthPercent: number
+) {
+  const [width, setWidth] = useState(initialWidth)
+  const [isDragging, setIsDragging] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }, [])
+
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging || !containerRef.current) return
+      const container = containerRef.current.parentElement
+      if (!container) return
+      const containerRect = container.getBoundingClientRect()
+      const newWidth = e.clientX - containerRect.left
+      const maxWidth = containerRect.width * maxWidthPercent
+      const clampedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth))
+      setWidth(clampedWidth)
+    },
+    [isDragging, minWidth, maxWidthPercent]
+  )
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    }
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp])
+
+  return { width, isDragging, handleMouseDown, containerRef }
+}
+
+function ChatSidebar({
+  width,
+  resizeHandle,
+}: {
+  width: number
+  resizeHandle: React.ReactNode
+}) {
   const { user_name, user_avatar, model_name } = useConfigStore()
 
   return (
-    <aside className='hidden md:flex md:w-[320px] flex-col border-r border-border bg-background'>
+    <aside
+      className='relative flex flex-col border-r border-border bg-background shrink-0'
+      style={{ width: `${width}px` }}
+    >
       <Card
         size='sm'
         className='rounded-none border-0 border-b border-border shadow-none'
@@ -80,6 +142,7 @@ function ChatSidebar() {
           aria-label='Chat input'
         />
       </div>
+      {resizeHandle}
     </aside>
   )
 }
@@ -174,9 +237,23 @@ export function Project() {
     }
   }
 
+  const { width, isDragging, handleMouseDown, containerRef } =
+    useResizablePanel(320, CHAT_MIN_WIDTH, 0.5)
+
+  const resizeHandle = (
+    <div
+      className={`absolute top-0 right-0 h-full w-[${RESIZE_HANDLE_WIDTH}px] cursor-col-resize hover:bg-primary/20 transition-colors ${isDragging ? 'bg-primary/30' : ''}`}
+      style={{ width: RESIZE_HANDLE_WIDTH, transform: 'translateX(50%)' }}
+      onMouseDown={handleMouseDown}
+    />
+  )
+
   return (
-    <div className='flex h-screen max-h-screen w-full bg-background'>
-      <ChatSidebar />
+    <div
+      className='flex h-screen max-h-screen w-full bg-background'
+      ref={containerRef}
+    >
+      <ChatSidebar width={width} resizeHandle={resizeHandle} />
       <div className='flex flex-1 flex-col min-w-0'>
         <header className='flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2'>
           {isEditingTitle ? (

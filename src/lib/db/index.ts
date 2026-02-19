@@ -13,6 +13,15 @@ export {
 // Re-export the SQLite implementation as the default
 export { createSqliteDb, getLocalAppDb } from './sqlite'
 
+// Query builder for type-safe queries
+export {
+  QueryBuilder,
+  type Operator,
+  type OrderDirection,
+  type FilterCondition,
+  type OrderCondition,
+} from './query-builder'
+
 // Configuration operations
 export {
   type Configuration,

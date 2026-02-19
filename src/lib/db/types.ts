@@ -1,3 +1,5 @@
+import type { QueryBuilder } from './query-builder'
+
 /**
  * Database types and shared definitions
  */
@@ -56,6 +58,12 @@ export interface DbInterface {
    * @throws DatabaseError on execution failure
    */
   execute(sql: string, params?: unknown[]): Promise<void>
+
+  /**
+   * Create a query builder for a table
+   * @returns QueryBuilder for chaining filter/order/limit operations
+   */
+  query<T>(table: TableName): QueryBuilder<T>
 }
 
 /**

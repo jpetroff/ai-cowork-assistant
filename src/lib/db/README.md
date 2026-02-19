@@ -6,10 +6,11 @@ Universal database interface for the application. Supports both local SQLite and
 
 ```
 src/lib/db/
-├── types.ts      # Core types and interfaces
-├── sqlite.ts     # SQLite implementation
-├── config.ts     # Configuration operations
-└── index.ts      # Public exports
+├── types.ts         # Core types and interfaces
+├── sqlite.ts        # SQLite implementation
+├── query-builder.ts # Fluent query builder (Convex-style API)
+├── config.ts        # Configuration operations
+└── index.ts         # Public exports
 ```
 
 ## Core Interface
@@ -22,7 +23,7 @@ interface DbInterface {
   insert<T extends Record<string, unknown>>(
     table: TableName,
     data: Omit<T, 'id' | 'created_at' | 'updated_at'>
-  ): Promise<string>  // Returns generated ID
+  ): Promise<string> // Returns generated ID
   upsert<T extends Record<string, unknown>>(
     table: TableName,
     data: Partial<T> & { id: string }
@@ -30,6 +31,7 @@ interface DbInterface {
   remove(table: TableName, id: string): Promise<void>
   select<T>(sql: string, params?: unknown[]): Promise<T[]>
   execute(sql: string, params?: unknown[]): Promise<void>
+  query<T>(table: TableName): QueryBuilder<T> // Convex-style query builder
 }
 ```
 
@@ -81,7 +83,7 @@ const id = await db.insert<Artifact>('artifacts', {
   content: '# Hello',
   file_path: null,
   chat_id: null,
-  message_id: null
+  message_id: null,
 })
 
 // Get by ID
@@ -91,7 +93,7 @@ const artifact = await db.get<Artifact>('artifacts', id)
 await db.upsert<Artifact>('artifacts', {
   id: 'existing-id',
   name: 'Updated Name',
-  content: 'Updated content'
+  content: 'Updated content',
   // created_at/updated_at auto-managed
 })
 
@@ -99,7 +101,62 @@ await db.upsert<Artifact>('artifacts', {
 await db.remove('artifacts', id)
 ```
 
-### Custom Queries
+### Query Builder (Convex-style API)
+
+The query builder provides a fluent, type-safe API inspired by [Convex](https://docs.convex.dev/api/interfaces/server.GenericDatabaseWriter):
+
+```typescript
+import { createSqliteDb } from '@/lib/db'
+import type { Message } from '@/lib/messages'
+
+const db = createSqliteDb()
+
+// Chain filters, ordering, and pagination
+const messages = await db
+  .query<Message>('messages')
+  .filter('chat_id', '=', chatId)
+  .filter('status', '!=', 'deleted')
+  .orderBy('created_at', 'desc')
+  .limit(50)
+  .all()
+
+// Get first result
+const firstMessage = await db
+  .query<Message>('messages')
+  .filter('chat_id', '=', chatId)
+  .orderBy('created_at', 'asc')
+  .first()
+
+// Count results
+const unreadCount = await db
+  .query<Message>('messages')
+  .filter('chat_id', '=', chatId)
+  .filter('read', '=', false)
+  .count()
+
+// IN operator for multiple values
+const specificMessages = await db
+  .query<Message>('messages')
+  .filter('id', 'IN', ['id1', 'id2', 'id3'])
+  .all()
+
+// Pagination with offset
+const page2 = await db
+  .query<Message>('messages')
+  .filter('chat_id', '=', chatId)
+  .orderBy('created_at', 'desc')
+  .limit(20)
+  .offset(20)
+  .all()
+```
+
+**Supported operators:** `=`, `!=`, `<`, `<=`, `>`, `>=`, `LIKE`, `IN`
+
+**Terminal methods:** `all()`, `first()`, `count()`
+
+### Custom Queries (Raw SQL)
+
+For complex queries that can't be expressed with the query builder:
 
 ```typescript
 // Select with custom SQL
@@ -109,10 +166,10 @@ const artifacts = await db.select<Artifact>(
 )
 
 // Execute arbitrary SQL
-await db.execute(
-  'UPDATE artifacts SET name = $1 WHERE id = $2',
-  ['New Name', id]
-)
+await db.execute('UPDATE artifacts SET name = $1 WHERE id = $2', [
+  'New Name',
+  id,
+])
 ```
 
 ### Configuration Operations
@@ -146,7 +203,7 @@ await artifacts.upsertArtifact({
   name: 'Project',
   file_type: 'markdown',
   content: '...',
-  chat_id: '...' // optional
+  chat_id: '...', // optional
 })
 
 // Messages
@@ -188,7 +245,7 @@ model NewTable {
   value       Int
   created_at  Int
   updated_at  Int
-  
+
   @@map("new_table")
 }
 ```
@@ -198,7 +255,12 @@ model NewTable {
 3. Add table name to `TableName` type in `db/types.ts`:
 
 ```typescript
-export type TableName = 'artifacts' | 'messages' | 'chats' | 'configuration' | 'new_table'
+export type TableName =
+  | 'artifacts'
+  | 'messages'
+  | 'chats'
+  | 'configuration'
+  | 'new_table'
 ```
 
 4. Create convenience module `src/lib/newTable.ts`:
@@ -237,10 +299,11 @@ export async function remove(id: string): Promise<void> {
 ## Best Practices
 
 1. **Always use table-specific modules** for domain operations
-2. **Handle errors** with try/catch blocks
-3. **Use Prisma-generated types** for type safety
-4. **Don't use raw SQL** unless necessary for complex queries
-5. **Use the universal interface** only for generic operations
+2. **Prefer Query Builder** over raw SQL for type-safe queries
+3. **Handle errors** with try/catch blocks
+4. **Use Prisma-generated types** for type safety
+5. **Don't use raw SQL** unless necessary for complex queries (joins, subqueries)
+6. **Use the universal interface** only for generic operations
 
 ## Scripts
 

@@ -1,5 +1,5 @@
 import Database from '@tauri-apps/plugin-sql'
-import { getLocalAppDb } from './db'
+import { getLocalAppDb } from './sqlite'
 
 export type Operator = '=' | '!=' | '<' | '<=' | '>' | '>=' | 'LIKE' | 'IN'
 export type OrderDirection = 'asc' | 'desc'
@@ -49,8 +49,7 @@ export class QueryBuilder<T = unknown> {
   async all(db?: Database): Promise<T[]> {
     const query = this.buildQuery()
     const bindings = this.buildBindings()
-    const database =
-      db || await getLocalAppDb()
+    const database = db || (await getLocalAppDb())
     return database.select<T[]>(query, bindings)
   }
 
@@ -62,8 +61,7 @@ export class QueryBuilder<T = unknown> {
   async count(db?: Database): Promise<number> {
     const query = `SELECT COUNT(*) as count FROM ${this.table}${this.buildWhereClause()}`
     const bindings = this.buildBindings()
-    const database =
-      db || await getLocalAppDb()
+    const database = db || (await getLocalAppDb())
     const rows = await database.select<{ count: number }[]>(query, bindings)
     return rows[0]?.count ?? 0
   }

@@ -65,6 +65,7 @@ Ask first:
 - ./src/components should contain higher level components, widgets or mini-apps that are composed of basic components from shadcn + baseUI
 - ./src/pages should contain React router pages for this single-page application
 - ./src/lib should contain any reusable helper functions
+- ./src/lib/db contains db API to access local SQLite database and provides reusable ways to build db queries without using SQL syntax -- abstracted implementation that does not depend on SQL
 
 ## Good and bad examples
 

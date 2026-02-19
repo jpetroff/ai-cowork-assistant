@@ -14,8 +14,9 @@
     "windows": [
       {
         "title": "AI Cowork Lab",
-        "width": 400,
-        "height": 280
+        "width": 800,
+        "height": 600,
+        "label": "main"
       }
     ],
     "security": {

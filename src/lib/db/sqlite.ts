@@ -1,6 +1,7 @@
 import Database from '@tauri-apps/plugin-sql'
 import type { DbConfig, DbInterface, TableName } from './types'
 import { DatabaseError } from './types'
+import { QueryBuilder } from './query-builder'
 
 const DB_NAME = 'sqlite:app_data.db'
 
@@ -146,6 +147,10 @@ export function createSqliteDb(): DbInterface {
           error instanceof Error ? error : undefined
         )
       }
+    },
+
+    query<T>(table: TableName): QueryBuilder<T> {
+      return new QueryBuilder<T>(table)
     },
   }
 }
