@@ -12,7 +12,7 @@ async def health():
 
 def main():
     parser = argparse.ArgumentParser(description="AI Cowork Lab Sidecar")
-    parser.add_argument("--port", type=int, default=1720)
+    parser.add_argument("--port", type=int, default=9720)
     args = parser.parse_args()
 
     print(f"FastAPI running on 127.0.0.1:{args.port}...")

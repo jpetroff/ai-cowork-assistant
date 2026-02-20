@@ -1,5 +1,15 @@
 import { create } from 'zustand'
-import { loadConfiguration, CONFIG_KEYS, type Configuration } from '@/lib/db'
+import { invoke } from '@tauri-apps/api/core'
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
+import {
+  loadConfiguration,
+  saveConfiguration,
+  CONFIG_KEYS,
+  type Configuration,
+} from '@/lib/db'
+import { initSidecar, type SidecarInfo } from '@/lib/sidecar'
+
+export type AppStatus = 'idle' | 'checking' | 'setup' | 'ready' | 'error'
 
 export type ConfigState = {
   user_name: string
@@ -26,17 +36,34 @@ function configToState(config: Configuration): ConfigState {
 }
 
 type ConfigStore = ConfigState & {
+  status: AppStatus
+  sidecarUrl: string | null
   isConfigured: boolean
-  isHydrated: boolean
   setConfig: (state: Partial<ConfigState>) => void
-  loadFromDb: () => Promise<void>
   setFromConfig: (config: Configuration) => void
+  initialize: () => Promise<void>
+  runSetup: () => Promise<void>
+}
+
+async function waitForSidecarHealth(url: string): Promise<boolean> {
+  for (let i = 0; i < 30; i++) {
+    try {
+      const res = await tauriFetch(url + '/health', {
+        method: 'GET',
+        connectTimeout: 2000,
+      })
+      if (res.ok) return true
+    } catch {}
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return false
 }
 
 export const useConfigStore = create<ConfigStore>((set) => ({
   ...defaultState,
+  status: 'idle',
+  sidecarUrl: null,
   isConfigured: false,
-  isHydrated: false,
   setConfig: (state) => set(state),
   setFromConfig: (config) => {
     const state = configToState(config)
@@ -49,27 +76,57 @@ export const useConfigStore = create<ConfigStore>((set) => ({
     set({
       ...state,
       isConfigured: hasAny,
-      isHydrated: true,
     })
   },
-  loadFromDb: async () => {
-    try {
-      const config = await loadConfiguration()
-      const state = configToState(config)
-      const isConfigured =
-        config[CONFIG_KEYS.USER_NAME] != null ||
-        config[CONFIG_KEYS.MODEL_NAME] != null
-      set({
-        ...state,
-        isConfigured: isConfigured || Object.keys(config).length > 0,
-        isHydrated: true,
-      })
-    } catch {
-      set({
-        ...defaultState,
-        isConfigured: false,
-        isHydrated: true,
-      })
+  initialize: async () => {
+    set({ status: 'checking' })
+
+    const info: SidecarInfo = await initSidecar()
+
+    if (!info.available || !info.url) {
+      set({ status: 'error' })
+      return
     }
+
+    set({ sidecarUrl: info.url })
+
+    const healthy = await waitForSidecarHealth(info.url)
+    if (!healthy) {
+      set({ status: 'error' })
+      return
+    }
+
+    const config = await loadConfiguration()
+    const state = configToState(config)
+    const isConfigured = !!config[CONFIG_KEYS.USER_NAME]
+
+    set({
+      ...state,
+      isConfigured,
+      status: isConfigured ? 'ready' : 'setup',
+    })
+  },
+  runSetup: async () => {
+    set({ status: 'checking' })
+
+    const info = await invoke<{ username: string; avatar_path: string }>(
+      'get_system_user_info'
+    )
+
+    await saveConfiguration({
+      [CONFIG_KEYS.USER_NAME]: info.username,
+      [CONFIG_KEYS.USER_AVATAR]: info.avatar_path,
+      [CONFIG_KEYS.MODEL_NAME]: 'gpt-oss-20b',
+      [CONFIG_KEYS.MODEL_API_URL]: 'https://llama.intranet/v1',
+    })
+
+    const config = await loadConfiguration()
+    const state = configToState(config)
+
+    set({
+      ...state,
+      isConfigured: true,
+      status: 'ready',
+    })
   },
 }))

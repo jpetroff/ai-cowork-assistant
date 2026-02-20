@@ -13,7 +13,7 @@ def colored_log(message, color=Fore.WHITE):
     logger.info(f"{color}{message}{Style.RESET_ALL}")
 
 def install():
-    colored_log("Building FastAPI Binary...", Fore.CYAN)
+    colored_log("Building python binary...", Fore.CYAN)
     path_to_main = str(Path("main.py").absolute())
     try:
         PyInstaller.__main__.run(

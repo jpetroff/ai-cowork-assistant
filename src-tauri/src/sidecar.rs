@@ -42,7 +42,7 @@ pub async fn init(app: tauri::AppHandle) -> Info {
 
     #[cfg(debug_assertions)]
     {
-        let url = "http://127.0.0.1:1720".to_string();
+        let url = "http://127.0.0.1:9720".to_string();
         state.lock().unwrap().url = Some(url.clone());
         return Info {
             available: true,

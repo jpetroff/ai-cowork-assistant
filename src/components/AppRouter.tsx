@@ -1,46 +1,10 @@
-import { useEffect } from 'react'
-import {
-  createHashRouter,
-  RouterProvider,
-  useNavigate,
-  useLocation,
-  Outlet,
-} from 'react-router-dom'
-import { useConfigStore } from '@/stores/config-store'
-import { SetupPage } from '@/pages/SetupPage'
+import { createHashRouter, RouterProvider, Outlet } from 'react-router-dom'
+import { rootLoader } from '@/loaders/root.loader'
+import { LoaderPage } from '@/pages/LoaderPage'
 import { ProjectsPage } from '@/pages/ProjectsPage'
 import { Project } from '@/pages/Project'
 
 function RootLayout() {
-  const loadFromDb = useConfigStore((s) => s.loadFromDb)
-  const { isConfigured, isHydrated } = useConfigStore()
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  useEffect(() => {
-    loadFromDb()
-  }, [loadFromDb])
-
-  useEffect(() => {
-    if (!isHydrated) return
-    const isRoot = location.pathname === '/'
-    const isProjects = location.pathname === '/projects'
-    const isProjectPage = location.pathname.startsWith('/project/')
-
-    if (isRoot && isConfigured) {
-      navigate('/projects', { replace: true })
-    } else if ((isProjects || isProjectPage) && !isConfigured) {
-      navigate('/', { replace: true })
-    }
-  }, [isHydrated, isConfigured, location.pathname, navigate])
-
-  if (!isHydrated) {
-    return (
-      <div className='flex items-center justify-center p-4 text-muted-foreground text-sm'>
-        Loading…
-      </div>
-    )
-  }
   return <Outlet />
 }
 
@@ -48,8 +12,9 @@ const router = createHashRouter([
   {
     path: '/',
     element: <RootLayout />,
+    loader: rootLoader,
     children: [
-      { index: true, element: <SetupPage /> },
+      { index: true, element: <LoaderPage /> },
       { path: 'projects', element: <ProjectsPage /> },
       { path: 'project/:projectId', element: <Project /> },
     ],

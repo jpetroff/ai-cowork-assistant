@@ -1,7 +1,7 @@
 fastapi
 websockets
 uvicorn
-pydantic
+pydantic>=2
 python-multipart
 rich
 dotenv 
