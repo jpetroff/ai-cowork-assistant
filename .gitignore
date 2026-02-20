@@ -25,5 +25,6 @@ dist-ssr
 
 .opencode
 .llm
+.ruff_cache
 
 /src/generated/prisma

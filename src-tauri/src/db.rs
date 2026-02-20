@@ -60,5 +60,11 @@ pub fn migrations() -> Vec<Migration> {
                   CREATE INDEX IF NOT EXISTS idx_artifacts_updated_at ON artifacts(updated_at);",
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "add_full_remote_config",
+            sql: "INSERT INTO configuration (key, value) VALUES ('full_remote', 'false');",
+            kind: MigrationKind::Up,
+        },
     ]
 }

@@ -19,6 +19,7 @@ export const CONFIG_KEYS = {
   USER_AVATAR: 'user_avatar',
   MODEL_NAME: 'model_name',
   MODEL_API_URL: 'model_api_url',
+  FULL_REMOTE: 'full_remote',
 } as const
 
 /**

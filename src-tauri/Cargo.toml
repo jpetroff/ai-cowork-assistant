@@ -29,6 +29,7 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-websocket = "2"
 tauri-plugin-http = "2"
+tauri-plugin-shell = "2"
 tauri-plugin-mcp-bridge = "0.8.2"
 whoami = "1"
 

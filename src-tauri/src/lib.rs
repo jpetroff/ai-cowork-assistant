@@ -1,7 +1,7 @@
-mod db;
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use serde::Serialize;
+
+mod db;
+mod sidecar;
 
 #[derive(Serialize)]
 pub struct SystemUserInfo {
@@ -9,15 +9,11 @@ pub struct SystemUserInfo {
     pub avatar_path: String,
 }
 
-// Returns current system user name and avatar path (desktop only).
-// Avatar path may be empty if not available from system settings (e.g. macOS stores it in Directory Services).
 #[tauri::command]
 fn get_system_user_info() -> SystemUserInfo {
-    let username = whoami::username();
-    let avatar_path = String::new();
     SystemUserInfo {
-        username,
-        avatar_path,
+        username: whoami::username(),
+        avatar_path: String::new(),
     }
 }
 
@@ -29,18 +25,23 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(
             tauri_plugin_sql::Builder::new()
                 .add_migrations(db::DB_NAME, db::migrations())
                 .build(),
         )
-        .plugin(tauri_plugin_opener::init());
+        .plugin(tauri_plugin_opener::init())
+        .manage(std::sync::Mutex::new(sidecar::State::default()));
 
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
     builder
-        .invoke_handler(tauri::generate_handler![get_system_user_info])
+        .invoke_handler(tauri::generate_handler![
+            get_system_user_info,
+            sidecar::init
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

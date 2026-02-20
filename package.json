@@ -23,6 +23,7 @@
     "@tauri-apps/plugin-fs": "~2",
     "@tauri-apps/plugin-http": "~2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-shell": "~2",
     "@tauri-apps/plugin-sql": "~2",
     "@tauri-apps/plugin-websocket": "~2",
     "@tiptap/extension-bold": "^3.19.0",

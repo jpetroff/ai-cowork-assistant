@@ -28,3 +28,4 @@ openinference-instrumentation-llama-index
 #utils
 black
 pylint>=3.3.4
+pyinstaller
