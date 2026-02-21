@@ -43,7 +43,6 @@ def main():
     log_level = "debug" if args.debug else "error"
 
     logger.info(f"Starting FastAPI server on 127.0.0.1:{args.port}")
-    print(f"FastAPI running on 127.0.0.1:{args.port}...")
 
     uvicorn.run(
         app,
@@ -53,6 +52,7 @@ def main():
         access_log=args.debug,
     )
 
+    print(f"FastAPI running on 127.0.0.1:{args.port}...")
 
 if __name__ == "__main__":
     main()

@@ -78,7 +78,7 @@ class ChatCompletionRequest(BaseModel):
 
     message: str = Field(description="User message to process")
     chat_history: Sequence[ChatMessageBase] = Field(
-        default_factory=list,
+        default_factory=Sequence,
         validation_alias="chatHistory",
         description="Chat history for context",
     )

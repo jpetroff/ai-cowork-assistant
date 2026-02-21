@@ -18,11 +18,14 @@ class Settings(BaseSettings):
         default="vector_storage.db", description="Path to ChromaDB persistent storage"
     )
     phoenix_endpoint: str = Field(
-        default="http://127.0.0.1:6006/v1/traces",
+        default="http://phoenix.intranet/v1/traces",
         description="Phoenix OTLP endpoint for traces",
     )
     documents_path: str = Field(
         default="./documents", description="Path to document storage"
+    )
+    api_base: str = Field(
+        default="http://llama.intranet/v1", description="Default LLM API endpoint, OpenAI-like"
     )
 
 

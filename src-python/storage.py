@@ -37,8 +37,9 @@ class VectorStorage:
         self._collection = self._client.get_or_create_collection(name="default")
 
         self._embed_model = OpenAILikeEmbedding(
+            model_name="mxbai-embed",
+            api_base=settings.api_base,
             api_key=api_key,
-            api_base=base_url,
             model=embed_model,
         )
 

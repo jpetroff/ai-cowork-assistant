@@ -3,57 +3,13 @@ from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from observability import setup_observability
 from schemas import ChatCompletionRequest, DefaultResponse
+
+from llamaflows.run_workflow import create_workflow
 
 router = APIRouter(tags=["completion"])
 logger = logging.getLogger(__name__)
 
-
-async def _process_completion(
-    request: ChatCompletionRequest, websocket: WebSocket
-) -> None:
-    if request.observability is not None:
-        setup_observability(enabled=request.observability)
-
-    try:
-        yield DefaultResponse(
-            type="event",
-            content="Processing request...",
-        )
-
-        # TODO: Integrate with LlamaIndex workflow
-        # For now, echo back the message as chunks
-        words = request.message.split()
-        for i, word in enumerate(words):
-            yield DefaultResponse(
-                type="completion.chunk",
-                content=word + " ",
-                payload={"index": i},
-            )
-
-        yield DefaultResponse(
-            type="completion.response",
-            content=" ".join(words),
-            payload={
-                "chat_history_count": len(request.chat_history),
-            },
-        )
-
-        yield DefaultResponse(
-            type="completion.usage",
-            payload={
-                "input_tokens": len(request.message.split()),
-                "output_tokens": len(words),
-            },
-        )
-
-    except Exception as e:
-        logger.error(f"Error processing completion: {e}")
-        yield DefaultResponse(
-            type="error",
-            payload={"message": str(e), "code": "processing_error"},
-        )
 
 
 @router.websocket("/completion")
@@ -66,7 +22,12 @@ async def completion_websocket(websocket: WebSocket):
         request = ChatCompletionRequest.model_validate(data)
         logger.info(f"Received completion request: {request.message[:50]}...")
 
-        async for response in _process_completion(request, websocket):
+        handler = create_workflow(
+            user_query=request.message,
+            chat_history=request.chat_history
+        )
+
+        async for response in handler:
             await websocket.send_json(response.model_dump(exclude_none=True))
 
     except WebSocketDisconnect:
