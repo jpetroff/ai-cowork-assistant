@@ -19,25 +19,69 @@ const LAST_MESSAGE_KEY = 'last_opened_message_id'
 const MOCK_CHAT_ID = '550e8400-e29b-41d4-a716-446655440000'
 const MOCK_MESSAGE_ID = '550e8400-e29b-41d4-a716-446655440001'
 
+/**
+ * State management store for the current project/artifact
+ * Manages artifact loading, markdown content, streaming state, and persistence
+ */
 export type ProjectStore = {
+  /** Currently loaded artifact ID */
   currentArtifactId: string | null
+  /** Current chat session ID (mocked for now) */
   currentChatId: string | null
+  /** Current message ID within the chat (mocked for now) */
   currentMessageId: string | null
+  /** Display name of the current artifact */
   name: string
+  /** Markdown content of the artifact */
   markdown: string
+  /** Whether content is currently being streamed */
   isStreaming: boolean
+  /** Whether artifact is currently loading */
   isLoading: boolean
+  /** Whether artifact has been loaded at least once */
   loadedOnce: boolean
+  /** Timestamp of last save operation */
   lastSavedAt: number | undefined
+  /**
+   * Load artifact by ID
+   * @param id - Artifact ID to load. If not provided, loads last opened or most recent artifact
+   */
   loadArtifact: (id?: string) => Promise<void>
+  /**
+   * Set markdown content (blocked during streaming)
+   * @param next - New markdown content
+   */
   setMarkdown: (next: string) => void
+  /**
+   * Update artifact name
+   * @param name - New name
+   */
   setName: (name: string) => void
+  /**
+   * Save current artifact to database
+   * Updates last_opened configuration with current artifact/chat/message IDs
+   */
   saveCurrent: () => Promise<void>
+  /**
+   * Initialize streaming mode with base content
+   * @param base - Initial markdown content to start with
+   */
   startStreaming: (base: string) => void
+  /**
+   * Append chunk to streaming content
+   * @param chunk - New content chunk to append
+   */
   appendStreamingChunk: (chunk: string) => void
+  /**
+   * Finalize streaming mode
+   */
   finishStreaming: () => void
 }
 
+/**
+ * Zustand store for project/artifact state management
+ * Provides methods to load, edit, save, and stream markdown artifacts
+ */
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   currentArtifactId: DEFAULT_ARTIFACT_ID,
   currentChatId: MOCK_CHAT_ID,
