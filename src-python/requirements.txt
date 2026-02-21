@@ -2,9 +2,11 @@ fastapi
 websockets
 uvicorn
 pydantic>=2
+pydantic-settings>=2
 python-multipart
 rich
-dotenv 
+dotenv
+shortuuid
 
 # Llama Index for RAG
 llama-index
@@ -13,8 +15,8 @@ llama-index-llms-openai-like
 llama-index-embeddings-ollama
 llama-index-embeddings-openai-like
 llama-index-llms-gemini
-llama-index-vector-stores-qdrant
-qdrant-client
+llama-index-vector-stores-chroma
+chromadb
 llama-index-tools-duckduckgo
 json-repair
 llama-index-postprocessor-colbert-rerank
@@ -25,7 +27,11 @@ arize-phoenix
 arize-phoenix-otel
 openinference-instrumentation-llama-index
 
-#utils
+# typescript type generation
+pydantic-to-typescript>=2
+json2ts
+
+# utils
 black
 pylint>=3.3.4
 pyinstaller

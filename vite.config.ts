@@ -7,10 +7,7 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   plugins: [
-    react({
-      // jsxRuntime: 'automatic',
-      // jsxImportSource: 'react'
-    }), 
+    react(), 
     tailwindcss()
   ],
 
