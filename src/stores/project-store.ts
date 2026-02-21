@@ -20,67 +20,66 @@ const MOCK_CHAT_ID = '550e8400-e29b-41d4-a716-446655440000'
 const MOCK_MESSAGE_ID = '550e8400-e29b-41d4-a716-446655440001'
 
 /**
- * State management store for the current project/artifact
- * Manages artifact loading, markdown content, streaming state, and persistence
+ * Zustand store type combining ProjectState with artifact management functions.
+ * Manages artifact loading, markdown editing, streaming state, and persistence.
+ *
+ * @extends ProjectState
+ * @property currentArtifactId - Currently loaded artifact ID
+ * @property currentChatId - Current chat session ID (mocked for now)
+ * @property currentMessageId - Current message ID within the chat (mocked for now)
+ * @property name - Display name of the current artifact
+ * @property markdown - Markdown content of the artifact
+ * @property isStreaming - Whether content is currently being streamed
+ * @property isLoading - Whether artifact is currently loading
+ * @property loadedOnce - Whether artifact has been loaded at least once
+ * @property lastSavedAt - Timestamp of last save operation
+ * @property loadArtifact - Load artifact by ID with fallback logic
+ * @property setMarkdown - Update markdown content (blocked during streaming)
+ * @property setName - Update artifact name
+ * @property saveCurrent - Save current artifact to database
+ * @property startStreaming - Initialize streaming mode with base content
+ * @property appendStreamingChunk - Append chunk to streaming content
+ * @property finishStreaming - Finalize streaming mode
  */
 export type ProjectStore = {
-  /** Currently loaded artifact ID */
   currentArtifactId: string | null
-  /** Current chat session ID (mocked for now) */
   currentChatId: string | null
-  /** Current message ID within the chat (mocked for now) */
   currentMessageId: string | null
-  /** Display name of the current artifact */
   name: string
-  /** Markdown content of the artifact */
   markdown: string
-  /** Whether content is currently being streamed */
   isStreaming: boolean
-  /** Whether artifact is currently loading */
   isLoading: boolean
-  /** Whether artifact has been loaded at least once */
   loadedOnce: boolean
-  /** Timestamp of last save operation */
   lastSavedAt: number | undefined
-  /**
-   * Load artifact by ID
-   * @param id - Artifact ID to load. If not provided, loads last opened or most recent artifact
-   */
   loadArtifact: (id?: string) => Promise<void>
-  /**
-   * Set markdown content (blocked during streaming)
-   * @param next - New markdown content
-   */
   setMarkdown: (next: string) => void
-  /**
-   * Update artifact name
-   * @param name - New name
-   */
   setName: (name: string) => void
-  /**
-   * Save current artifact to database
-   * Updates last_opened configuration with current artifact/chat/message IDs
-   */
   saveCurrent: () => Promise<void>
-  /**
-   * Initialize streaming mode with base content
-   * @param base - Initial markdown content to start with
-   */
   startStreaming: (base: string) => void
-  /**
-   * Append chunk to streaming content
-   * @param chunk - New content chunk to append
-   */
   appendStreamingChunk: (chunk: string) => void
-  /**
-   * Finalize streaming mode
-   */
   finishStreaming: () => void
 }
 
 /**
- * Zustand store for project/artifact state management
- * Provides methods to load, edit, save, and stream markdown artifacts
+ * Zustand store for project/artifact state management.
+ *
+ * @remarks
+ * This store provides methods to:
+ * - Load artifacts from the database with intelligent fallback logic
+ * - Edit and stream markdown content
+ * - Save artifacts with automatic configuration updates
+ * - Manage streaming state for real-time content updates
+ *
+ * @example
+ * ```ts
+ * import { useProjectStore } from '@/stores/project-store'
+ *
+ * const { name, markdown, loadArtifact, setMarkdown, saveCurrent } = useProjectStore()
+ *
+ * await loadArtifact()
+ * setMarkdown('# New content')
+ * await saveCurrent()
+ * ```
  */
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   currentArtifactId: DEFAULT_ARTIFACT_ID,
@@ -93,6 +92,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   loadedOnce: false,
   lastSavedAt: undefined,
 
+  /**
+   * Load artifact by ID with intelligent fallback logic.
+   *
+   * @param id - Artifact ID to load. If not provided, loads last opened or most recent artifact
+   * @remarks
+   * This async function follows this priority order:
+   * 1. Use provided artifact ID if given
+   * 2. Load from last_opened_artifact_id configuration
+   * 3. Get most recent artifact for current chat
+   * 4. Get most recent artifact overall
+   * 5. Fall back to default artifact ID (default-project)
+   *
+   * @example
+   * ```ts
+   * await loadArtifact()
+   * await loadArtifact('specific-artifact-id')
+   * ```
+   */
   loadArtifact: async (id?: string) => {
     let artifactId = id
     let chatId = get().currentChatId
@@ -192,15 +209,32 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
+  /**
+   * Update markdown content (blocked during streaming).
+   *
+   * @param next - New markdown content
+   * @remarks Prevents modification while content is being streamed
+   */
   setMarkdown: (next: string) => {
     if (get().isStreaming) return
     set({ markdown: next })
   },
 
+  /**
+   * Update artifact name.
+   *
+   * @param name - New name
+   */
   setName: (name: string) => {
     set({ name })
   },
 
+  /**
+   * Save current artifact to database.
+   *
+   * @remarks
+   * Updates last_opened configuration with current artifact/chat/message IDs
+   */
   saveCurrent: async () => {
     const {
       currentArtifactId,
@@ -237,10 +271,21 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
+  /**
+   * Initialize streaming mode with base content.
+   *
+   * @param base - Initial markdown content to start with
+   */
   startStreaming: (base: string) => {
     set({ isStreaming: true, markdown: base })
   },
 
+  /**
+   * Append chunk to streaming content.
+   *
+   * @param chunk - New content chunk to append
+   * @remarks Automatically fixes mismatched markdown delimiters before appending
+   */
   appendStreamingChunk: (chunk: string) => {
     set((state) => {
       if (!state.isStreaming) return state
@@ -250,6 +295,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     })
   },
 
+  /**
+   * Finalize streaming mode.
+   *
+   * @remarks Clears isStreaming flag, allowing further edits
+   */
   finishStreaming: () => {
     set({ isStreaming: false })
   },

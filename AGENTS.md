@@ -8,6 +8,7 @@
 - default to small components
 - always use bun package manager to check or install dependencies
 - always check Context7 MCP for up-to-date knowledge about libraries and packages used in this project
+- use minimal JSDoc for type declarations (@property tags only), comprehensive JSDoc for store/method implementations inside create()
 
 ## Don't
 
