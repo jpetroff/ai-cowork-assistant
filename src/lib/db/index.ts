@@ -10,8 +10,7 @@ export {
   DatabaseError,
 } from './types'
 
-// Re-export the SQLite implementation as the default
-export { createSqliteDb, getLocalAppDb } from './sqlite'
+export { SqliteDatabase, db, getLocalAppDb } from './sqlite'
 
 // Query builder for type-safe queries
 export {

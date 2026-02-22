@@ -1,11 +1,9 @@
 import type { Project } from '../generated/prisma/client'
-import { createSqliteDb } from './db'
-import type { TableName } from './db'
+import { db, type TableName } from './db'
 
 export type { Project }
 
 const TABLE: TableName = 'projects'
-const db = createSqliteDb()
 
 export type ProjectInput = Omit<Project, 'id' | 'created_at' | 'updated_at'>
 

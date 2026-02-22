@@ -1,15 +1,9 @@
 import type { Artifact } from '../generated/prisma/client'
-import { createSqliteDb } from './db'
-import type { TableName } from './db'
+import { db, type TableName } from './db'
 
-// Re-export the Prisma type
 export type { Artifact }
 
-// Table name constant
 const TABLE: TableName = 'artifacts'
-
-// Database instance (singleton)
-const db = createSqliteDb()
 
 /**
  * Convenience type for upsert operations
