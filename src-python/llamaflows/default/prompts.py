@@ -12,5 +12,20 @@ Follow these rules and guidelines:
 User Request:
 {user_query}
 
-Ensure you ONLY reply with the rewritten artifact and NO other content. Mark the beginning of the artifact document as `|artifact|>` and the end as `<|artifact|` so it can be extracted and used separately from the answer as a standalone document.
+Ensure you START reply ONLY with the generated artifact and NO other content. Mark the beginning of the artifact document as `|artifact|>` and the end as `<|artifact|` so it can be extracted and used separately from the answer as a standalone document.
+
+After artifact is complete, write a very short summary about your generation: 
+* it should be 1 or 2 sentences long 
+* it should explain how the result in the artifact matches what was requested from you in the message.
+
+<response template>
+|artifact|>
+
+artifact content in markdown
+
+<|artifact|
+
+followup text for the user 
+</response template>
+
 Answer: """

@@ -12,6 +12,7 @@ export type Type =
   | "error"
   | "completion.response"
   | "completion.chunk"
+  | "completion.chunk.thinking"
   | "completion.usage"
   | "completion.sources"
   | "completion.hitl.request"

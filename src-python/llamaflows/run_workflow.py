@@ -1,5 +1,8 @@
 from inspect import isgeneratorfunction
-from typing import Sequence
+import json
+from typing import Sequence, List
+from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
+from llama_index.core.callbacks.base_handler import BaseCallbackHandler
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.ollama import Ollama
 from llama_index.core.llms import LLM
@@ -9,6 +12,7 @@ from workflows.events import StopEvent
 from llamaflows.default.main import SimpleQueryWorkflow, WorkflowResult
 from schemas import ChatMessageBase, DefaultResponse
 from config import settings
+import tiktoken
 
 
 async def create_workflow(
@@ -21,10 +25,27 @@ async def create_workflow(
     #     is_chat_model=True
     # )
 
+    # 1. Initialize token counter
+    # Note: Since Ollama runs local models (e.g., Llama3), it's best to 
+    # use a tokenizer that matches, or simply the default for tracking.
+    callbacks: List[BaseCallbackHandler] = []
+    try:
+        tiktoken.get_encoding('gpt-oss-20b')
+        token_counter = TokenCountingHandler(
+            tokenizer=tiktoken.encoding_for_model("gpt-oss-20b").encode
+        )
+        callbacks.append(token_counter)
+    except:
+        token_counter = None
+        print("Could not initialize token encoding statistics…")
+        pass
+
+
     llm = Ollama(
         model="gpt-oss:20b",
         base_url="http://ollama.intranet",
-        thinking=True
+        thinking=True,
+        callback_manager=CallbackManager(callbacks)
     )
     w = SimpleQueryWorkflow(
         llm=llm
@@ -41,29 +62,27 @@ async def create_workflow(
 
     final_result: WorkflowResult = await handler
 
-    # accumulated_response = {
-    #     "full_response": "",
-    #     "full_followup": "",
-    #     "generated_tokens": 0,
-    # }
-
     if final_result.response_gen != None:
         async for response in final_result.response_gen:
-            # accumulated_response["generated_tokens"] += 1
-            # accumulated_response["full_response"] += str(response.delta)
-            # _last_response = response
-            yield DefaultResponse(
-                type="completion.chunk", content=str(response.delta)
-            )
+            thinking_delta = response.additional_kwargs.get("thinking_delta")  # Thinking text
+            if thinking_delta is not None:
+                yield DefaultResponse(
+                    type="completion.chunk.thinking", content=str(thinking_delta)
+                )
+            else:
+                yield DefaultResponse(
+                    type="completion.chunk", content=str(response.delta)
+                )
     else:
         yield DefaultResponse(
             type="completion.response", content=str(final_result.response_text)
         )
 
-    # yield DefaultResponse(
-    #     type="completion.usage",
-    #     payload={
-    #         "generated_tokens": accumulated_response["generated_tokens"],
-    #         # "traceId": trace.trace_id if trace is not None else None,
-    #     },
-    # )
+    if token_counter is not None:
+        # --- Retrieve Statistics ---
+        print("Total Tokens:", token_counter.total_llm_token_count)
+        print("Prompt Tokens:", token_counter.prompt_llm_token_count)
+        print("Completion Tokens:", token_counter.completion_llm_token_count)
+
+        # Reset counts for the next query if needed
+        token_counter.reset_counts()

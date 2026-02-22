@@ -21,6 +21,7 @@ class DefaultResponse(BaseModel):
         Literal["error"],
         Literal["completion.response"],
         Literal["completion.chunk"],
+        Literal["completion.chunk.thinking"],
         Literal["completion.usage"],
         Literal["completion.sources"],
         Literal["completion.hitl.request"],
