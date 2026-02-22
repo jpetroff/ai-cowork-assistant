@@ -28,3 +28,6 @@ dist-ssr
 .ruff_cache
 
 /src/generated/prisma
+
+__pycache__/
+*.pyc
