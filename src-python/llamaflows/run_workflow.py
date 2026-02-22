@@ -1,6 +1,7 @@
 from inspect import isgeneratorfunction
 from typing import Sequence
 from llama_index.llms.openai_like import OpenAILike
+from llama_index.llms.ollama import Ollama
 from llama_index.core.llms import LLM
 from llama_index.llms.openai_like.base import CompletionResponseGen
 from workflows.events import StopEvent
@@ -14,10 +15,16 @@ async def create_workflow(
     user_query: str,
     chat_history: Sequence[ChatMessageBase] | None = None,
 ):
-    llm = OpenAILike(
-        model="gpt-oss-20b",
-        api_base=settings.api_base,
-        is_chat_model=True
+    # llm = OpenAILike(
+    #     model="gpt-oss-20b",
+    #     api_base=settings.api_base,
+    #     is_chat_model=True
+    # )
+
+    llm = Ollama(
+        model="gpt-oss:20b",
+        base_url="http://ollama.intranet",
+        thinking=True
     )
     w = SimpleQueryWorkflow(
         llm=llm
