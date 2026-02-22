@@ -44,7 +44,7 @@ export function createSqliteDb(): DbInterface {
 
       const columns = ['id', ...Object.keys(data), 'created_at', 'updated_at']
       const values = [id, ...Object.values(data), now, now]
-      const placeholders = columns.map(() => '?').join(', ')
+      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ')
       const columnNames = columns.join(', ')
 
       try {
@@ -55,7 +55,7 @@ export function createSqliteDb(): DbInterface {
         return id
       } catch (error) {
         throw new DatabaseError(
-          `Failed to insert record into ${table}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Failed to insert record into ${table}: ${error instanceof Error ? error.message : String(error)}`,
           undefined,
           error instanceof Error ? error : undefined
         )
@@ -83,7 +83,7 @@ export function createSqliteDb(): DbInterface {
             updateFields.push('updated_at')
           }
 
-          const setClause = updateFields.map((key) => `${key} = ?`).join(', ')
+          const setClause = updateFields.map((key, i) => `${key} = $${i + 1}`).join(', ')
           const values = [...Object.values(rest), ...(hasTimestamps ? [now] : [])]
 
           await db.execute(
@@ -94,7 +94,7 @@ export function createSqliteDb(): DbInterface {
           // Insert with timestamps
           const columns = ['id', ...Object.keys(rest), 'created_at', 'updated_at']
           const values = [id, ...Object.values(rest), now, now]
-          const placeholders = columns.map(() => '?').join(', ')
+          const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ')
 
           await db.execute(
             `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`,

@@ -1,16 +1,5 @@
-import Database from '@tauri-apps/plugin-sql'
 import { DatabaseError } from './types'
-
-const DB_NAME = 'sqlite:app_data.db'
-
-let dbInstance: Database | null = null
-
-async function getLocalAppDb(): Promise<Database> {
-  if (!dbInstance) {
-    dbInstance = await Database.load(DB_NAME)
-  }
-  return dbInstance
-}
+import { getLocalAppDb } from './sqlite'
 
 export type Configuration = Record<string, string>
 

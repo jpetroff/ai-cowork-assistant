@@ -20,10 +20,10 @@ const MOCK_CHAT_ID = '550e8400-e29b-41d4-a716-446655440000'
 const MOCK_MESSAGE_ID = '550e8400-e29b-41d4-a716-446655440001'
 
 /**
- * Zustand store type combining ProjectState with artifact management functions.
+ * Zustand store type combining ChatState with artifact management functions.
  * Manages artifact loading, markdown editing, streaming state, and persistence.
  *
- * @extends ProjectState
+ * @extends ChatState
  * @property currentArtifactId - Currently loaded artifact ID
  * @property currentChatId - Current chat session ID (mocked for now)
  * @property currentMessageId - Current message ID within the chat (mocked for now)
@@ -41,7 +41,7 @@ const MOCK_MESSAGE_ID = '550e8400-e29b-41d4-a716-446655440001'
  * @property appendStreamingChunk - Append chunk to streaming content
  * @property finishStreaming - Finalize streaming mode
  */
-export type ProjectStore = {
+export type ChatStore = {
   currentArtifactId: string | null
   currentChatId: string | null
   currentMessageId: string | null
@@ -61,7 +61,7 @@ export type ProjectStore = {
 }
 
 /**
- * Zustand store for project/artifact state management.
+ * Zustand store for chat/artifact state management.
  *
  * @remarks
  * This store provides methods to:
@@ -72,16 +72,16 @@ export type ProjectStore = {
  *
  * @example
  * ```ts
- * import { useProjectStore } from '@/stores/project-store'
+ * import { useChatStore } from '@/stores/chat-store'
  *
- * const { name, markdown, loadArtifact, setMarkdown, saveCurrent } = useProjectStore()
+ * const { name, markdown, loadArtifact, setMarkdown, saveCurrent } = useChatStore()
  *
  * await loadArtifact()
  * setMarkdown('# New content')
  * await saveCurrent()
  * ```
  */
-export const useProjectStore = create<ProjectStore>((set, get) => ({
+export const useChatStore = create<ChatStore>((set, get) => ({
   currentArtifactId: DEFAULT_ARTIFACT_ID,
   currentChatId: MOCK_CHAT_ID,
   currentMessageId: MOCK_MESSAGE_ID,
