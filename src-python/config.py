@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     port: int = Field(default=9720, description="Port to run the FastAPI server on")
     observability_enabled: bool = Field(
-        default=False, description="Enable Phoenix observability"
+        default=True, description="Enable Phoenix observability"
     )
     vector_db_path: str = Field(
         default="vector_storage.db", description="Path to ChromaDB persistent storage"
