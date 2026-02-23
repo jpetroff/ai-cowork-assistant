@@ -8,6 +8,11 @@ import {
 } from '@/lib/artifacts'
 import { closeOpenMarkdownDelimiters } from '@/lib/markdown-streaming'
 import { loadConfiguration, saveConfigurationEntry } from '@/lib/db'
+import type { ConnectionStatus, ChatMessage } from '@/lib/chat/types'
+import { generateId, buildChatHistory } from '@/lib/chat/types'
+import { getChatController } from '@/lib/chat/chat-controller'
+import { useConfigStore } from './config-store'
+import type { ChatMessageBase } from '@/lib/api-types'
 
 const DEFAULT_ARTIFACT_ID = 'default-project'
 const DEFAULT_NAME = 'Untitled project'
@@ -15,24 +20,23 @@ const LAST_OPENED_KEY = 'last_opened_artifact_id'
 const LAST_CHAT_KEY = 'last_opened_chat_id'
 const LAST_MESSAGE_KEY = 'last_opened_message_id'
 
-// Mock chat and message IDs since chat is not fully implemented yet
-const MOCK_CHAT_ID = '550e8400-e29b-41d4-a716-446655440000'
-const MOCK_MESSAGE_ID = '550e8400-e29b-41d4-a716-446655440001'
-
 /**
  * Zustand store type combining ChatState with artifact management functions.
  * Manages artifact loading, markdown editing, streaming state, and persistence.
  *
  * @extends ChatState
  * @property currentArtifactId - Currently loaded artifact ID
- * @property currentChatId - Current chat session ID (mocked for now)
- * @property currentMessageId - Current message ID within the chat (mocked for now)
+ * @property currentChatId - Current chat session ID
+ * @property currentMessageId - Current message ID within the chat
  * @property name - Display name of the current artifact
  * @property markdown - Markdown content of the artifact
  * @property isStreaming - Whether content is currently being streamed
  * @property isLoading - Whether artifact is currently loading
  * @property loadedOnce - Whether artifact has been loaded at least once
  * @property lastSavedAt - Timestamp of last save operation
+ * @property messages - Chat messages in current session
+ * @property inputText - Current input text being typed
+ * @property connectionStatus - WebSocket connection status
  * @property loadArtifact - Load artifact by ID with fallback logic
  * @property setMarkdown - Update markdown content (blocked during streaming)
  * @property setName - Update artifact name
@@ -51,6 +55,9 @@ export type ChatStore = {
   isLoading: boolean
   loadedOnce: boolean
   lastSavedAt: number | undefined
+  messages: ChatMessage[]
+  inputText: string
+  connectionStatus: ConnectionStatus
   loadArtifact: (id?: string) => Promise<void>
   setMarkdown: (next: string) => void
   setName: (name: string) => void
@@ -58,6 +65,16 @@ export type ChatStore = {
   startStreaming: (base: string) => void
   appendStreamingChunk: (chunk: string) => void
   finishStreaming: () => void
+  setInputText: (text: string) => void
+  setConnectionStatus: (status: ConnectionStatus) => void
+  sendMessage: (text: string) => void
+  appendToMessage: (messageId: string, chunk: string) => void
+  appendToThinking: (messageId: string, chunk: string) => void
+  appendEventToMessage: (messageId: string, event: string) => void
+  completeMessage: (messageId: string) => void
+  errorMessage: (messageId: string, error: string) => void
+  startArtifactStreaming: (messageId: string) => void
+  finishArtifactStreaming: (messageId: string) => void
 }
 
 /**
@@ -83,14 +100,17 @@ export type ChatStore = {
  */
 export const useChatStore = create<ChatStore>((set, get) => ({
   currentArtifactId: DEFAULT_ARTIFACT_ID,
-  currentChatId: MOCK_CHAT_ID,
-  currentMessageId: MOCK_MESSAGE_ID,
+  currentChatId: null,
+  currentMessageId: null,
   name: DEFAULT_NAME,
   markdown: '',
   isStreaming: false,
   isLoading: false,
   loadedOnce: false,
   lastSavedAt: undefined,
+  messages: [],
+  inputText: '',
+  connectionStatus: 'disconnected',
 
   /**
    * Load artifact by ID with intelligent fallback logic.
@@ -302,5 +322,123 @@ export const useChatStore = create<ChatStore>((set, get) => ({
    */
   finishStreaming: () => {
     set({ isStreaming: false })
+  },
+
+  setInputText: (text: string) => {
+    set({ inputText: text })
+  },
+
+  setConnectionStatus: (status: ConnectionStatus) => {
+    set({ connectionStatus: status })
+  },
+
+  sendMessage: (text: string) => {
+    const { currentChatId, messages } = get()
+
+    const userMsg: ChatMessage = {
+      id: generateId(),
+      role: 'user',
+      content: text,
+      createdAt: Date.now(),
+      status: 'complete',
+    }
+
+    const assistantMsg: ChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content: '',
+      createdAt: Date.now(),
+      status: 'streaming',
+      thinking: '',
+      events: [],
+    }
+
+    set({
+      messages: [...messages, userMsg, assistantMsg],
+      inputText: '',
+    })
+
+    const sidecarUrl = useConfigStore.getState().sidecarUrl
+    if (!sidecarUrl) {
+      get().errorMessage(assistantMsg.id, 'No sidecar URL configured')
+      return
+    }
+
+    const controller = getChatController(sidecarUrl)
+    controller.setCurrentMessageId(assistantMsg.id)
+
+    const chatHistory: ChatMessageBase[] = buildChatHistory([
+      ...messages,
+      userMsg,
+    ])
+    controller.sendMessage(text, chatHistory)
+  },
+
+  appendToMessage: (messageId: string, chunk: string) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, content: m.content + chunk } : m
+      ),
+    }))
+  },
+
+  appendToThinking: (messageId: string, chunk: string) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, thinking: (m.thinking || '') + chunk } : m
+      ),
+    }))
+  },
+
+  appendEventToMessage: (messageId: string, event: string) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, events: [...(m.events || []), event] } : m
+      ),
+    }))
+  },
+
+  completeMessage: (messageId: string) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, status: 'complete', events: [] } : m
+      ),
+    }))
+  },
+
+  errorMessage: (messageId: string, error: string) => {
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, status: 'error', content: error } : m
+      ),
+    }))
+  },
+
+  startArtifactStreaming: (messageId: string) => {
+    const { currentChatId, messages, currentArtifactId } = get()
+    const existingArtifacts = messages.filter((m) => m.hasArtifact).length
+
+    if (existingArtifacts === 0) {
+      get().startStreaming('')
+    } else {
+      const newArtifactId = generateId()
+      set({
+        currentArtifactId: newArtifactId,
+        name: 'Untitled project',
+        markdown: '',
+        isStreaming: true,
+      })
+    }
+
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? { ...m, hasArtifact: true } : m
+      ),
+    }))
+  },
+
+  finishArtifactStreaming: (messageId: string) => {
+    get().finishStreaming()
+    get().saveCurrent()
   },
 }))

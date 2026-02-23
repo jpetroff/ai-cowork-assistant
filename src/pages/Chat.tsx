@@ -8,21 +8,11 @@ import { Card, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatDistanceToNow } from 'date-fns'
-
-const MOCK_MESSAGES = [
-  {
-    id: '1',
-    role: 'user' as const,
-    content: 'Help me draft a short requirements doc.',
-    createdAt: Date.now() - 60000,
-  },
-  {
-    id: '2',
-    role: 'assistant' as const,
-    content: "I'll help. Share the project name and main goals.",
-    createdAt: Date.now() - 30000,
-  },
-]
+import { ChatMessage, ChatInput } from '@/components/chat'
+import {
+  getChatController,
+  resetChatController,
+} from '@/lib/chat/chat-controller'
 
 const CHAT_MIN_WIDTH = 200
 const RESIZE_HANDLE_WIDTH = 4
@@ -85,6 +75,7 @@ function ChatSidebar({
   resizeHandle: React.ReactNode
 }) {
   const { user_name, user_avatar, model_name } = useConfigStore()
+  const messages = useChatStore((s) => s.messages)
 
   return (
     <aside
@@ -118,29 +109,13 @@ function ChatSidebar({
       </Card>
       <ScrollArea className='flex-1'>
         <div className='flex flex-col gap-2 p-3'>
-          {MOCK_MESSAGES.map((msg) => (
-            <div
-              key={msg.id}
-              className='rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-foreground'
-            >
-              <p className='font-medium text-muted-foreground text-xs'>
-                {msg.role === 'user' ? 'You' : 'Assistant'}
-              </p>
-              <p className='mt-0.5'>{msg.content}</p>
-              <p className='mt-1 text-[10px] text-muted-foreground'>
-                {formatDistanceToNow(msg.createdAt, { addSuffix: true })}
-              </p>
-            </div>
+          {messages.map((msg) => (
+            <ChatMessage key={msg.id} message={msg} />
           ))}
         </div>
       </ScrollArea>
       <div className='border-t border-border p-3'>
-        <Input
-          disabled
-          placeholder='Chat coming soon'
-          className='text-sm'
-          aria-label='Chat input'
-        />
+        <ChatInput />
       </div>
       {resizeHandle}
     </aside>
@@ -176,6 +151,8 @@ export function Chat() {
   const lastSavedAt = useChatStore((s) => s.lastSavedAt)
   const isLoading = useChatStore((s) => s.isLoading)
   const loadedOnce = useChatStore((s) => s.loadedOnce)
+  const setConnectionStatus = useChatStore((s) => s.setConnectionStatus)
+  const sidecarUrl = useConfigStore((s) => s.sidecarUrl)
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -184,7 +161,14 @@ export function Chat() {
 
   useEffect(() => {
     loadArtifact()
-  }, [loadArtifact])
+    if (sidecarUrl) {
+      setConnectionStatus('connected')
+      getChatController(sidecarUrl)
+    }
+    return () => {
+      resetChatController()
+    }
+  }, [loadArtifact, sidecarUrl, setConnectionStatus])
 
   useEffect(() => {
     setTitleValue(name)
