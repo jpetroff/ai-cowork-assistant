@@ -58,6 +58,7 @@ export type ChatStore = {
   messages: ChatMessage[]
   inputText: string
   connectionStatus: ConnectionStatus
+  artifactStreamingMessageId: string | null
   loadArtifact: (id?: string) => Promise<void>
   setMarkdown: (next: string) => void
   setName: (name: string) => void
@@ -111,6 +112,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   inputText: '',
   connectionStatus: 'disconnected',
+  artifactStreamingMessageId: null,
 
   /**
    * Load artifact by ID with intelligent fallback logic.
@@ -393,7 +395,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   appendEventToMessage: (messageId: string, event: string) => {
     set((state) => ({
       messages: state.messages.map((m) =>
-        m.id === messageId ? { ...m, events: [...(m.events || []), event] } : m
+        m.id === messageId ? { ...m, events: [event] } : m
       ),
     }))
   },
@@ -415,21 +417,39 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   startArtifactStreaming: (messageId: string) => {
-    const { currentChatId, messages, currentArtifactId } = get()
-    const existingArtifacts = messages.filter((m) => m.hasArtifact).length
+    const state = get()
+    const message = state.messages.find((m) => m.id === messageId)
+    if (!message) return
+
+    // Only start if not already streaming for this message
+    if (state.artifactStreamingMessageId === messageId) return
+
+    // Generate new artifact ID for this document
+    const newArtifactId = generateId()
+
+    // Check if this is the first artifact in the chat
+    const existingArtifacts = state.messages.filter((m) => m.hasArtifact).length
 
     if (existingArtifacts === 0) {
-      get().startStreaming('')
-    } else {
-      const newArtifactId = generateId()
+      // First artifact - stream into current document
       set({
         currentArtifactId: newArtifactId,
-        name: 'Untitled project',
         markdown: '',
         isStreaming: true,
+        artifactStreamingMessageId: messageId,
+      })
+    } else {
+      // Subsequent artifact - create new document
+      set({
+        currentArtifactId: newArtifactId,
+        name: `Document ${existingArtifacts + 1}`,
+        markdown: '',
+        isStreaming: true,
+        artifactStreamingMessageId: messageId,
       })
     }
 
+    // Mark message as having an artifact
     set((state) => ({
       messages: state.messages.map((m) =>
         m.id === messageId ? { ...m, hasArtifact: true } : m
@@ -438,7 +458,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   finishArtifactStreaming: (messageId: string) => {
-    get().finishStreaming()
+    const state = get()
+
+    // Only finish if this message was the one streaming
+    if (state.artifactStreamingMessageId !== messageId) return
+
+    // Finish streaming and save the document
+    set({ isStreaming: false, artifactStreamingMessageId: null })
     get().saveCurrent()
   },
 }))

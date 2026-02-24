@@ -26,11 +26,11 @@ async def create_workflow(
     # )
 
     # 1. Initialize token counter
-    # Note: Since Ollama runs local models (e.g., Llama3), it's best to 
+    # Note: Since Ollama runs local models (e.g., Llama3), it's best to
     # use a tokenizer that matches, or simply the default for tracking.
     callbacks: List[BaseCallbackHandler] = []
     try:
-        tiktoken.get_encoding('gpt-oss-20b')
+        tiktoken.get_encoding("gpt-oss-20b")
         token_counter = TokenCountingHandler(
             tokenizer=tiktoken.encoding_for_model("gpt-oss-20b").encode
         )
@@ -40,22 +40,19 @@ async def create_workflow(
         print("Could not initialize token encoding statistics…")
         pass
 
-
     llm = Ollama(
         model="gpt-oss:20b",
         base_url="http://ollama.intranet",
         thinking=True,
-        callback_manager=CallbackManager(callbacks)
+        callback_manager=CallbackManager(callbacks),
     )
-    w = SimpleQueryWorkflow(
-        llm=llm
-    )
+    w = SimpleQueryWorkflow(llm=llm)
     handler = w.run(
         user_query=user_query,
         chat_history=[],
     )
 
-     # now we handle events coming back from the workflow
+    # now we handle events coming back from the workflow
     async for event in handler.stream_events():
         if isinstance(event, StopEvent) == False:
             yield DefaultResponse(type="event", payload=event.model_dump())
@@ -64,7 +61,9 @@ async def create_workflow(
 
     if final_result.response_gen != None:
         async for response in final_result.response_gen:
-            thinking_delta = response.additional_kwargs.get("thinking_delta")  # Thinking text
+            thinking_delta = response.additional_kwargs.get(
+                "thinking_delta"
+            )  # Thinking text
             if thinking_delta is not None:
                 yield DefaultResponse(
                     type="completion.chunk.thinking", content=str(thinking_delta)
@@ -73,6 +72,8 @@ async def create_workflow(
                 yield DefaultResponse(
                     type="completion.chunk", content=str(response.delta)
                 )
+        # Send completion signal after all chunks are streamed
+        yield DefaultResponse(type="completion.response", content="")
     else:
         yield DefaultResponse(
             type="completion.response", content=str(final_result.response_text)

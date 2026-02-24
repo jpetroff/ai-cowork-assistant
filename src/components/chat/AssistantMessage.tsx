@@ -9,25 +9,23 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
 
   return (
     <div className='space-y-1'>
-      {message.events?.map((event, i) => (
-        <ProgressEvent key={i} event={event} />
-      ))}
-
+      {message.status === 'streaming' &&
+        message.events &&
+        message.events.length > 0 && (
+          <ProgressEvent event={message.events[message.events.length - 1]} />
+        )}
       {message.thinking && (
         <ThinkingBlock content={message.thinking} isStreaming={isStreaming} />
       )}
-
       {message.content && (
         <div className='text-sm whitespace-pre-wrap'>{message.content}</div>
       )}
-
       {message.hasArtifact && (
         <Badge variant='secondary' className='text-[10px] gap-1'>
           <FileText className='size-3' />
           Document created
         </Badge>
       )}
-
       {message.status === 'error' && (
         <div className='text-xs text-destructive'>{message.content}</div>
       )}

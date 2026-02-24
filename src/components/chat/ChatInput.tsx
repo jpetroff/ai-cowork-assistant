@@ -7,12 +7,10 @@ export function ChatInput() {
   const inputText = useChatStore((s) => s.inputText)
   const setInputText = useChatStore((s) => s.setInputText)
   const sendMessage = useChatStore((s) => s.sendMessage)
-  const connectionStatus = useChatStore((s) => s.connectionStatus)
   const messages = useChatStore((s) => s.messages)
 
   const isStreaming = messages.some((m) => m.status === 'streaming')
-  const isConnected = connectionStatus === 'connected'
-  const isDisabled = !inputText.trim() || !isConnected || isStreaming
+  const isDisabled = !inputText.trim() || isStreaming
 
   const handleSend = () => {
     if (!isDisabled) {
@@ -33,8 +31,8 @@ export function ChatInput() {
         value={inputText}
         onChange={(e) => setInputText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isConnected ? 'Type a message...' : 'Connecting...'}
-        disabled={!isConnected || isStreaming}
+        placeholder='Type a message...'
+        disabled={isStreaming}
         className='text-sm flex-1'
         aria-label='Chat input'
       />

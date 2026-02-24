@@ -24,6 +24,7 @@ export interface StreamState {
   isInArtifact: boolean
   artifactContent: string
   thinkingComplete: boolean
+  buffer: string
 }
 
 export interface WSEventHandlers {
