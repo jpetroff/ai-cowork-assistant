@@ -38,9 +38,7 @@ export async function upsert(
  * List all chats (ordered by updated_at descending)
  */
 export async function list(): Promise<Chat[]> {
-  return db.select<Chat>(
-    'SELECT * FROM chats ORDER BY updated_at DESC'
-  )
+  return db.select<Chat>('SELECT * FROM chats ORDER BY updated_at DESC')
 }
 
 /**
@@ -58,4 +56,25 @@ export async function listByProject(projectId: string): Promise<Chat[]> {
  */
 export async function remove(id: string): Promise<void> {
   return db.remove(TABLE, id)
+}
+
+/**
+ * Update a chat's name
+ */
+export async function rename(id: string, name: string): Promise<void> {
+  return db.upsert<Chat>(TABLE, { id, name, updated_at: Date.now() })
+}
+
+/**
+ * Move a chat to a different project
+ */
+export async function moveToProject(
+  id: string,
+  projectId: string
+): Promise<void> {
+  return db.upsert<Chat>(TABLE, {
+    id,
+    project_id: projectId,
+    updated_at: Date.now(),
+  })
 }

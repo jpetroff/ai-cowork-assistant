@@ -8,7 +8,7 @@ const TABLE: TableName = 'messages'
 /**
  * Convenience type for insert operations
  */
-export type MessageInput = Omit<Message, 'id' | 'created_at'>
+export type MessageInput = Omit<Message, 'id' | 'created_at' | 'updated_at'>
 
 /**
  * Get a message by ID

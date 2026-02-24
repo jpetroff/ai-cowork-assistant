@@ -12,14 +12,17 @@ import { getChatController } from '@/lib/chat/chat-controller'
 import { useConfigStore } from './config-store'
 import type { ChatMessageBase } from '@/lib/api-types'
 import { loadChatMessages, saveMessage } from '@/lib/chat/message-persistence'
+import { generateChatName } from '@/lib/chat/auto-naming'
+import { rename as renameChat, get as getChat } from '@/lib/chats'
 
-const DEFAULT_NAME = 'Untitled project'
+const DEFAULT_NAME = 'Some LLM name'
 
 export type ChatStore = {
   currentArtifactId: string | null
   currentChatId: string | null
   currentMessageId: string | null
   name: string
+  artifactName: string
   markdown: string
   isStreaming: boolean
   isLoading: boolean
@@ -29,6 +32,7 @@ export type ChatStore = {
   inputText: string
   connectionStatus: ConnectionStatus
   artifactStreamingMessageId: string | null
+  hasAutoNamed: boolean
   loadChat: (chatId: string) => Promise<void>
   setMarkdown: (next: string) => void
   setName: (name: string) => void
@@ -46,6 +50,7 @@ export type ChatStore = {
   errorMessage: (messageId: string, error: string) => void
   startArtifactStreaming: (messageId: string) => void
   finishArtifactStreaming: (messageId: string) => void
+  autoNameChat: () => Promise<void>
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -53,6 +58,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   currentChatId: null,
   currentMessageId: null,
   name: DEFAULT_NAME,
+  artifactName: DEFAULT_NAME,
   markdown: '',
   isStreaming: false,
   isLoading: false,
@@ -62,35 +68,49 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   inputText: '',
   connectionStatus: 'disconnected',
   artifactStreamingMessageId: null,
+  hasAutoNamed: false,
 
   loadChat: async (chatId: string) => {
-    set({ isLoading: true, currentChatId: chatId })
+    set({ isLoading: true, currentChatId: chatId, hasAutoNamed: false })
 
     try {
-      const messages = await loadChatMessages(chatId)
+      const [messages, chatRecord] = await Promise.all([
+        loadChatMessages(chatId),
+        getChat(chatId),
+      ])
       const recentArtifact = await getMostRecentArtifactByChat(chatId)
+
+      // Determine if chat has been auto-named already (has assistant messages)
+      const hasAssistantMessage = messages.some((m) => m.role === 'assistant')
+      // Check if chat has been manually renamed (name is not default)
+      const chatName = chatRecord?.name || DEFAULT_NAME
+      const isDefaultName = chatName === 'New Chat' || chatName === DEFAULT_NAME
 
       if (recentArtifact) {
         set({
           currentArtifactId: recentArtifact.id,
           currentMessageId: recentArtifact.message_id ?? null,
-          name: recentArtifact.name,
+          name: chatName,
+          artifactName: recentArtifact.name,
           markdown: recentArtifact.content ?? '',
           messages,
           lastSavedAt: recentArtifact.updated_at,
           isLoading: false,
           loadedOnce: true,
+          hasAutoNamed: hasAssistantMessage && !isDefaultName,
         })
       } else {
         set({
           currentArtifactId: null,
           currentMessageId: null,
-          name: DEFAULT_NAME,
+          name: chatName,
+          artifactName: DEFAULT_NAME,
           markdown: '',
           messages,
           lastSavedAt: undefined,
           isLoading: false,
           loadedOnce: true,
+          hasAutoNamed: hasAssistantMessage && !isDefaultName,
         })
       }
     } catch {
@@ -98,10 +118,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentArtifactId: null,
         currentMessageId: null,
         name: DEFAULT_NAME,
+        artifactName: DEFAULT_NAME,
         markdown: '',
         messages: [],
         isLoading: false,
         loadedOnce: true,
+        hasAutoNamed: false,
       })
     }
   },
@@ -120,7 +142,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       currentArtifactId,
       currentChatId,
       currentMessageId,
-      name,
+      artifactName,
       markdown,
     } = get()
     if (!currentArtifactId) return
@@ -128,7 +150,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     try {
       const input: UpsertArtifactInput = {
         id: currentArtifactId,
-        name,
+        name: artifactName,
         file_type: 'markdown',
         content: markdown,
         chat_id: currentChatId ?? undefined,
@@ -237,7 +259,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 
   completeMessage: async (messageId: string) => {
-    const { currentChatId, messages } = get()
+    const { currentChatId, messages, hasAutoNamed } = get()
 
     set((state) => ({
       messages: state.messages.map((m) =>
@@ -249,6 +271,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const assistantMsg = messages.find((m) => m.id === messageId)
     if (assistantMsg && currentChatId) {
       await saveMessage({ ...assistantMsg, status: 'complete' }, currentChatId)
+    }
+
+    // Auto-name chat on first assistant response
+    if (!hasAutoNamed && currentChatId) {
+      await get().autoNameChat()
     }
   },
 
@@ -280,7 +307,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     } else {
       set({
         currentArtifactId: newArtifactId,
-        name: `Document ${existingArtifacts + 1}`,
+        artifactName: `Document ${existingArtifacts + 1}`,
         markdown: '',
         isStreaming: true,
         artifactStreamingMessageId: messageId,
@@ -301,5 +328,30 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
     set({ isStreaming: false, artifactStreamingMessageId: null })
     get().saveCurrent()
+  },
+
+  autoNameChat: async () => {
+    const { currentChatId, messages, name } = get()
+    if (!currentChatId || get().hasAutoNamed) return
+
+    // Only auto-name if using default name
+    if (name !== 'New Chat' && name !== DEFAULT_NAME) {
+      set({ hasAutoNamed: true })
+      return
+    }
+
+    try {
+      const generatedName = await generateChatName(messages)
+      if (generatedName) {
+        set({ name: generatedName, hasAutoNamed: true })
+        // Persist to database
+        await renameChat(currentChatId, generatedName)
+        // Also save current artifact if exists
+        await get().saveCurrent()
+      }
+    } catch (error) {
+      console.error('[auto-naming] Failed to auto-name chat:', error)
+      set({ hasAutoNamed: true })
+    }
   },
 }))
