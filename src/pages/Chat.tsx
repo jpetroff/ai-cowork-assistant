@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { useConfigStore } from '@/stores/config-store'
 import { useChatStore } from '@/stores/chat-store'
 import { ProjectEditor } from '@/components/ProjectEditor'
@@ -14,7 +15,7 @@ import {
   resetChatController,
 } from '@/lib/chat/chat-controller'
 
-const CHAT_MIN_WIDTH = 200
+const CHAT_MIN_WIDTH = 280
 const RESIZE_HANDLE_WIDTH = 4
 
 function useResizablePanel(
@@ -141,7 +142,8 @@ function SaveStatus({
 }
 
 export function Chat() {
-  const loadArtifact = useChatStore((s) => s.loadArtifact)
+  const { chatId } = useParams<{ chatId: string }>()
+  const loadChat = useChatStore((s) => s.loadChat)
   const markdown = useChatStore((s) => s.markdown)
   const isStreaming = useChatStore((s) => s.isStreaming)
   const setMarkdown = useChatStore((s) => s.setMarkdown)
@@ -160,7 +162,9 @@ export function Chat() {
   const DEBOUNCE_MS = 800
 
   useEffect(() => {
-    loadArtifact()
+    if (chatId) {
+      loadChat(chatId)
+    }
     if (sidecarUrl) {
       setConnectionStatus('connected')
       getChatController(sidecarUrl)
@@ -168,7 +172,7 @@ export function Chat() {
     return () => {
       resetChatController()
     }
-  }, [loadArtifact, sidecarUrl, setConnectionStatus])
+  }, [chatId, loadChat, sidecarUrl, setConnectionStatus])
 
   useEffect(() => {
     setTitleValue(name)
@@ -222,11 +226,11 @@ export function Chat() {
   }
 
   const { width, isDragging, handleMouseDown, containerRef } =
-    useResizablePanel(320, CHAT_MIN_WIDTH, 0.5)
+    useResizablePanel(360, CHAT_MIN_WIDTH, 0.5)
 
   const resizeHandle = (
     <div
-      className={`absolute top-0 right-0 h-full w-[${RESIZE_HANDLE_WIDTH}px] cursor-col-resize hover:bg-primary/20 transition-colors ${isDragging ? 'bg-primary/30' : ''}`}
+      className={`absolute top-0 right-0 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isDragging ? 'bg-primary/30' : ''}`}
       style={{ width: RESIZE_HANDLE_WIDTH, transform: 'translateX(50%)' }}
       onMouseDown={handleMouseDown}
     />
@@ -234,7 +238,7 @@ export function Chat() {
 
   return (
     <div
-      className='flex h-screen max-h-screen w-full bg-background'
+      className='flex h-screen w-full bg-background overflow-hidden'
       ref={containerRef}
     >
       <ChatSidebar width={width} resizeHandle={resizeHandle} />
@@ -260,12 +264,12 @@ export function Chat() {
           )}
           <SaveStatus lastSavedAt={lastSavedAt} isLoading={isLoading} />
         </header>
-        <div className='flex-1 min-h-0 overflow-hidden p-4'>
+        <div className='flex-1 p-4 min-h-0'>
           <ProjectEditor
             value={markdown}
             onChange={setMarkdown}
             isStreaming={isStreaming}
-            className='h-full min-h-0'
+            className='h-full'
           />
         </div>
       </div>

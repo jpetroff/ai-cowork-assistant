@@ -7,6 +7,7 @@ import {
   CONFIG_KEYS,
   type Configuration,
 } from '@/lib/db'
+import { runMigrations } from '@/lib/db/migrations'
 import { initSidecar, type SidecarInfo } from '@/lib/sidecar'
 
 /**
@@ -186,6 +187,9 @@ export const useConfigStore = create<ConfigStore>((set) => ({
    */
   initialize: async () => {
     set({ status: 'checking' })
+
+    // Run database migrations
+    await runMigrations()
 
     const info: SidecarInfo = await initSidecar()
 

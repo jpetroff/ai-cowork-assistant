@@ -37,6 +37,7 @@ model Message {
   role        String
   content     String
   created_at  Int
+  updated_at  Int
 
   @@map("messages")
 }

@@ -2,49 +2,19 @@ import { create } from 'zustand'
 import {
   loadArtifactById,
   upsertArtifact,
-  getMostRecentArtifact,
   getMostRecentArtifactByChat,
   type UpsertArtifactInput,
 } from '@/lib/artifacts'
 import { closeOpenMarkdownDelimiters } from '@/lib/markdown-streaming'
-import { loadConfiguration, saveConfigurationEntry } from '@/lib/db'
 import type { ConnectionStatus, ChatMessage } from '@/lib/chat/types'
 import { generateId, buildChatHistory } from '@/lib/chat/types'
 import { getChatController } from '@/lib/chat/chat-controller'
 import { useConfigStore } from './config-store'
 import type { ChatMessageBase } from '@/lib/api-types'
+import { loadChatMessages, saveMessage } from '@/lib/chat/message-persistence'
 
-const DEFAULT_ARTIFACT_ID = 'default-project'
 const DEFAULT_NAME = 'Untitled project'
-const LAST_OPENED_KEY = 'last_opened_artifact_id'
-const LAST_CHAT_KEY = 'last_opened_chat_id'
-const LAST_MESSAGE_KEY = 'last_opened_message_id'
 
-/**
- * Zustand store type combining ChatState with artifact management functions.
- * Manages artifact loading, markdown editing, streaming state, and persistence.
- *
- * @extends ChatState
- * @property currentArtifactId - Currently loaded artifact ID
- * @property currentChatId - Current chat session ID
- * @property currentMessageId - Current message ID within the chat
- * @property name - Display name of the current artifact
- * @property markdown - Markdown content of the artifact
- * @property isStreaming - Whether content is currently being streamed
- * @property isLoading - Whether artifact is currently loading
- * @property loadedOnce - Whether artifact has been loaded at least once
- * @property lastSavedAt - Timestamp of last save operation
- * @property messages - Chat messages in current session
- * @property inputText - Current input text being typed
- * @property connectionStatus - WebSocket connection status
- * @property loadArtifact - Load artifact by ID with fallback logic
- * @property setMarkdown - Update markdown content (blocked during streaming)
- * @property setName - Update artifact name
- * @property saveCurrent - Save current artifact to database
- * @property startStreaming - Initialize streaming mode with base content
- * @property appendStreamingChunk - Append chunk to streaming content
- * @property finishStreaming - Finalize streaming mode
- */
 export type ChatStore = {
   currentArtifactId: string | null
   currentChatId: string | null
@@ -59,7 +29,7 @@ export type ChatStore = {
   inputText: string
   connectionStatus: ConnectionStatus
   artifactStreamingMessageId: string | null
-  loadArtifact: (id?: string) => Promise<void>
+  loadChat: (chatId: string) => Promise<void>
   setMarkdown: (next: string) => void
   setName: (name: string) => void
   saveCurrent: () => Promise<void>
@@ -68,39 +38,18 @@ export type ChatStore = {
   finishStreaming: () => void
   setInputText: (text: string) => void
   setConnectionStatus: (status: ConnectionStatus) => void
-  sendMessage: (text: string) => void
+  sendMessage: (text: string) => Promise<void>
   appendToMessage: (messageId: string, chunk: string) => void
   appendToThinking: (messageId: string, chunk: string) => void
   appendEventToMessage: (messageId: string, event: string) => void
-  completeMessage: (messageId: string) => void
+  completeMessage: (messageId: string) => Promise<void>
   errorMessage: (messageId: string, error: string) => void
   startArtifactStreaming: (messageId: string) => void
   finishArtifactStreaming: (messageId: string) => void
 }
 
-/**
- * Zustand store for chat/artifact state management.
- *
- * @remarks
- * This store provides methods to:
- * - Load artifacts from the database with intelligent fallback logic
- * - Edit and stream markdown content
- * - Save artifacts with automatic configuration updates
- * - Manage streaming state for real-time content updates
- *
- * @example
- * ```ts
- * import { useChatStore } from '@/stores/chat-store'
- *
- * const { name, markdown, loadArtifact, setMarkdown, saveCurrent } = useChatStore()
- *
- * await loadArtifact()
- * setMarkdown('# New content')
- * await saveCurrent()
- * ```
- */
 export const useChatStore = create<ChatStore>((set, get) => ({
-  currentArtifactId: DEFAULT_ARTIFACT_ID,
+  currentArtifactId: null,
   currentChatId: null,
   currentMessageId: null,
   name: DEFAULT_NAME,
@@ -114,149 +63,58 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   connectionStatus: 'disconnected',
   artifactStreamingMessageId: null,
 
-  /**
-   * Load artifact by ID with intelligent fallback logic.
-   *
-   * @param id - Artifact ID to load. If not provided, loads last opened or most recent artifact
-   * @remarks
-   * This async function follows this priority order:
-   * 1. Use provided artifact ID if given
-   * 2. Load from last_opened_artifact_id configuration
-   * 3. Get most recent artifact for current chat
-   * 4. Get most recent artifact overall
-   * 5. Fall back to default artifact ID (default-project)
-   *
-   * @example
-   * ```ts
-   * await loadArtifact()
-   * await loadArtifact('specific-artifact-id')
-   * ```
-   */
-  loadArtifact: async (id?: string) => {
-    let artifactId = id
-    let chatId = get().currentChatId
-    let messageId = get().currentMessageId
+  loadChat: async (chatId: string) => {
+    set({ isLoading: true, currentChatId: chatId })
 
-    if (!artifactId) {
-      // Try to load last opened artifact, chat, and message from config
-      try {
-        const config = await loadConfiguration()
-        artifactId = config[LAST_OPENED_KEY] || undefined
-        const savedChatId = config[LAST_CHAT_KEY]
-        const savedMessageId = config[LAST_MESSAGE_KEY]
-        if (savedChatId) chatId = savedChatId
-        if (savedMessageId) messageId = savedMessageId
-      } catch {
-        // Ignore config errors
-      }
-
-      // If no specific artifact, try to get most recent for the current chat
-      if (!artifactId && chatId) {
-        try {
-          const recent = await getMostRecentArtifactByChat(chatId)
-          if (recent) {
-            artifactId = recent.id
-            // Restore chat/message from the saved artifact if available
-            if (recent.chat_id) chatId = recent.chat_id
-            if (recent.message_id) messageId = recent.message_id
-          }
-        } catch {
-          // Ignore errors
-        }
-      }
-
-      // If still no artifact, try most recent overall
-      if (!artifactId) {
-        try {
-          const recent = await getMostRecentArtifact()
-          if (recent) {
-            artifactId = recent.id
-            // Restore chat/message from the saved artifact if available
-            if (recent.chat_id) chatId = recent.chat_id
-            if (recent.message_id) messageId = recent.message_id
-          }
-        } catch {
-          // Ignore errors
-        }
-      }
-
-      // Fall back to default
-      artifactId = artifactId || DEFAULT_ARTIFACT_ID
-    }
-
-    set({ isLoading: true })
     try {
-      const record = await loadArtifactById(artifactId)
-      if (record) {
+      const messages = await loadChatMessages(chatId)
+      const recentArtifact = await getMostRecentArtifactByChat(chatId)
+
+      if (recentArtifact) {
         set({
-          currentArtifactId: record.id,
-          currentChatId: chatId,
-          currentMessageId: messageId,
-          name: record.name,
-          markdown: record.content ?? '',
-          lastSavedAt: record.updated_at,
+          currentArtifactId: recentArtifact.id,
+          currentMessageId: recentArtifact.message_id ?? null,
+          name: recentArtifact.name,
+          markdown: recentArtifact.content ?? '',
+          messages,
+          lastSavedAt: recentArtifact.updated_at,
           isLoading: false,
           loadedOnce: true,
         })
-        // Save as last opened
-        try {
-          await saveConfigurationEntry(LAST_OPENED_KEY, record.id)
-          if (chatId) await saveConfigurationEntry(LAST_CHAT_KEY, chatId)
-          if (messageId)
-            await saveConfigurationEntry(LAST_MESSAGE_KEY, messageId)
-        } catch {
-          // Ignore config save errors
-        }
       } else {
         set({
-          currentArtifactId: artifactId,
-          currentChatId: chatId,
-          currentMessageId: messageId,
+          currentArtifactId: null,
+          currentMessageId: null,
           name: DEFAULT_NAME,
           markdown: '',
+          messages,
+          lastSavedAt: undefined,
           isLoading: false,
           loadedOnce: true,
         })
       }
     } catch {
       set({
-        currentArtifactId: artifactId,
-        currentChatId: chatId,
-        currentMessageId: messageId,
+        currentArtifactId: null,
+        currentMessageId: null,
         name: DEFAULT_NAME,
         markdown: '',
+        messages: [],
         isLoading: false,
         loadedOnce: true,
       })
     }
   },
 
-  /**
-   * Update markdown content (blocked during streaming).
-   *
-   * @param next - New markdown content
-   * @remarks Prevents modification while content is being streamed
-   */
   setMarkdown: (next: string) => {
     if (get().isStreaming) return
     set({ markdown: next })
   },
 
-  /**
-   * Update artifact name.
-   *
-   * @param name - New name
-   */
   setName: (name: string) => {
     set({ name })
   },
 
-  /**
-   * Save current artifact to database.
-   *
-   * @remarks
-   * Updates last_opened configuration with current artifact/chat/message IDs
-   */
   saveCurrent: async () => {
     const {
       currentArtifactId,
@@ -277,37 +135,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         message_id: currentMessageId ?? undefined,
       }
       await upsertArtifact(input)
-      // Save as last opened
-      try {
-        await saveConfigurationEntry(LAST_OPENED_KEY, currentArtifactId)
-        if (currentChatId)
-          await saveConfigurationEntry(LAST_CHAT_KEY, currentChatId)
-        if (currentMessageId)
-          await saveConfigurationEntry(LAST_MESSAGE_KEY, currentMessageId)
-      } catch {
-        // Ignore config save errors
-      }
       set({ lastSavedAt: Date.now(), isLoading: false })
     } catch {
       set({ isLoading: false })
     }
   },
 
-  /**
-   * Initialize streaming mode with base content.
-   *
-   * @param base - Initial markdown content to start with
-   */
   startStreaming: (base: string) => {
     set({ isStreaming: true, markdown: base })
   },
 
-  /**
-   * Append chunk to streaming content.
-   *
-   * @param chunk - New content chunk to append
-   * @remarks Automatically fixes mismatched markdown delimiters before appending
-   */
   appendStreamingChunk: (chunk: string) => {
     set((state) => {
       if (!state.isStreaming) return state
@@ -317,11 +154,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     })
   },
 
-  /**
-   * Finalize streaming mode.
-   *
-   * @remarks Clears isStreaming flag, allowing further edits
-   */
   finishStreaming: () => {
     set({ isStreaming: false })
   },
@@ -334,8 +166,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set({ connectionStatus: status })
   },
 
-  sendMessage: (text: string) => {
+  sendMessage: async (text: string) => {
     const { currentChatId, messages } = get()
+    if (!currentChatId) return
 
     const userMsg: ChatMessage = {
       id: generateId(),
@@ -359,6 +192,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       messages: [...messages, userMsg, assistantMsg],
       inputText: '',
     })
+
+    // Persist user message to database
+    await saveMessage(userMsg, currentChatId)
 
     const sidecarUrl = useConfigStore.getState().sidecarUrl
     if (!sidecarUrl) {
@@ -400,12 +236,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }))
   },
 
-  completeMessage: (messageId: string) => {
+  completeMessage: async (messageId: string) => {
+    const { currentChatId, messages } = get()
+
     set((state) => ({
       messages: state.messages.map((m) =>
         m.id === messageId ? { ...m, status: 'complete', events: [] } : m
       ),
     }))
+
+    // Persist assistant message to database
+    const assistantMsg = messages.find((m) => m.id === messageId)
+    if (assistantMsg && currentChatId) {
+      await saveMessage({ ...assistantMsg, status: 'complete' }, currentChatId)
+    }
   },
 
   errorMessage: (messageId: string, error: string) => {
@@ -421,17 +265,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const message = state.messages.find((m) => m.id === messageId)
     if (!message) return
 
-    // Only start if not already streaming for this message
     if (state.artifactStreamingMessageId === messageId) return
 
-    // Generate new artifact ID for this document
     const newArtifactId = generateId()
-
-    // Check if this is the first artifact in the chat
     const existingArtifacts = state.messages.filter((m) => m.hasArtifact).length
 
     if (existingArtifacts === 0) {
-      // First artifact - stream into current document
       set({
         currentArtifactId: newArtifactId,
         markdown: '',
@@ -439,7 +278,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         artifactStreamingMessageId: messageId,
       })
     } else {
-      // Subsequent artifact - create new document
       set({
         currentArtifactId: newArtifactId,
         name: `Document ${existingArtifacts + 1}`,
@@ -449,7 +287,6 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       })
     }
 
-    // Mark message as having an artifact
     set((state) => ({
       messages: state.messages.map((m) =>
         m.id === messageId ? { ...m, hasArtifact: true } : m
@@ -460,10 +297,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   finishArtifactStreaming: (messageId: string) => {
     const state = get()
 
-    // Only finish if this message was the one streaming
     if (state.artifactStreamingMessageId !== messageId) return
 
-    // Finish streaming and save the document
     set({ isStreaming: false, artifactStreamingMessageId: null })
     get().saveCurrent()
   },

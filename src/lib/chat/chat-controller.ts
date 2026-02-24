@@ -432,9 +432,9 @@ export class ChatController {
           console.error('[ChatController] Error in onArtifactEnd:', e)
         }
       },
-      onComplete: (messageId) => {
+      onComplete: async (messageId) => {
         try {
-          useChatStore.getState().completeMessage(messageId)
+          await useChatStore.getState().completeMessage(messageId)
         } catch (e) {
           console.error('[ChatController] Error in onComplete:', e)
         }

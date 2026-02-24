@@ -12,9 +12,9 @@ export function ChatInput() {
   const isStreaming = messages.some((m) => m.status === 'streaming')
   const isDisabled = !inputText.trim() || isStreaming
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!isDisabled) {
-      sendMessage(inputText.trim())
+      await sendMessage(inputText.trim())
     }
   }
 

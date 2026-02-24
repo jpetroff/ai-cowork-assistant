@@ -179,13 +179,6 @@ export function ProjectEditor({
     setLinkUrl('')
   }, [editor])
 
-  const openLinkPopover = useCallback(() => {
-    if (!editor) return
-    const previousUrl = editor.getAttributes('link').href
-    setLinkUrl(previousUrl || '')
-    setLinkPopoverOpen(true)
-  }, [editor])
-
   useEffect(() => {
     if (!editor) return
     editor.setEditable(!isStreaming && !isMarkdownView)
@@ -284,18 +277,28 @@ export function ProjectEditor({
         </Toggle>
         <span className='w-px h-5 bg-border mx-0.5' aria-hidden />
         {/* Link Editing */}
-        <Popover open={linkPopoverOpen} onOpenChange={setLinkPopoverOpen}>
-          <PopoverTrigger>
-            <Button
-              type='button'
-              size='icon-sm'
-              variant={editor.isActive('link') ? 'default' : 'ghost'}
-              onClick={openLinkPopover}
-              aria-label='Link'
-            >
-              <LinkIcon className='size-4' />
-            </Button>
-          </PopoverTrigger>
+        <Popover
+          open={linkPopoverOpen}
+          onOpenChange={(open) => {
+            if (open && editor) {
+              const previousUrl = editor.getAttributes('link').href
+              setLinkUrl(previousUrl || '')
+            }
+            setLinkPopoverOpen(open)
+          }}
+        >
+          <PopoverTrigger
+            render={
+              <Button
+                type='button'
+                size='icon-sm'
+                variant={editor.isActive('link') ? 'default' : 'ghost'}
+                aria-label='Link'
+              >
+                <LinkIcon className='size-4' />
+              </Button>
+            }
+          />
           <PopoverContent className='w-80' align='start'>
             <div className='flex flex-col gap-2'>
               <Label htmlFor='link-url'>URL</Label>

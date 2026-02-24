@@ -86,7 +86,7 @@ export function Project() {
   }
 
   return (
-    <div className='flex flex-col min-h-screen'>
+    <div className='flex flex-col h-screen'>
       <header className='flex items-center justify-between gap-4 border-b border-border px-6 py-4'>
         <div className='flex items-center gap-2'>
           <Button
@@ -96,12 +96,14 @@ export function Project() {
           >
             <ArrowLeft className='size-4' />
           </Button>
-          <h1 className='text-lg font-semibold'>{project?.name || 'Project'}</h1>
+          <h1 className='text-lg font-semibold'>
+            {project?.name || 'Project'}
+          </h1>
         </div>
       </header>
 
       <main className='flex-1 overflow-auto p-6'>
-        <div className='max-w-[800px] mx-auto px-4 sm:px-6'>
+        <div className='max-w-4xl mx-auto'>
           {isLoading ? (
             <div className='flex items-center justify-center h-32 text-muted-foreground'>
               Loading...
@@ -164,13 +166,17 @@ export function Project() {
                         </p>
                         <p className='text-xs text-muted-foreground'>
                           Updated{' '}
-                          {formatDistanceToNow(chat.updated_at, { addSuffix: true })}
+                          {formatDistanceToNow(chat.updated_at, {
+                            addSuffix: true,
+                          })}
                         </p>
                       </CardHeader>
                       <CardContent className='pt-0'>
                         <p className='text-xs text-muted-foreground'>
                           Created{' '}
-                          {formatDistanceToNow(chat.created_at, { addSuffix: true })}
+                          {formatDistanceToNow(chat.created_at, {
+                            addSuffix: true,
+                          })}
                         </p>
                       </CardContent>
                     </Card>

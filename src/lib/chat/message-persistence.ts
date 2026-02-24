@@ -11,12 +11,22 @@ export async function saveMessage(
     role: message.role,
     content: message.content,
   }
-  await messagesDb.insert(input)
+  try {
+    await messagesDb.insert(input)
+  } catch (error) {
+    console.error('[message-persistence] Failed to save message:', error)
+    // Don't throw - allow chat to continue even if persistence fails
+  }
 }
 
 export async function loadChatMessages(chatId: string): Promise<ChatMessage[]> {
-  const dbMessages = await messagesDb.getByChat(chatId)
-  return dbMessages.map(dbToChatMessage)
+  try {
+    const dbMessages = await messagesDb.getByChat(chatId)
+    return dbMessages.map(dbToChatMessage)
+  } catch (error) {
+    console.error('[message-persistence] Failed to load messages:', error)
+    return []
+  }
 }
 
 function dbToChatMessage(msg: Message): ChatMessage {
