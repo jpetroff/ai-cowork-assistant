@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import '@/styles/editor.css'
 import Document from '@tiptap/extension-document'
@@ -33,6 +33,9 @@ import { Markdown } from '@tiptap/markdown'
 import { Button } from '@/components/ui/button'
 import { Toggle } from '@/components/ui/toggle'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import {
   Bold as BoldIcon,
   Italic as ItalicIcon,
@@ -52,8 +55,19 @@ import {
   Columns,
   Rows,
   Merge,
+  Link as LinkIcon,
+  Eye,
+  EyeOff,
+  FileCode,
+  FileText,
+  Unlink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 
 const extensions = [
   Document,
@@ -81,7 +95,9 @@ const extensions = [
   TableRow,
   TableHeader,
   TableCell,
-  InvisibleCharacters,
+  InvisibleCharacters.configure({
+    visible: false,
+  }),
   Typography,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
   UniqueId.configure({ types: ['heading', 'paragraph'] }),
@@ -106,10 +122,15 @@ export function ProjectEditor({
   const isInitializedRef = useRef(false)
   onChangeRef.current = onChange
 
+  const [showInvisibleChars, setShowInvisibleChars] = useState(false)
+  const [isMarkdownView, setIsMarkdownView] = useState(false)
+  const [linkUrl, setLinkUrl] = useState('')
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false)
+
   const editor = useEditor({
     extensions,
     content: value || '',
-    editable: !isStreaming,
+    editable: !isStreaming && !isMarkdownView,
     editorProps: {
       attributes: {
         class:
@@ -117,7 +138,7 @@ export function ProjectEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      if (isStreaming) return
+      if (isStreaming || isMarkdownView) return
       const ed = editor as unknown as { getMarkdown?: () => string }
       const markdown =
         typeof ed.getMarkdown === 'function'
@@ -130,10 +151,45 @@ export function ProjectEditor({
     },
   })
 
+  const toggleInvisibleChars = useCallback(() => {
+    if (!editor) return
+    editor.commands.toggleInvisibleCharacters()
+    setShowInvisibleChars((prev) => !prev)
+  }, [editor])
+
+  const handleLinkSubmit = useCallback(() => {
+    if (!editor) return
+    if (linkUrl) {
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange('link')
+        .setLink({ href: linkUrl })
+        .run()
+    } else {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    }
+    setLinkUrl('')
+    setLinkPopoverOpen(false)
+  }, [editor, linkUrl])
+
+  const handleUnsetLink = useCallback(() => {
+    if (!editor) return
+    editor.chain().focus().extendMarkRange('link').unsetLink().run()
+    setLinkUrl('')
+  }, [editor])
+
+  const openLinkPopover = useCallback(() => {
+    if (!editor) return
+    const previousUrl = editor.getAttributes('link').href
+    setLinkUrl(previousUrl || '')
+    setLinkPopoverOpen(true)
+  }, [editor])
+
   useEffect(() => {
     if (!editor) return
-    editor.setEditable(!isStreaming)
-  }, [editor, isStreaming])
+    editor.setEditable(!isStreaming && !isMarkdownView)
+  }, [editor, isStreaming, isMarkdownView])
 
   useEffect(() => {
     if (!editor) return
@@ -146,6 +202,7 @@ export function ProjectEditor({
     // Skip if value hasn't changed
     if (value === valueRef.current) return
     valueRef.current = value
+    // Update editor content regardless of markdown view - editor needs to stay synced
     try {
       editor.commands.setContent(value || '', {
         contentType: 'markdown',
@@ -225,6 +282,52 @@ export function ProjectEditor({
         >
           <Highlighter className='size-4' />
         </Toggle>
+        <span className='w-px h-5 bg-border mx-0.5' aria-hidden />
+        {/* Link Editing */}
+        <Popover open={linkPopoverOpen} onOpenChange={setLinkPopoverOpen}>
+          <PopoverTrigger>
+            <Button
+              type='button'
+              size='icon-sm'
+              variant={editor.isActive('link') ? 'default' : 'ghost'}
+              onClick={openLinkPopover}
+              aria-label='Link'
+            >
+              <LinkIcon className='size-4' />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className='w-80' align='start'>
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='link-url'>URL</Label>
+              <Input
+                id='link-url'
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder='https://example.com'
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleLinkSubmit()
+                  }
+                }}
+              />
+              <div className='flex gap-2 mt-2'>
+                <Button size='sm' onClick={handleLinkSubmit} className='flex-1'>
+                  {editor.isActive('link') ? 'Update' : 'Add'} Link
+                </Button>
+                {editor.isActive('link') && (
+                  <Button
+                    size='sm'
+                    variant='destructive'
+                    onClick={handleUnsetLink}
+                  >
+                    <Unlink className='size-4' />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
         <span className='w-px h-5 bg-border mx-0.5' aria-hidden />
         <Toggle
           size='sm'
@@ -382,6 +485,40 @@ export function ProjectEditor({
         >
           <TableIcon className='size-4' />
         </Button>
+        <span className='w-px h-5 bg-border mx-0.5' aria-hidden />
+        {/* Toggle invisible characters */}
+        <Toggle
+          size='sm'
+          pressed={showInvisibleChars}
+          onPressedChange={toggleInvisibleChars}
+          aria-label='Toggle invisible characters'
+        >
+          {showInvisibleChars ? (
+            <Eye className='size-4' />
+          ) : (
+            <EyeOff className='size-4' />
+          )}
+        </Toggle>
+        <span className='w-px h-5 bg-border mx-0.5' aria-hidden />
+        {/* Switch between rich text and markdown view */}
+        <div className='flex items-center gap-2 ml-auto'>
+          <Label
+            htmlFor='markdown-view'
+            className='text-xs text-muted-foreground cursor-pointer'
+          >
+            {isMarkdownView ? (
+              <FileCode className='size-4 inline mr-1' />
+            ) : (
+              <FileText className='size-4 inline mr-1' />
+            )}
+            {isMarkdownView ? 'Markdown' : 'Rich Text'}
+          </Label>
+          <Switch
+            id='markdown-view'
+            checked={isMarkdownView}
+            onCheckedChange={setIsMarkdownView}
+          />
+        </div>
       </div>
       {isStreaming && (
         <div className='px-3 py-1.5 text-muted-foreground text-xs border-b border-border bg-muted/30'>
@@ -389,7 +526,13 @@ export function ProjectEditor({
         </div>
       )}
       <ScrollArea className='flex-1 max-h-[calc(100vh-12rem)]'>
-        <EditorContent editor={editor} />
+        {isMarkdownView ? (
+          <div className='p-3 font-mono text-sm whitespace-pre-wrap break-all'>
+            {value || ''}
+          </div>
+        ) : (
+          <EditorContent editor={editor} />
+        )}
       </ScrollArea>
     </div>
   )
