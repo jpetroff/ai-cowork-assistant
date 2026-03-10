@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "@hypothesi/tauri-mcp-server": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "bunx",
+        "@hypothesi/tauri-mcp-server"
+      ]
+    }
+  }
+}

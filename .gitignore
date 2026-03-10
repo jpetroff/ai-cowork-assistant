@@ -23,7 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-.opencode
 .llm
 .ruff_cache
 
