@@ -1,319 +1,289 @@
 # Database Module
 
-Universal database interface for the application. Supports both local SQLite and future cloud implementations.
+SQLite database layer backed by `@tauri-apps/plugin-sql`. Provides a universal `DbInterface`, a fluent query builder, typed repository functions per domain, and app settings helpers.
 
 ## Architecture
 
-```
+```text
 src/lib/db/
-├── types.ts         # Core types and interfaces
-├── sqlite.ts        # SQLite implementation
-├── query-builder.ts # Fluent query builder (Convex-style API)
-├── config.ts        # Configuration operations
-└── index.ts         # Public exports
+├── types.ts              # Entity types, DbInterface, DatabaseError
+├── sqlite.ts             # SqliteDatabase implementation + singleton `db`
+├── query-builder.ts      # Fluent QueryBuilder
+├── settings.ts           # App settings (get/set key-value pairs)
+├── repositories/
+│   ├── projects.ts       # Project CRUD
+│   ├── conversations.ts  # Conversation CRUD
+│   ├── messages.ts       # Message insert/list
+│   ├── artifacts.ts      # Artifact CRUD
+│   ├── llm-providers.ts  # LLM provider CRUD + default management
+│   └── index.ts          # Re-exports all repositories
+└── index.ts              # Public exports
 ```
 
-## Core Interface
+## Tables
 
-The `DbInterface` provides a unified API for database operations:
+| Table | Entity type | Notes |
+| --- | --- | --- |
+| `projects` | `Project` | Top-level workspace folders |
+| `conversations` | `Conversation` | Belongs to a project |
+| `messages` | `Message` | Belongs to a conversation; no `updated_at` |
+| `artifacts` | `Artifact` | Files/content produced in a conversation |
+| `llm_providers` | `LlmProvider` | AI provider config; no `updated_at` |
+| `app_settings` | `AppSetting` | Key-value store for app preferences |
+
+## Importing
 
 ```typescript
-interface DbInterface {
-  get<T>(table: TableName, id: string): Promise<T | null>
-  insert<T extends Record<string, unknown>>(
-    table: TableName,
-    data: Omit<T, 'id' | 'created_at' | 'updated_at'>
-  ): Promise<string> // Returns generated ID
-  upsert<T extends Record<string, unknown>>(
-    table: TableName,
-    data: Partial<T> & { id: string }
-  ): Promise<void>
-  remove(table: TableName, id: string): Promise<void>
-  select<T>(sql: string, params?: unknown[]): Promise<T[]>
-  execute(sql: string, params?: unknown[]): Promise<void>
-  query<T>(table: TableName): QueryBuilder<T> // Convex-style query builder
-}
+// Preferred: use repository functions directly
+import {
+  createProject, getProject, listProjects, updateProject, deleteProject,
+  createConversation, getConversation, listConversations, updateConversation, deleteConversation,
+  createMessage, listMessages,
+  createArtifact, getArtifact, listArtifacts, updateArtifact,
+  createLlmProvider, getLlmProvider, listLlmProviders, updateLlmProvider, deleteLlmProvider, setDefaultProvider,
+} from '@/lib/db'
+
+// Settings
+import { getSetting, setSetting, SETTING_KEYS } from '@/lib/db'
+
+// Low-level access (only when needed)
+import { db } from '@/lib/db'
+import type { Project, Conversation, Message, Artifact, LlmProvider } from '@/lib/db'
 ```
 
-## Table Names
+## Repositories
 
-Valid table names are defined as:
+### Projects
 
 ```typescript
-type TableName = 'artifacts' | 'messages' | 'chats' | 'configuration'
+import { createProject, getProject, listProjects, updateProject, deleteProject } from '@/lib/db'
+
+const id = await createProject({ name: 'My Project', folder_path: '/home/user/my-project' })
+
+const project = await getProject(id)          // Project | null
+
+const all = await listProjects()               // Project[], ordered by updated_at DESC
+
+await updateProject(id, { name: 'Renamed' })  // partial update, auto-bumps updated_at
+
+await deleteProject(id)
 ```
 
-## Error Handling
-
-All database operations throw `DatabaseError` on failure:
+### Conversations
 
 ```typescript
-try {
-  const record = await db.get('artifacts', id)
-} catch (error) {
-  if (error instanceof DatabaseError) {
-    console.error('DB Error:', error.message)
-    console.error('Original error:', error.originalError)
-  }
-}
+import { createConversation, getConversation, listConversations, updateConversation, deleteConversation } from '@/lib/db'
+
+const id = await createConversation({ project_id: projectId, title: 'Optional title' })
+
+const conv = await getConversation(id)                  // Conversation | null
+
+const all = await listConversations(projectId)           // Conversation[], ordered by updated_at DESC
+
+await updateConversation(id, { title: 'New title' })
+
+await deleteConversation(id)
 ```
 
-## Usage Examples
+### Messages
 
-### Creating a Database Instance
-
-```typescript
-import { createSqliteDb } from '@/lib/db'
-
-const db = createSqliteDb()
-```
-
-### Basic CRUD Operations
+Messages are append-only — there is no update function. Sequence order must be managed by the caller.
 
 ```typescript
-import { createSqliteDb } from '@/lib/db'
-import type { Artifact } from '@/lib/artifacts'
+import { createMessage, listMessages } from '@/lib/db'
 
-const db = createSqliteDb()
-
-// Insert (auto-generates id, created_at, updated_at)
-const id = await db.insert<Artifact>('artifacts', {
-  name: 'My Project',
-  file_type: 'markdown',
-  content: '# Hello',
-  file_path: null,
-  chat_id: null,
-  message_id: null,
+const id = await createMessage({
+  conversation_id: convId,
+  role: 'user',           // 'user' | 'assistant'
+  content: 'Hello',
+  sequence_order: 0,      // caller manages ordering
 })
+
+const msgs = await listMessages(convId)   // Message[], ordered by sequence_order ASC
+```
+
+### Artifacts
+
+```typescript
+import { createArtifact, getArtifact, listArtifacts, updateArtifact } from '@/lib/db'
+
+const id = await createArtifact({
+  conversation_id: convId,
+  version: 1,
+  // optional:
+  message_id: msgId,
+  title: 'Result',
+  content: '# Hello',
+  file_path: '/path/to/file',
+  file_hash: 'abc123',
+})
+
+const artifact = await getArtifact(id)              // Artifact | null
+
+const all = await listArtifacts(convId)              // Artifact[], ordered by version ASC
+
+await updateArtifact(id, {
+  content: '# Updated',
+  file_hash: 'def456',
+  // any subset of: title, content, file_path, file_hash, message_id
+})
+```
+
+### LLM Providers
+
+```typescript
+import { createLlmProvider, getLlmProvider, listLlmProviders, updateLlmProvider, deleteLlmProvider, setDefaultProvider } from '@/lib/db'
+
+const id = await createLlmProvider({
+  name: 'Anthropic',
+  provider_type: 'anthropic',
+  base_url: 'https://api.anthropic.com',
+  api_key: 'sk-...',   // optional
+  is_default: 1,       // optional, defaults to 0
+})
+
+const provider = await getLlmProvider(id)    // LlmProvider | null
+
+const all = await listLlmProviders()          // LlmProvider[], ordered by created_at ASC
+
+await updateLlmProvider(id, { api_key: 'new-key' })
+
+// Clears is_default on all rows, then sets is_default = 1 on the given id
+await setDefaultProvider(id)
+
+await deleteLlmProvider(id)
+```
+
+## App Settings
+
+Typed keys are defined in `SETTING_KEYS`. You can also pass arbitrary string keys.
+
+```typescript
+import { getSetting, setSetting, SETTING_KEYS } from '@/lib/db'
+
+// SETTING_KEYS = { THEME, APPROVAL_MODE, EDITOR_AUTOSAVE_INTERVAL_MS }
+
+await setSetting(SETTING_KEYS.THEME, 'dark')
+
+const theme = await getSetting(SETTING_KEYS.THEME)   // string | null
+```
+
+## Low-Level DbInterface
+
+Use the singleton `db` when repository functions don't cover your needs.
+
+```typescript
+import { db } from '@/lib/db'
 
 // Get by ID
-const artifact = await db.get<Artifact>('artifacts', id)
+const project = await db.get<Project>('projects', id)
+
+// Insert (auto-generates id, created_at, updated_at)
+const newId = await db.insert<Project>('projects', { name: 'X', folder_path: '/x' })
 
 // Upsert (update if exists, insert if not)
-await db.upsert<Artifact>('artifacts', {
-  id: 'existing-id',
-  name: 'Updated Name',
-  content: 'Updated content',
-  // created_at/updated_at auto-managed
-})
+await db.upsert<Project>('projects', { id, name: 'Updated' })
 
 // Delete
-await db.remove('artifacts', id)
+await db.remove('projects', id)
+
+// Raw select
+const rows = await db.select<Project>(
+  'SELECT * FROM projects WHERE folder_path LIKE $1',
+  ['/home/%']
+)
+
+// Raw execute
+await db.execute('DELETE FROM projects WHERE created_at < $1', [cutoff])
 ```
 
-### Query Builder (Convex-style API)
+## Query Builder
 
-The query builder provides a fluent, type-safe API inspired by [Convex](https://docs.convex.dev/api/interfaces/server.GenericDatabaseWriter):
+The `QueryBuilder` provides a fluent, type-safe API for `SELECT` queries. Access it via `db.query()`.
 
 ```typescript
-import { createSqliteDb } from '@/lib/db'
-import type { Message } from '@/lib/messages'
+import { db } from '@/lib/db'
+import type { Message } from '@/lib/db'
 
-const db = createSqliteDb()
-
-// Chain filters, ordering, and pagination
+// Basic filter + order + limit
 const messages = await db
   .query<Message>('messages')
-  .filter('chat_id', '=', chatId)
-  .filter('status', '!=', 'deleted')
-  .orderBy('created_at', 'desc')
+  .filter('conversation_id', '=', convId)
+  .orderBy('sequence_order', 'asc')
   .limit(50)
   .all()
 
-// Get first result
-const firstMessage = await db
+// First result
+const first = await db
   .query<Message>('messages')
-  .filter('chat_id', '=', chatId)
-  .orderBy('created_at', 'asc')
-  .first()
+  .filter('conversation_id', '=', convId)
+  .first()    // Message | null
 
-// Count results
-const unreadCount = await db
+// Count
+const total = await db
   .query<Message>('messages')
-  .filter('chat_id', '=', chatId)
-  .filter('read', '=', false)
-  .count()
+  .filter('conversation_id', '=', convId)
+  .count()    // number
 
-// IN operator for multiple values
-const specificMessages = await db
+// IN operator
+const selected = await db
   .query<Message>('messages')
   .filter('id', 'IN', ['id1', 'id2', 'id3'])
   .all()
 
-// Pagination with offset
+// Pagination
 const page2 = await db
   .query<Message>('messages')
-  .filter('chat_id', '=', chatId)
-  .orderBy('created_at', 'desc')
+  .filter('conversation_id', '=', convId)
+  .orderBy('sequence_order', 'asc')
   .limit(20)
   .offset(20)
   .all()
 ```
 
-**Supported operators:** `=`, `!=`, `<`, `<=`, `>`, `>=`, `LIKE`, `IN`
+**Supported filter operators:** `=` `!=` `<` `<=` `>` `>=` `LIKE` `IN`
 
-**Terminal methods:** `all()`, `first()`, `count()`
+**Terminal methods:** `.all()` → `T[]`, `.first()` → `T | null`, `.count()` → `number`
 
-### Custom Queries (Raw SQL)
+> Note: Multiple `.filter()` calls are joined with `AND`. There is no `OR` support in the query builder — use raw `db.select()` for complex conditions.
 
-For complex queries that can't be expressed with the query builder:
+## Error Handling
 
-```typescript
-// Select with custom SQL
-const artifacts = await db.select<Artifact>(
-  'SELECT * FROM artifacts WHERE chat_id = $1 ORDER BY updated_at DESC',
-  [chatId]
-)
-
-// Execute arbitrary SQL
-await db.execute('UPDATE artifacts SET name = $1 WHERE id = $2', [
-  'New Name',
-  id,
-])
-```
-
-### Configuration Operations
+All operations throw `DatabaseError` on failure:
 
 ```typescript
-import { loadConfiguration, saveConfigurationEntry } from '@/lib/db'
+import { DatabaseError } from '@/lib/db'
 
-// Load all config
-const config = await loadConfiguration()
-console.log(config.USER_NAME)
-
-// Save single entry
-await saveConfigurationEntry('USER_NAME', 'John Doe')
+try {
+  await createProject({ name: 'X', folder_path: '/x' })
+} catch (error) {
+  if (error instanceof DatabaseError) {
+    console.error(error.message)        // human-readable description
+    console.error(error.originalError)  // underlying plugin error, if any
+  }
+}
 ```
-
-## Table-Specific APIs
-
-While the universal interface works for all tables, convenience modules provide type-safe, domain-specific functions:
-
-```typescript
-import { artifacts } from '@/lib/artifacts'
-import { messages } from '@/lib/messages'
-import { chats } from '@/lib/chats'
-
-// Artifacts
-const artifact = await artifacts.get(id)
-const recent = await artifacts.getMostRecent()
-const list = await artifacts.listByChat(chatId)
-await artifacts.upsertArtifact({
-  id: '123',
-  name: 'Project',
-  file_type: 'markdown',
-  content: '...',
-  chat_id: '...', // optional
-})
-
-// Messages
-const message = await messages.get(id)
-const chatMessages = await messages.getByChat(chatId)
-
-// Chats
-const chat = await chats.get(id)
-const allChats = await chats.list()
-```
-
-## Future: Cloud Implementation
-
-To switch to a cloud API backend:
-
-1. Create `http.ts` implementing `DbInterface`
-2. Swap the import in table modules:
-
-```typescript
-// Before
-import { createSqliteDb } from './db'
-const db = createSqliteDb()
-
-// After
-import { createHttpDb } from './db/http'
-const db = createHttpDb({ baseUrl: 'https://api.example.com' })
-```
-
-No changes needed in table-specific code.
 
 ## Adding a New Table
 
-1. Define the table in `prisma/schema.prisma`:
+1. Define the model in `prisma/schema.prisma` and run `bun run db:generate`
 
-```prisma
-model NewTable {
-  id          String   @id
-  name        String
-  value       Int
-  created_at  Int
-  updated_at  Int
+2. Add the table name to `TableName` in [types.ts](types.ts):
 
-  @@map("new_table")
-}
-```
+   ```typescript
+   export type TableName = 'projects' | 'conversations' | ... | 'new_table'
+   ```
 
-2. Run `bun run db:generate` to generate TypeScript types
+3. Add the entity interface to [types.ts](types.ts)
 
-3. Add table name to `TableName` type in `db/types.ts`:
+4. Create `repositories/new-table.ts` following the existing repository pattern
 
-```typescript
-export type TableName =
-  | 'artifacts'
-  | 'messages'
-  | 'chats'
-  | 'configuration'
-  | 'new_table'
-```
-
-4. Create convenience module `src/lib/newTable.ts`:
-
-```typescript
-import type { NewTable } from '../generated/prisma/client'
-import { createSqliteDb } from './db'
-import type { TableName } from './db'
-
-export type { NewTable }
-
-const TABLE: TableName = 'new_table'
-const db = createSqliteDb()
-
-export async function get(id: string): Promise<NewTable | null> {
-  return db.get<NewTable>(TABLE, id)
-}
-
-export async function insert(
-  data: Omit<NewTable, 'id' | 'created_at' | 'updated_at'>
-): Promise<string> {
-  return db.insert<NewTable>(TABLE, data)
-}
-
-export async function upsert(
-  data: Partial<NewTable> & { id: string }
-): Promise<void> {
-  return db.upsert<NewTable>(TABLE, data)
-}
-
-export async function remove(id: string): Promise<void> {
-  return db.remove(TABLE, id)
-}
-```
-
-## Best Practices
-
-1. **Always use table-specific modules** for domain operations
-2. **Prefer Query Builder** over raw SQL for type-safe queries
-3. **Handle errors** with try/catch blocks
-4. **Use Prisma-generated types** for type safety
-5. **Don't use raw SQL** unless necessary for complex queries (joins, subqueries)
-6. **Use the universal interface** only for generic operations
+5. Re-export from [repositories/index.ts](repositories/index.ts)
 
 ## Scripts
 
 ```bash
-# Generate TypeScript types from Prisma schema
-bun run db:generate
-
-# Run database migrations
-bun run db:migrate
-
-# Open Prisma Studio (database GUI)
-bun run db:studio
+bun run db:generate   # Regenerate TypeScript types from Prisma schema
+bun run db:migrate    # Run migrations
+bun run db:studio     # Open Prisma Studio
 ```

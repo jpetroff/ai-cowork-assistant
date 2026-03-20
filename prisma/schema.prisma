@@ -14,7 +14,7 @@ datasource db {
 model Project {
   id          String @id
   name        String @unique
-  folder_path String
+  folder_path String?
   created_at  Int
   updated_at  Int
 
