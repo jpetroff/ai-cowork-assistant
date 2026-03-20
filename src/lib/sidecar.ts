@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
-import { loadConfiguration, CONFIG_KEYS } from './db/config'
 
 export interface SidecarInfo {
   available: boolean
@@ -9,12 +8,6 @@ export interface SidecarInfo {
 }
 
 export async function initSidecar(): Promise<SidecarInfo> {
-  const config = await loadConfiguration()
-
-  if (config[CONFIG_KEYS.FULL_REMOTE] === 'true') {
-    return { available: false, url: null, error: null }
-  }
-
   return invoke<SidecarInfo>('init')
 }
 

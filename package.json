@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "prisma generate && vite",
+    "build": "prisma generate && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "db:generate": "prisma generate",

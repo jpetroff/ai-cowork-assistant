@@ -1,7 +1,7 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// TypeScript-side peer schema definition.
+// This file MUST stay in sync with the Rust migration in src-tauri/src/db.rs.
+// When updating either file, update the other to match.
 
-// TypeScript client generator
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -12,54 +12,66 @@ datasource db {
 }
 
 model Project {
-  id            String  @id
-  name          String
-  output_folder String?
-  created_at    Int
-  updated_at    Int
+  id          String @id
+  name        String @unique
+  folder_path String
+  created_at  Int
+  updated_at  Int
 
   @@map("projects")
 }
 
-model Chat {
-  id          String  @id
-  name        String
-  project_id  String?
-  created_at  Int
-  updated_at  Int
+model Conversation {
+  id         String  @id
+  project_id String
+  title      String?
+  created_at Int
+  updated_at Int
 
-  @@map("chats")
+  @@map("conversations")
 }
 
 model Message {
-  id          String  @id
-  chat_id     String
-  role        String
-  content     String
-  created_at  Int
-  updated_at  Int
+  id              String @id
+  conversation_id String
+  role            String
+  content         String
+  sequence_order  Int
+  created_at      Int
 
   @@map("messages")
 }
 
 model Artifact {
-  id          String  @id
-  name        String
-  file_type   String
-  content     String?
-  file_path   String?
-  chat_id     String?
-  message_id  String?
-  project_id  String?
-  created_at  Int
-  updated_at  Int
+  id              String  @id
+  conversation_id String
+  message_id      String?
+  title           String?
+  content         String
+  file_path       String?
+  file_hash       String?
+  version         Int
+  created_at      Int
+  updated_at      Int
 
   @@map("artifacts")
 }
 
-model Configuration {
-  key    String  @id
-  value  String
+model LlmProvider {
+  id            String  @id
+  name          String
+  provider_type String
+  base_url      String
+  api_key       String?
+  is_default    Int
+  created_at    Int
 
-  @@map("configuration")
+  @@map("llm_providers")
+}
+
+model AppSetting {
+  key   String @id
+  value String
+
+  @@map("app_settings")
 }

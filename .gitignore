@@ -30,3 +30,8 @@ dist-ssr
 
 __pycache__/
 *.pyc
+
+# AI 
+.serena
+.claude/settings*.*
+.mcp.json

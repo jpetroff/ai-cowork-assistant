@@ -5,11 +5,66 @@ import type { QueryBuilder } from './query-builder'
  */
 
 export type TableName =
-  | 'artifacts'
-  | 'messages'
-  | 'chats'
-  | 'configuration'
   | 'projects'
+  | 'conversations'
+  | 'messages'
+  | 'artifacts'
+  | 'llm_providers'
+  | 'app_settings'
+
+// Entity types matching the SQLite schema in src-tauri/src/db.rs
+export interface Project {
+  id: string
+  name: string
+  folder_path: string
+  created_at: number
+  updated_at: number
+}
+
+export interface Conversation {
+  id: string
+  project_id: string
+  title: string | null
+  created_at: number
+  updated_at: number
+}
+
+export interface Message {
+  id: string
+  conversation_id: string
+  role: 'user' | 'assistant'
+  content: string
+  sequence_order: number
+  created_at: number
+}
+
+export interface Artifact {
+  id: string
+  conversation_id: string
+  message_id: string | null
+  title: string | null
+  content: string
+  file_path: string | null
+  file_hash: string | null
+  version: number
+  created_at: number
+  updated_at: number
+}
+
+export interface LlmProvider {
+  id: string
+  name: string
+  provider_type: string
+  base_url: string
+  api_key: string | null
+  is_default: number
+  created_at: number
+}
+
+export interface AppSetting {
+  key: string
+  value: string
+}
 
 export interface DbConfig {
   name: string

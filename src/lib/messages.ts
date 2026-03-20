@@ -1,61 +1,24 @@
-import type { Message } from '../generated/prisma/client'
-import { db, type TableName } from './db'
+import type { Message } from './db/types'
+import { createMessage, listMessages } from './db/repositories/messages'
+import { db } from './db'
 
 export type { Message }
 
-const TABLE: TableName = 'messages'
-
-/**
- * Convenience type for insert operations
- */
-export type MessageInput = Omit<Message, 'id' | 'created_at' | 'updated_at'>
-
-/**
- * Get a message by ID
- */
-export async function get(id: string): Promise<Message | null> {
-  return db.get<Message>(TABLE, id)
+export type MessageInput = {
+  conversation_id: string
+  role: 'user' | 'assistant'
+  content: string
+  sequence_order: number
 }
 
-/**
- * Insert a new message
- * @returns The generated ID
- */
 export async function insert(data: MessageInput): Promise<string> {
-  return db.insert<Message>(TABLE, data)
+  return createMessage(data)
 }
 
-/**
- * Upsert a message (insert or update)
- */
-export async function upsert(
-  data: Partial<Message> & { id: string }
-): Promise<void> {
-  return db.upsert<Message>(TABLE, data)
+export async function getByConversation(conversationId: string): Promise<Message[]> {
+  return listMessages(conversationId)
 }
 
-/**
- * Get all messages for a specific chat, ordered by creation time
- */
-export async function getByChat(chatId: string): Promise<Message[]> {
-  return db.select<Message>(
-    'SELECT * FROM messages WHERE chat_id = $1 ORDER BY created_at ASC',
-    [chatId]
-  )
-}
-
-/**
- * List all messages (ordered by creation time descending)
- */
-export async function list(): Promise<Message[]> {
-  return db.select<Message>(
-    'SELECT * FROM messages ORDER BY created_at DESC'
-  )
-}
-
-/**
- * Delete a message by ID
- */
 export async function remove(id: string): Promise<void> {
-  return db.remove(TABLE, id)
+  return db.remove('messages', id)
 }

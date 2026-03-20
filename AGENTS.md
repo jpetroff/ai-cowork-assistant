@@ -3,7 +3,6 @@
 ## Do
 
 - use shadcn with baseUI for React UI components and frontend
-- use Zustand package for global app state management
 - use Tailwind for styling
 - default to small components
 - always use bun package manager to check or install dependencies
@@ -18,64 +17,19 @@
 
 ## Commands
 
-### file scoped checks preferred
-
-#### Typescript full project check at ./src
-
-bunx tsc --noEmit
-
-#### Rust full check at ./src-tauri
-
-cargo check
-
-#### Linter checks
-
-bunx prettier --write path/to/file.tsx
-bunx eslint --fix path/to/file.tsx
-
-### full build when explicitly requested
-
-bun tauri build
-
-### to run a dev server with vite and bun
-
-bun tauri dev
-
-## Safety and permissions
-
-Allowed without prompt:
-
-- read files, list files
-- tsc single file, prettier, eslint,
-- vitest single test
-- creating a folder for components, pages, fragments inside ./src
-
-Ask first:
-
-- package installs,
-- git push
-- deleting files, chmod
-- running full build or end to end suites
+- Use `bun` as node environment and `bunx` to run commands: `bunx tsc --noEmit`, `bunx prettier --write path/to/file.tsx`, `bunx eslint --fix path/to/file.tsx` and etc
+- DO NOT use npm
+- Use `uv` as python package manager and run commands with `uvx`
+- DO NOT use `pip`
 
 ## Project structure
 
-- ./src contains all UI and application source code of the project
-- ./src-tauri source of Tauri backend for desktop application (use @hypothesi/tauri-mcp-server for details on how to use this directory)
-- ./src-python source of python sidecar with FastAPI for the application
-- ./src/components/ui should contain all shadcn + baseUI components
-- ./src/components should contain higher level components, widgets or mini-apps that are composed of basic components from shadcn + baseUI
-- ./src/pages should contain React router pages for this single-page application
-- ./src/lib should contain any reusable helper functions
-- ./src/lib/db contains db API to access local SQLite database and provides reusable ways to build db queries without using SQL syntax -- abstracted implementation that does not depend on SQL
+Refer to ./openspec/project.md for project specifications, file structure
 
 ## Good and bad examples
 
 - avoid class based components like `Admin.tsx`
 - use functional components with hooks like `Projects.tsx`
-
-## When stuck
-
-- ask a clarifying question, propose a short plan, or open a draft PR with notes
 
 ## Design system
 

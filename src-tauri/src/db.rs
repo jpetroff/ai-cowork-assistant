@@ -1,70 +1,83 @@
+// Rust-side authoritative schema definition.
+// This file MUST stay in sync with the TypeScript-side peer: prisma/schema.prisma.
+// When updating either file, update the other to match.
+
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub const DB_NAME: &str = "sqlite:app_data.db";
 
-/*
-    All table are also schemas are defined in ./prisma/scheme.prisma to automatically generate frontend types. Run bun run db:generate to update Typescript bindings
-*/
 pub fn migrations() -> Vec<Migration> {
-    vec![
-        Migration {
-            version: 1,
-            description: "create_base_schema",
-            sql: "CREATE TABLE IF NOT EXISTS configuration (key TEXT PRIMARY KEY, value TEXT);
-                 CREATE TABLE IF NOT EXISTS projects (
-                     id TEXT PRIMARY KEY,
-                     name TEXT NOT NULL,
-                     output_folder TEXT,
-                     created_at INTEGER NOT NULL,
-                     updated_at INTEGER NOT NULL
-                 );
-                 CREATE TABLE IF NOT EXISTS chats (
-                     id TEXT PRIMARY KEY,
-                     name TEXT NOT NULL,
-                     project_id TEXT,
-                     created_at INTEGER NOT NULL,
-                     updated_at INTEGER NOT NULL
-                 );
-                 CREATE TABLE IF NOT EXISTS messages (
-                     id TEXT PRIMARY KEY,
-                     chat_id TEXT NOT NULL,
-                     role TEXT NOT NULL,
-                     content TEXT NOT NULL,
-                     created_at INTEGER NOT NULL,
-                     FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
-                 );
-                 CREATE TABLE IF NOT EXISTS artifacts (
-                     id TEXT PRIMARY KEY,
-                     name TEXT NOT NULL,
-                     file_type TEXT NOT NULL,
-                     content TEXT,
-                     file_path TEXT,
-                     chat_id TEXT,
-                     message_id TEXT,
-                     project_id TEXT,
-                     created_at INTEGER NOT NULL,
-                     updated_at INTEGER NOT NULL
-                 );",
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "add_indexes",
-            sql: "CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at);
-                  CREATE INDEX IF NOT EXISTS idx_chats_project_id ON chats(project_id);
-                  CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at);
-                  CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
-                  CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
-                  CREATE INDEX IF NOT EXISTS idx_artifacts_chat_id ON artifacts(chat_id);
-                  CREATE INDEX IF NOT EXISTS idx_artifacts_project_id ON artifacts(project_id);
-                  CREATE INDEX IF NOT EXISTS idx_artifacts_updated_at ON artifacts(updated_at);",
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 3,
-            description: "add_full_remote_config",
-            sql: "INSERT INTO configuration (key, value) VALUES ('full_remote', 'false');",
-            kind: MigrationKind::Up,
-        },
-    ]
+    vec![Migration {
+        version: 1,
+        description: "initial schema",
+        kind: MigrationKind::Up,
+        sql: "
+PRAGMA journal_mode=WAL;
+PRAGMA foreign_keys=ON;
+
+CREATE TABLE IF NOT EXISTS projects (
+  id          TEXT PRIMARY KEY,
+  name        TEXT UNIQUE NOT NULL,
+  folder_path TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id         TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  title      TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conv_project
+  ON conversations(project_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content         TEXT NOT NULL,
+  sequence_order  INTEGER NOT NULL,
+  created_at      INTEGER NOT NULL,
+  UNIQUE(conversation_id, sequence_order)
+);
+CREATE INDEX IF NOT EXISTS idx_msg_conv
+  ON messages(conversation_id, sequence_order);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  message_id      TEXT REFERENCES messages(id) ON DELETE SET NULL,
+  title           TEXT,
+  content         TEXT NOT NULL DEFAULT '',
+  file_path       TEXT,
+  file_hash       TEXT,
+  version         INTEGER NOT NULL DEFAULT 1,
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_art_conv
+  ON artifacts(conversation_id, version);
+
+CREATE TABLE IF NOT EXISTS llm_providers (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  provider_type TEXT NOT NULL,
+  base_url      TEXT NOT NULL,
+  api_key       TEXT,
+  is_default    INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('theme', '\"system\"');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('approval_mode', '\"manual\"');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('editor_autosave_interval_ms', '1000');
+",
+    }]
 }

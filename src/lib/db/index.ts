@@ -2,11 +2,15 @@
  * Database module - exports the database interface and implementation
  */
 
-import type { DbConfig } from './types'
-
 export {
   type TableName,
   type DbInterface,
+  type Project,
+  type Conversation,
+  type Message,
+  type Artifact,
+  type LlmProvider,
+  type AppSetting,
   DatabaseError,
 } from './types'
 
@@ -21,16 +25,18 @@ export {
   type OrderCondition,
 } from './query-builder'
 
-// Configuration operations
+// Settings operations (replaces old config.ts)
 export {
-  type Configuration,
-  CONFIG_KEYS,
-  loadConfiguration,
-  saveConfigurationEntry,
-  saveConfiguration,
-} from './config'
+  SETTING_KEYS,
+  type SettingKey,
+  getSetting,
+  setSetting,
+} from './settings'
+
+// Typed repository modules
+export * from './repositories'
 
 // Default database configuration
-export const DEFAULT_DB_CONFIG: DbConfig = {
+export const DEFAULT_DB_CONFIG = {
   name: 'sqlite:app_data.db',
 }

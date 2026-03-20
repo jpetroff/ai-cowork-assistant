@@ -6,7 +6,7 @@ import { QueryBuilder } from './query-builder'
 const DB_NAME = 'sqlite:app_data.db'
 
 function generateId(): string {
-  return `${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+  return crypto.randomUUID()
 }
 
 export class SqliteDatabase implements DbInterface {

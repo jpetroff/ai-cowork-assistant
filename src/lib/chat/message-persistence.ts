@@ -1,27 +1,28 @@
-import type { Message } from '../../generated/prisma/client'
-import * as messagesDb from '../messages'
+import type { Message } from '../db/types'
+import { createMessage, listMessages } from '../db/repositories/messages'
 import type { ChatMessage } from './types'
 
 export async function saveMessage(
   message: ChatMessage,
-  chatId: string
+  conversationId: string,
+  sequenceOrder: number
 ): Promise<void> {
-  const input: messagesDb.MessageInput = {
-    chat_id: chatId,
-    role: message.role,
-    content: message.content,
-  }
   try {
-    await messagesDb.insert(input)
+    await createMessage({
+      conversation_id: conversationId,
+      role: message.role,
+      content: message.content,
+      sequence_order: sequenceOrder,
+    })
   } catch (error) {
     console.error('[message-persistence] Failed to save message:', error)
     // Don't throw - allow chat to continue even if persistence fails
   }
 }
 
-export async function loadChatMessages(chatId: string): Promise<ChatMessage[]> {
+export async function loadConversationMessages(conversationId: string): Promise<ChatMessage[]> {
   try {
-    const dbMessages = await messagesDb.getByChat(chatId)
+    const dbMessages = await listMessages(conversationId)
     return dbMessages.map(dbToChatMessage)
   } catch (error) {
     console.error('[message-persistence] Failed to load messages:', error)
@@ -32,7 +33,7 @@ export async function loadChatMessages(chatId: string): Promise<ChatMessage[]> {
 function dbToChatMessage(msg: Message): ChatMessage {
   return {
     id: msg.id,
-    role: msg.role as 'user' | 'assistant',
+    role: msg.role,
     content: msg.content,
     createdAt: msg.created_at,
     status: 'complete',
