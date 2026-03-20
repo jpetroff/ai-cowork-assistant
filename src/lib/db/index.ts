@@ -14,7 +14,7 @@ export {
   DatabaseError,
 } from './types'
 
-export { SqliteDatabase, db, getLocalAppDb } from './sqlite'
+export { SqliteDatabase, db } from './sqlite'
 
 // Query builder for type-safe queries
 export {
