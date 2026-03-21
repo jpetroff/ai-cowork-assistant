@@ -1301,9 +1301,9 @@ export const db = {
 
 ```typescript
 // src/router.tsx
-import { createBrowserRouter, RouterProvider, Outlet } from 'react-router';
+import { createHashRouter, RouterProvider, Outlet } from 'react-router';
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     element: <AppShell><Outlet /></AppShell>,
     children: [
@@ -1317,24 +1317,27 @@ export const router = createBrowserRouter([
       },
       {
         path: '/',
-        loader: () => useProjectStore.getState().loadAll(),
+        // Loaders fire-and-return: they kick off async store actions but do NOT await them.
+        // Each store action sets status='loading' synchronously, then resolves async.
+        // Components read their own slice's status and render skeletons independently (ADR-004).
+        loader: ({ params: _p }) => { useProjectStore.getState().loadAll(); return null; },
         element: <HomePage />,
       },
       {
         path: '/projects/:projectId',
-        loader: async ({ params }) => {
-          useProjectStore.getState().setActive(params.projectId!);
-          await useConversationStore.getState().loadForProject(params.projectId!);
+        loader: ({ params }) => {
+          useProjectStore.getState().setActive(params.projectId!);       // sync clear + set active
+          useConversationStore.getState().loadForProject(params.projectId!); // fire, don't await
           return null;
         },
         element: <ProjectPage />,
       },
       {
         path: '/projects/:projectId/chats/:chatId',
-        loader: async ({ params }) => {
-          useConversationStore.getState().setActive(params.chatId!);
-          await useMessageStore.getState().loadForConversation(params.chatId!);
-          await useArtifactStore.getState().loadForConversation(params.chatId!);
+        loader: ({ params }) => {
+          useConversationStore.getState().setActive(params.chatId!);        // sync clear
+          useMessageStore.getState().loadForConversation(params.chatId!);   // fire, don't await
+          useArtifactStore.getState().loadForConversation(params.chatId!);  // fire, don't await
           return null;
         },
         element: <ChatPage />,
@@ -1351,7 +1354,11 @@ export default function App() {
 }
 ```
 
-**Loading state during navigation** — use React Router's built-in `useNavigation()` in `AppShell` for a top-of-page progress indicator, and store-level `isLoading` flags for per-route skeleton screens:
+**Loading state during navigation** — two independent layers handle loading UX:
+
+1. **Route-level (AppShell):** `useNavigation().state === 'loading'` is true only while the loader function itself runs. Since loaders return `null` immediately (fire-and-return pattern), this progress bar is brief — just the synchronous dispatch time.
+
+2. **Component-level (per-slice status):** Each store slice exposes `status: 'idle' | 'loading' | 'ready' | 'error'`. Load actions set `status = 'loading'` *synchronously at the top* before the async work starts. Each subscribing component reads its own status and renders its own skeleton. Components on the same page load and reveal independently as their data arrives.
 
 ```typescript
 // src/components/layout/AppShell.tsx
@@ -1365,11 +1372,36 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-// src/pages/ChatPage.tsx — loading return node pattern
+// Each store slice — status set synchronously before async work:
+// src/stores/message.store.ts
+loadForConversation: async (conversationId: string) => {
+  set({ status: 'loading', messages: [] }); // ← sync clear prevents stale-data flash
+  const rows = await db.getMessages(conversationId);
+  set({ status: 'ready', messages: rows });
+},
+
+// Each component handles its own loading state:
+// src/components/chat/MessageList.tsx
+function MessageList() {
+  const status = useMessageStore(s => s.status);
+  const messages = useMessageStore(s => s.messages);
+  if (status === 'loading') return <MessageListSkeleton />;
+  if (status === 'error') return <MessageListError />;
+  return <>{messages.map(m => <MessageBubble key={m.id} id={m.id} />)}</>;
+}
+
+// src/components/editor/EditorPanel.tsx
+function EditorPanel() {
+  const status = useArtifactStore(s => s.status);
+  const artifact = useArtifactStore(s => s.activeArtifact);
+  if (status === 'loading') return <EditorSkeleton />;
+  return <TipTapEditor content={artifact?.content ?? ''} />;
+}
+
+// ChatPage is now just a layout shell — no loading logic of its own:
+// src/pages/ChatPage.tsx
 export default function ChatPage() {
-  const isLoading = useMessageStore(s => s.isLoading);
-  if (isLoading) return <ChatSkeleton />;  // ← loading return node
-  return <ChatLayout />;
+  return <ChatLayout />; // ChatLayout composes MessageList + EditorPanel + ConversationSidebar
 }
 ```
 
@@ -1769,7 +1801,7 @@ Location: `tests/e2e/flows/`
 ### ADR-001: React Router v7 over TanStack Router
 
 - **Context:** Need route-level data loading to eliminate `useEffect` for data fetching in components. Initial spec used TanStack Router for its type safety, but this app has only 5 routes with simple string params and loaders that return `null` (data lives in Zustand stores, not in loader return values). TanStack Router's type-inference advantage is only realized when components call `useLoaderData()` — which this architecture never does.
-- **Decision:** React Router v7 with `loader` functions per route. Loaders call store actions and return `null`; components read state from Zustand stores. Navigation loading state exposed via `useNavigation()` for a progress indicator in `AppShell`. Per-route loading skeletons driven by store `isLoading` flags ("loading return node" pattern).
+- **Decision:** React Router v7 with `loader` functions per route. Loaders call store actions and return `null`; components read state from Zustand stores. Navigation loading state exposed via `useNavigation()` for a progress indicator in `AppShell`. Per-component loading skeletons driven by per-slice `status` flags in each store (see ADR-004 for the per-component loading pattern). `createHashRouter` used instead of `createBrowserRouter` (see ADR-005).
 - **Alternatives considered:** TanStack Router v1 — superior TypeScript, but zero advantage given the store-centric data model. Manual `useEffect` fetch — rejected, introduces race conditions and loading state complexity in components.
 - **Consequences:** Industry-standard API; lower learning curve for open-source contributors (OC-001); `useNavigation()` replaces TanStack's `pendingComponent` with equivalent capability.
 - **Satisfies:** TC-002, NFR-001
@@ -1788,14 +1820,30 @@ Location: `tests/e2e/flows/`
 - **Consequences:** Must handle multiplexing carefully if concurrent requests are ever needed (deferred).
 - **Satisfies:** INT-001, NFR-001
 
-### ADR-004: Markdown as canonical artifact format, TipTap `tiptap-markdown` for serialization
+### ADR-004: Per-component loading state via store `status` slices, not page-level `isLoading`
+
+- **Context:** A page like `ChatPage` contains multiple independently-loaded data slices: message history (fast), artifact content (may be slower), conversation metadata (fast). A single page-level `isLoading` flag forces all components to wait for the slowest slice, and every loader must be awaited before the page renders anything.
+- **Decision:** Each store slice exposes a `status: 'idle' | 'loading' | 'ready' | 'error'` field rather than a boolean `isLoading`. Route loaders *fire* async loads but do **not** await them — they return `null` immediately after kicking off the actions. Each subscribing component reads its own slice's `status` and renders its own skeleton independently. This is the "per-component loading return node" pattern. See Section 7.1 for usage.
+- **Alternatives considered:** (a) React Suspense + `use(promise)` — cleaner Suspense integration but requires stores to expose stable Promise references and ErrorBoundary wrappers; adds complexity for limited gain given React 19 Suspense's maturity for this pattern. (b) Page-level `isLoading` flag — simpler, but forces synchronous waterfalling of all data before any part of the page renders. (c) Await all loads in loader — same waterfall problem; router shows progress bar until everything resolves.
+- **Consequences:** Each component self-describes its loading state. The router loader becomes a "fire and return" dispatcher. Store status must be reset to `'idle'` or `'loading'` synchronously at the top of each load action to avoid stale-data flash.
+- **Satisfies:** NFR-001, NFR-003
+
+### ADR-005: `createHashRouter` over `createBrowserRouter`
+
+- **Context:** Tauri v2 hosts the WebView with a custom protocol (`tauri://` or `https://tauri.localhost`). HTML5 history-based routing requires the server to return the app shell for all paths — in Tauri, this would require configuring the WebView asset protocol to handle arbitrary paths. Hash-based routing works without any server/protocol configuration.
+- **Decision:** Use `createHashRouter`. URLs are `/#/`, `/#/projects/:id`, etc. No Tauri or Vite config changes needed.
+- **Alternatives considered:** `createBrowserRouter` with Tauri asset protocol configuration — possible but adds fragile config that breaks differently on each platform.
+- **Consequences:** URLs are not pretty, but this is a desktop app with no URL sharing or SEO requirements, so hash URLs have zero user-visible downside.
+- **Satisfies:** TC-001, NFR-007
+
+### ADR-006: Markdown as canonical artifact format, TipTap `tiptap-markdown` for serialization
 
 - **Context:** Artifacts must be loadable into the editor and optionally saved as `.md` files. TipTap's internal format is ProseMirror JSON.
 - **Decision:** Store and sync markdown text; use `tiptap-markdown` extension to parse/serialize. TipTap JSON is ephemeral in the editor only.
 - **Consequences:** Some TipTap features (e.g., fine-grained undo across sessions) not preserved; markdown round-trips may lose formatting edge cases.
 - **Satisfies:** FR-EDT-010, TC-003
 
-### ADR-005: `EditorPanel` is the only component using TipTap's `useEditor` hook
+### ADR-007: `EditorPanel` is the only component using TipTap's `useEditor` hook
 
 - **Context:** `useEditor` is a React hook that must be called in a component. But the artifact store needs to call editor commands (for AI-applied changes).
 - **Decision:** `EditorPanel` owns the `useEditor` call and immediately registers the instance in `artifactStore` via `setEditorInstance`. Store actions then call `editorInstance.commands.*` directly.

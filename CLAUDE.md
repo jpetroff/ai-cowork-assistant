@@ -26,6 +26,11 @@
 
 Refer to ./openspec/specs/project/spec.md for detailed project specifications
 
+## MCPs
+
+- Prefer serena MCP for advenced code search: it uses language server for searching symbols and imports when doing refactoring work.
+- Use Context7 MCP to get latest up-to-date documentation about framework and libraries
+
 ## Good and bad examples
 
 - avoid class based components like `Admin.tsx`
