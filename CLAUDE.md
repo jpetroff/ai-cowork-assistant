@@ -28,7 +28,11 @@ Refer to ./openspec/specs/project/spec.md for detailed project specifications
 
 ## MCPs
 
-- Prefer serena MCP for advenced code search: it uses language server for searching symbols and imports when doing refactoring work.
+- **Always use Serena MCP first** for any code exploration, search, or refactoring — do not default to grep/glob/read when Serena tools can answer the question more precisely.
+  - Use `get_symbols_overview` to understand a file's structure before reading it
+  - Use `find_symbol` with `include_body=true` to read a specific function/class without loading the whole file
+  - Use `find_referencing_symbols` to find all callers/usages of a symbol (more accurate than text search)
+  - Use `replace_symbol_body` / `rename_symbol` for safe, LSP-aware edits and renames
 - Use Context7 MCP to get latest up-to-date documentation about framework and libraries
 
 ## Good and bad examples
