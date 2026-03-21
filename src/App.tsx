@@ -1,10 +1,17 @@
 import { useEffect } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
+import { useAppStore } from './stores/appStore'
+import { startWindowSizePersistence, currentWindowLabel } from './lib/windows'
 
 export default function App() {
+  const init = useAppStore((s) => s.init)
+
   useEffect(() => {
-    // TODO: appStore.init()
+    init()
+    if (currentWindowLabel() === 'main') {
+      startWindowSizePersistence()
+    }
   }, [])
 
   return <RouterProvider router={router} />

@@ -20,5 +20,3 @@ export const useMessageStore = makeStubHook({ status: 'loading' as StoreStatus }
 /** @property status - always 'loading' until real store is wired */
 export const useArtifactStore = makeStubHook({ status: 'loading' as StoreStatus })
 
-/** @property status - always 'loading' until real store is wired */
-export const useAppStore = makeStubHook({ status: 'loading' as StoreStatus })

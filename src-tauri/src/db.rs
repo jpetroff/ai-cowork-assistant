@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS app_settings (
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('theme', '\"system\"');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('approval_mode', '\"manual\"');
 INSERT OR IGNORE INTO app_settings (key, value) VALUES ('editor_autosave_interval_ms', '1000');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('main_window_width', '1200');
+INSERT OR IGNORE INTO app_settings (key, value) VALUES ('main_window_height', '800');
 ",
     }]
 }
