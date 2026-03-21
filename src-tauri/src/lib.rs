@@ -1,21 +1,7 @@
-use serde::Serialize;
-
 mod db;
+mod dev;
 mod sidecar;
-
-#[derive(Serialize)]
-pub struct SystemUserInfo {
-    pub username: String,
-    pub avatar_path: String,
-}
-
-#[tauri::command]
-fn get_system_user_info() -> SystemUserInfo {
-    SystemUserInfo {
-        username: whoami::username(),
-        avatar_path: String::new(),
-    }
-}
+mod system;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -39,8 +25,10 @@ pub fn run() {
 
     builder
         .invoke_handler(tauri::generate_handler![
-            get_system_user_info,
-            sidecar::init
+            sidecar::init,
+            system::get_os_username,
+            system::get_os_avatar_path,
+            dev::clear_app_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

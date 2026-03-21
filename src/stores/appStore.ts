@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { invoke } from '@tauri-apps/api/core'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { initSidecar } from '@/lib/sidecar'
 import { listLlmProviders } from '@/lib/db/repositories'
@@ -15,6 +16,11 @@ export interface StartupStep {
   error?: string
 }
 
+export interface SetupDefaults {
+  name: string
+  avatarPath: string | null
+}
+
 interface AppState {
   appPhase: AppPhase
   startupSteps: StartupStep[]
@@ -23,6 +29,8 @@ interface AppState {
   sidcarError: string | null
   bootError: string | null
   isFirstRun: boolean
+  /** Pre-populated from OS on first run; null on normal runs */
+  setupDefaults: SetupDefaults | null
 
   init: () => Promise<void>
   onSetupComplete: () => void
@@ -51,6 +59,20 @@ function makeSidecarStep(status: StartupStep['status'] = 'pending'): StartupStep
   return { id: SIDECAR_STEP_ID, label: 'Starting AI engine…', status }
 }
 
+// ── OS info helper ────────────────────────────────────────────────────────────
+
+async function fetchSetupDefaults(): Promise<SetupDefaults> {
+  try {
+    const [name, avatarPath] = await Promise.all([
+      invoke<string>('get_os_username'),
+      invoke<string | null>('get_os_avatar_path'),
+    ])
+    return { name: name ?? '', avatarPath: avatarPath ?? null }
+  } catch {
+    return { name: '', avatarPath: null }
+  }
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -61,6 +83,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidcarError: null,
   bootError: null,
   isFirstRun: false,
+  setupDefaults: null,
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -125,6 +148,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isFirstRun })
 
     if (isFirstRun) {
+      // Fetch OS username and avatar for setup pre-population
+      const setupDefaults = await fetchSetupDefaults()
+      set({ setupDefaults })
+
       // Setup page fills the time while sidecar starts in the background
       set({ appPhase: 'setup' })
       if (currentWindowLabel() === 'splash') {
