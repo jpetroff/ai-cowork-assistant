@@ -16,7 +16,7 @@ export type TableName =
 export interface Project {
   id: string
   name: string
-  folder_path: string
+  folder_path: string | null
   created_at: number
   updated_at: number
 }

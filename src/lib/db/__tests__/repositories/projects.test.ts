@@ -12,6 +12,27 @@ describe('createProject()', () => {
     expect(params).toContain('My Project')
     expect(params).toContain('/my/project')
   })
+
+  it('inserts null when folder_path is omitted', async () => {
+    await createProject({ name: 'No Folder' })
+    const { params } = mockDb.rows[0]
+    expect(params).toContain('No Folder')
+    expect(params).toContain(null)
+  })
+
+  it('inserts null when folder_path is explicitly null', async () => {
+    await createProject({ name: 'Explicit Null', folder_path: null })
+    const { params } = mockDb.rows[0]
+    expect(params).toContain(null)
+  })
+
+  it('allows duplicate names', async () => {
+    await createProject({ name: 'New project' })
+    await createProject({ name: 'New project' })
+    expect(mockDb.rows).toHaveLength(2)
+    expect(mockDb.rows[0].params).toContain('New project')
+    expect(mockDb.rows[1].params).toContain('New project')
+  })
 })
 
 describe('listProjects()', () => {

@@ -9,9 +9,6 @@ function makeStubHook<S extends object>(state: S) {
 }
 
 /** @property status - always 'loading' until real store is wired */
-export const useProjectStore = makeStubHook({ status: 'loading' as StoreStatus })
-
-/** @property status - always 'loading' until real store is wired */
 export const useConversationStore = makeStubHook({ status: 'loading' as StoreStatus })
 
 /** @property status - always 'loading' until real store is wired */

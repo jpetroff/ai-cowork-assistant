@@ -3,6 +3,7 @@ import { useNavigate, useNavigation } from 'react-router-dom'
 import { currentWindowLabel } from '@/lib/windows'
 import { useAppStore } from '@/stores/appStore'
 import { LoadingPage } from '@/pages/LoadingPage'
+import { NotificationToast } from '@/components/ui/NotificationToast'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -47,6 +48,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="h-0.5 bg-primary animate-pulse fixed top-0 left-0 right-0 z-50" />
       )}
       {children}
+      <NotificationToast />
     </div>
   )
 }

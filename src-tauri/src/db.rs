@@ -17,8 +17,8 @@ PRAGMA foreign_keys=ON;
 
 CREATE TABLE IF NOT EXISTS projects (
   id          TEXT PRIMARY KEY,
-  name        TEXT UNIQUE NOT NULL,
-  folder_path TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  folder_path TEXT,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );

@@ -3,13 +3,13 @@ import type { Project } from '../types'
 
 export async function createProject(data: {
   name: string
-  folder_path: string
+  folder_path?: string | null
 }): Promise<string> {
   const id = crypto.randomUUID()
   const now = Date.now()
   await db.execute(
     'INSERT INTO projects (id, name, folder_path, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)',
-    [id, data.name, data.folder_path, now, now]
+    [id, data.name, data.folder_path ?? null, now, now]
   )
   return id
 }
@@ -24,7 +24,7 @@ export async function listProjects(): Promise<Project[]> {
 
 export async function updateProject(
   id: string,
-  data: Partial<Pick<Project, 'name' | 'folder_path'>>
+  data: Partial<Pick<Project, 'name'> & { folder_path: string | null }>
 ): Promise<void> {
   const fields = Object.keys(data)
   if (fields.length === 0) return

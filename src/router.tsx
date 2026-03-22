@@ -5,6 +5,7 @@ import { SetupPage } from '@/pages/SetupPage'
 import { HomePage } from '@/pages/HomePage'
 import { ProjectPage } from '@/pages/ProjectPage'
 import { ChatPage } from '@/pages/ChatPage'
+import { useProjectStore } from '@/stores/projectStore'
 
 export const router = createHashRouter([
   {
@@ -19,10 +20,7 @@ export const router = createHashRouter([
       { path: 'setup', element: <SetupPage /> },
       {
         index: true,
-        loader: () => {
-          // TODO: projectStore.getState().loadAll()
-          return null
-        },
+        loader: () => useProjectStore.getState().loadAll(),
         element: <HomePage />,
       },
       {

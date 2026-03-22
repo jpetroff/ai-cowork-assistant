@@ -1,9 +1,9 @@
-import { ProjectListSkeleton } from '@/components/projects/ProjectListSkeleton'
+import { ProjectList } from '@/components/projects/ProjectList'
 
 export function HomePage() {
   return (
     <div className="p-6">
-      <ProjectListSkeleton />
+      <ProjectList />
     </div>
   )
 }

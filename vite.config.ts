@@ -45,7 +45,7 @@ export default defineConfig({
   // Vitest configuration
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
-    setupFiles: ["src/lib/db/__tests__/setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    setupFiles: ["src/lib/db/__tests__/setup.ts", "src/test-setup.ts"],
   },
 });

@@ -25,11 +25,17 @@ The system SHALL enable WAL journal mode and foreign key enforcement via PRAGMA 
 - **THEN** `PRAGMA foreign_keys` returns `1`
 
 ### Requirement: Projects table stores project records
-The system SHALL create a `projects` table with UUID primary key, unique name, folder path, and timestamps (Unix ms).
+The system SHALL create a `projects` table with UUID primary key, nullable folder path, and timestamps (Unix ms). The `name` column SHALL NOT have a UNIQUE constraint — duplicate names are permitted. These properties are defined in the single initial migration (v1) in `db.rs`; no incremental migration is required.
 
-#### Scenario: Unique name constraint enforced
+#### Scenario: Folder path may be null
+
+- **WHEN** a project is inserted with no folder path
+- **THEN** the row is stored successfully with `folder_path` as NULL
+
+#### Scenario: Duplicate names are permitted
+
 - **WHEN** two projects with the same name are inserted
-- **THEN** the second insert fails with a UNIQUE constraint error
+- **THEN** both inserts succeed without error
 
 ### Requirement: Conversations table is indexed by project
 The system SHALL create a `conversations` table with a foreign key to `projects(id) ON DELETE CASCADE` and an index on `(project_id, updated_at DESC)`.
