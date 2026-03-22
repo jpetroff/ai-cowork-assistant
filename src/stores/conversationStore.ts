@@ -5,6 +5,7 @@ import {
   updateConversation,
   deleteConversation,
 } from '@/lib/db/repositories/conversations'
+import { createArtifact } from '@/lib/db/repositories/artifacts'
 import type { Conversation } from '@/lib/db/types'
 import { useNotificationStore } from './notificationStore'
 
@@ -79,6 +80,14 @@ export const useConversationStore = create<ConversationState & ConversationActio
         updated_at: Date.now(),
       }
       set((s) => ({ conversations: [conversation, ...s.conversations] }))
+
+      // Create the initial empty artifact for this conversation (FR-CHT-004)
+      try {
+        await createArtifact({ conversation_id: id, version: 1, content: '' })
+      } catch (artifactErr) {
+        console.warn('[conversationStore] Could not create initial artifact:', artifactErr instanceof Error ? artifactErr.message : artifactErr)
+      }
+
       return conversation
     } catch (err) {
       useNotificationStore.getState().push({

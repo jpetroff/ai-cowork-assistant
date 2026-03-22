@@ -9,6 +9,8 @@ import { useProjectStore } from '@/stores/projectStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
 import { useLlmProviderStore } from '@/stores/llmProviderStore'
+import { useMessageStore } from '@/stores/messageStore'
+import { useArtifactStore } from '@/stores/artifactStore'
 
 export const router = createHashRouter([
   {
@@ -41,8 +43,28 @@ export const router = createHashRouter([
       },
       {
         path: 'projects/:projectId/chats/:chatId',
-        loader: ({ params }) => {
-          useConversationStore.getState().setActive(params.chatId!)
+        loader: async ({ params }) => {
+          const projectId = params.projectId!
+          const chatId = params.chatId!
+
+          // Guard for direct URL navigation — ensure project is active
+          if (!useProjectStore.getState().activeProjectId) {
+            useProjectStore.getState().setActive(projectId)
+          }
+
+          // Load conversations if not already loaded for this project
+          if (useConversationStore.getState().activeProjectId !== projectId) {
+            await useConversationStore.getState().loadForProject(projectId)
+          }
+
+          useConversationStore.getState().setActive(chatId)
+
+          // Load messages and artifacts in parallel
+          await Promise.all([
+            useMessageStore.getState().loadForConversation(chatId),
+            useArtifactStore.getState().loadForConversation(chatId),
+          ])
+
           return null
         },
         element: <ChatPage />,

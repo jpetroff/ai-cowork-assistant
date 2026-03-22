@@ -1,0 +1,457 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Editor typography — Warm Editorial Document
+   Professional prose styles for the TipTap / ProseMirror content canvas.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Variables ────────────────────────────────────────────────────────────── */
+.ProseMirror {
+  --ed-font-body:     ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ed-font-mono:     ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", Menlo, monospace;
+  --ed-size-body:     15px;
+  --ed-size-sm:       13px;
+  --ed-line-body:     1.8;
+  --ed-line-tight:    1.3;
+  --ed-line-heading:  1.2;
+  --ed-space-block:   1.15em;       /* spacing between block elements */
+  --ed-space-tight:   0.5em;
+  --ed-indent-list:   1.6em;
+
+  /* Warm ink colours — adapts to light/dark */
+  --ed-ink:           oklch(0.147 0.004 49.25);
+  --ed-ink-muted:     oklch(0.45 0.012 50);
+  --ed-ink-faint:     oklch(0.68 0.010 50);
+  --ed-accent:        oklch(0.45 0.09 40);     /* warm brown accent */
+  --ed-accent-subtle: oklch(0.45 0.09 40 / 0.12);
+  --ed-code-bg:       oklch(0.965 0.006 60);   /* warm cream */
+  --ed-code-border:   oklch(0.88 0.010 55);
+  --ed-pre-bg:        oklch(0.16 0.005 50);    /* near-black for code blocks */
+  --ed-pre-fg:        oklch(0.93 0.012 70);
+  --ed-quote-bar:     oklch(0.50 0.08 42);     /* editorial accent bar */
+  --ed-hr:            oklch(0.87 0.008 55);
+  --ed-selection:     oklch(0.45 0.09 40 / 0.15);
+  --ed-link:          oklch(0.40 0.09 40);
+}
+
+/* Dark-mode overrides via .dark ancestor */
+.dark .ProseMirror {
+  --ed-ink:           oklch(0.93 0.006 55);
+  --ed-ink-muted:     oklch(0.65 0.010 55);
+  --ed-ink-faint:     oklch(0.48 0.010 55);
+  --ed-accent:        oklch(0.75 0.07 55);
+  --ed-accent-subtle: oklch(0.75 0.07 55 / 0.12);
+  --ed-code-bg:       oklch(0.22 0.006 50);
+  --ed-code-border:   oklch(0.30 0.008 50);
+  --ed-pre-bg:        oklch(0.14 0.004 50);
+  --ed-pre-fg:        oklch(0.88 0.010 65);
+  --ed-quote-bar:     oklch(0.68 0.07 55);
+  --ed-hr:            oklch(0.30 0.006 50);
+  --ed-selection:     oklch(0.75 0.07 55 / 0.20);
+  --ed-link:          oklch(0.72 0.07 55);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+.ProseMirror {
+  outline: none;
+  font-family:   var(--ed-font-body);
+  font-size:     var(--ed-size-body);
+  line-height:   var(--ed-line-body);
+  color:         var(--ed-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  letter-spacing: -0.003em;
+  text-rendering: optimizeLegibility;
+  /* Optimal reading measure — centered in the panel */
+  max-width: 68ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Text selection */
+.ProseMirror ::selection {
+  background: var(--ed-selection);
+}
+
+/* ── Block spacing ────────────────────────────────────────────────────────── */
+
+.ProseMirror > * + * {
+  margin-top: var(--ed-space-block);
+}
+
+.ProseMirror p {
+  margin: 0;
+  color: var(--ed-ink);
+}
+
+.ProseMirror > p + p {
+  margin-top: 0.85em;
+}
+
+/* ── Headings ─────────────────────────────────────────────────────────────── */
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  font-family:     var(--ed-font-body);
+  color:           var(--ed-ink);
+  font-feature-settings: "kern" 1, "liga" 1;
+  margin-top: 2em;
+  margin-bottom: 0.4em;
+}
+
+.ProseMirror h1 + *,
+.ProseMirror h2 + *,
+.ProseMirror h3 + *,
+.ProseMirror h4 + * {
+  margin-top: 0;
+}
+
+.ProseMirror h1 {
+  font-size:      2em;
+  font-weight:    800;
+  line-height:    var(--ed-line-heading);
+  letter-spacing: -0.035em;
+  color:          var(--ed-ink);
+}
+
+.ProseMirror h2 {
+  font-size:      1.5em;
+  font-weight:    700;
+  line-height:    var(--ed-line-heading);
+  letter-spacing: -0.025em;
+  color:          var(--ed-ink);
+}
+
+.ProseMirror h3 {
+  font-size:      1.2em;
+  font-weight:    650;
+  line-height:    var(--ed-line-tight);
+  letter-spacing: -0.018em;
+}
+
+.ProseMirror h4 {
+  font-size:      1em;
+  font-weight:    650;
+  line-height:    var(--ed-line-tight);
+  letter-spacing: -0.01em;
+}
+
+.ProseMirror h5 {
+  font-size:      0.9em;
+  font-weight:    600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color:          var(--ed-ink-muted);
+}
+
+.ProseMirror h6 {
+  font-size:      0.875em;
+  font-weight:    600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color:          var(--ed-ink-faint);
+}
+
+/* First heading at top — no extra top margin */
+.ProseMirror > h1:first-child,
+.ProseMirror > h2:first-child,
+.ProseMirror > h3:first-child {
+  margin-top: 0;
+}
+
+/* ── Inline text formatting ───────────────────────────────────────────────── */
+
+.ProseMirror strong {
+  font-weight: 650;
+  color: var(--ed-ink);
+}
+
+.ProseMirror em {
+  font-style: italic;
+  color: var(--ed-ink);
+}
+
+.ProseMirror s {
+  color: var(--ed-ink-faint);
+  text-decoration-thickness: 1px;
+}
+
+.ProseMirror u {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+/* Inline code */
+.ProseMirror code {
+  font-family:      var(--ed-font-mono);
+  font-size:        0.86em;
+  background:       var(--ed-code-bg);
+  border:           1px solid var(--ed-code-border);
+  border-radius:    4px;
+  padding:          0.15em 0.4em 0.12em;
+  color:            var(--ed-ink);
+  font-weight:      450;
+  -webkit-font-smoothing: auto;
+  font-feature-settings: "liga" 0;
+}
+
+/* Highlight */
+.ProseMirror mark {
+  background:     oklch(0.88 0.10 85 / 0.55);
+  border-radius:  2px;
+  padding:        0 0.1em;
+}
+
+.dark .ProseMirror mark {
+  background:     oklch(0.65 0.09 70 / 0.30);
+}
+
+/* ── Links ────────────────────────────────────────────────────────────────── */
+
+.ProseMirror a {
+  color:                    var(--ed-link);
+  text-decoration:          underline;
+  text-underline-offset:    2px;
+  text-decoration-thickness: 1px;
+  text-decoration-color:    currentColor;
+  transition:               opacity 0.12s ease;
+}
+
+.ProseMirror a:hover {
+  opacity: 0.7;
+}
+
+/* ── Blockquote ───────────────────────────────────────────────────────────── */
+
+.ProseMirror blockquote {
+  margin:       1.5em 0;
+  padding:      0.5em 0 0.5em 1.25em;
+  border-left:  3px solid var(--ed-quote-bar);
+  color:        var(--ed-ink-muted);
+  font-style:   italic;
+  font-size:    1em;
+  line-height:  var(--ed-line-body);
+  position:     relative;
+}
+
+.ProseMirror blockquote p {
+  color: inherit;
+  margin: 0;
+}
+
+.ProseMirror blockquote > p + p {
+  margin-top: 0.6em;
+}
+
+/* ── Code blocks ──────────────────────────────────────────────────────────── */
+
+.ProseMirror pre {
+  font-family:      var(--ed-font-mono);
+  font-size:        var(--ed-size-sm);
+  background:       var(--ed-pre-bg);
+  color:            var(--ed-pre-fg);
+  padding:          1em 1.25em;
+  border-radius:    6px;
+  overflow-x:       auto;
+  margin:           1.5em 0;
+  line-height:      1.65;
+  -webkit-font-smoothing: auto;
+  font-feature-settings: "liga" 0;
+  tab-size: 2;
+}
+
+.ProseMirror pre code {
+  font-family:  inherit;
+  font-size:    inherit;
+  background:   none;
+  border:       none;
+  padding:      0;
+  color:        inherit;
+  font-weight:  400;
+  border-radius: 0;
+}
+
+/* ── Lists ────────────────────────────────────────────────────────────────── */
+
+.ProseMirror ul,
+.ProseMirror ol {
+  margin:        1em 0;
+  padding-left:  var(--ed-indent-list);
+}
+
+.ProseMirror ul {
+  list-style: none;
+}
+
+.ProseMirror ul > li {
+  position: relative;
+}
+
+/* Custom bullet — small warm square */
+.ProseMirror ul > li::before {
+  content:          '';
+  position:         absolute;
+  left:             -1.15em;
+  top:              0.62em;
+  width:            4px;
+  height:           4px;
+  border-radius:    1px;
+  background:       var(--ed-accent);
+  opacity:          0.7;
+}
+
+.ProseMirror ol {
+  list-style: decimal;
+}
+
+.ProseMirror ol > li::marker {
+  color:       var(--ed-ink-muted);
+  font-variant-numeric: tabular-nums;
+  font-size:   0.9em;
+}
+
+.ProseMirror li {
+  margin-top:   0.35em;
+  line-height:  var(--ed-line-body);
+  padding-left: 0.2em;
+}
+
+.ProseMirror li > p {
+  margin: 0;
+}
+
+/* Nested lists */
+.ProseMirror li > ul,
+.ProseMirror li > ol {
+  margin: 0.2em 0 0;
+}
+
+/* ── Horizontal rule ──────────────────────────────────────────────────────── */
+
+.ProseMirror hr {
+  border:       none;
+  border-top:   1px solid var(--ed-hr);
+  margin:       2.5em 0;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout:    fixed;
+  width:           100%;
+  margin:          1.5em 0;
+  font-size:       0.9em;
+  overflow:        hidden;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  min-width:       6em;
+  border:          1px solid var(--ed-hr);
+  padding:         0.5em 0.75em;
+  vertical-align:  top;
+  box-sizing:      border-box;
+  position:        relative;
+  line-height:     var(--ed-line-body);
+}
+
+.ProseMirror th {
+  font-weight:      650;
+  font-size:        0.82em;
+  letter-spacing:   0.04em;
+  text-transform:   uppercase;
+  background-color: var(--ed-code-bg);
+  color:            var(--ed-ink-muted);
+  border-bottom:    2px solid var(--ed-code-border);
+}
+
+/* Alternating row tint */
+.ProseMirror tr:nth-child(even) td {
+  background-color: oklch(0.98 0.003 55 / 0.5);
+}
+
+.dark .ProseMirror tr:nth-child(even) td {
+  background-color: oklch(1 0 0 / 0.03);
+}
+
+.ProseMirror .selectedCell::after {
+  z-index:     2;
+  position:    absolute;
+  content:     '';
+  inset:       0;
+  background:  var(--ed-selection);
+  pointer-events: none;
+}
+
+.ProseMirror .column-resize-handle {
+  position:   absolute;
+  right:      -2px;
+  top:        0;
+  bottom:     -2px;
+  width:      4px;
+  background: var(--ed-accent);
+  opacity:    0.4;
+  pointer-events: none;
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+/* ── Placeholder ──────────────────────────────────────────────────────────── */
+
+.ProseMirror p.is-empty:first-child::before {
+  content:        attr(data-placeholder);
+  float:          left;
+  color:          var(--ed-ink-faint);
+  pointer-events: none;
+  height:         0;
+  font-style:     italic;
+}
+
+/* ── Invisible characters ─────────────────────────────────────────────────── */
+
+.ProseMirror .invisible-character {
+  color: var(--ed-ink-faint);
+  opacity: 0.4;
+}
+
+/* ── Subscript / Superscript ──────────────────────────────────────────────── */
+
+.ProseMirror sub {
+  font-size:      0.78em;
+  vertical-align: sub;
+}
+
+.ProseMirror sup {
+  font-size:      0.78em;
+  vertical-align: super;
+}
+
+/* ── Typography smart improvements ───────────────────────────────────────── */
+
+/* En dash and em dash look */
+.ProseMirror p {
+  hanging-punctuation: first last;
+  word-break: break-word;
+}
+
+/* Heading anchors — subtle accent on hover for when headings get IDs */
+.ProseMirror h1:hover,
+.ProseMirror h2:hover,
+.ProseMirror h3:hover {
+  cursor: text;
+}
+
+/* ── Streaming state ──────────────────────────────────────────────────────── */
+/* Applied when AI is writing content (isStreaming = true on the editor) */
+.ProseMirror[contenteditable="false"] {
+  cursor: default;
+  opacity: 0.97;
+}

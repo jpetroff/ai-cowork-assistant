@@ -12,6 +12,8 @@ import Italic from '@tiptap/extension-italic'
 import Strike from '@tiptap/extension-strike'
 import Underline from '@tiptap/extension-underline'
 import Code from '@tiptap/extension-code'
+import Blockquote from '@tiptap/extension-blockquote'
+import CodeBlock from '@tiptap/extension-code-block'
 import Highlight from '@tiptap/extension-highlight'
 import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
@@ -79,6 +81,8 @@ const extensions = [
   Strike,
   Underline,
   Code,
+  Blockquote,
+  CodeBlock,
   Highlight,
   Subscript,
   Superscript,
@@ -129,12 +133,12 @@ export function ProjectEditor({
 
   const editor = useEditor({
     extensions,
-    content: value || '',
+    content: '',
     editable: !isStreaming && !isMarkdownView,
     editorProps: {
       attributes: {
         class:
-          'prose prose-sm dark:prose-invert max-w-none min-h-[200px] px-3 py-2 focus:outline-none ProseMirror',
+          'max-w-none min-h-[200px] px-6 py-5 focus:outline-none',
       },
     },
     onUpdate: ({ editor }) => {
@@ -186,24 +190,24 @@ export function ProjectEditor({
 
   useEffect(() => {
     if (!editor) return
-    // Initialize the ref on first load
+    const parseMarkdown = (content: string) => {
+      try {
+        editor.commands.setContent(content || '', { contentType: 'markdown', emitUpdate: false })
+      } catch {
+        editor.commands.setContent(content || '', { emitUpdate: false })
+      }
+    }
+    // On first load: parse initial content as markdown
     if (!isInitializedRef.current) {
-      valueRef.current = value
       isInitializedRef.current = true
+      valueRef.current = value
+      parseMarkdown(value)
       return
     }
-    // Skip if value hasn't changed
+    // Skip if value hasn't changed (e.g. onChange round-trip)
     if (value === valueRef.current) return
     valueRef.current = value
-    // Update editor content regardless of markdown view - editor needs to stay synced
-    try {
-      editor.commands.setContent(value || '', {
-        contentType: 'markdown',
-        emitUpdate: false,
-      })
-    } catch {
-      editor.commands.setContent(value || '', { emitUpdate: false })
-    }
+    parseMarkdown(value)
   }, [editor, value])
 
   if (!editor) {
@@ -528,7 +532,7 @@ export function ProjectEditor({
           Assistant is writing…
         </div>
       )}
-      <ScrollArea className='flex-1 max-h-[calc(100vh-12rem)]'>
+      <ScrollArea className='flex-1 min-h-0'>
         {isMarkdownView ? (
           <div className='p-3 font-mono text-sm whitespace-pre-wrap break-all'>
             {value || ''}
