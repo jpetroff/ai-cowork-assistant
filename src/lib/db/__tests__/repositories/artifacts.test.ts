@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { mockDb } from '../setup'
-import { createArtifact, updateArtifact } from '../../repositories/artifacts'
+import { mockDb, mockDatabaseInstance } from '../setup'
+import { createArtifact, updateArtifact, listArtifactsByProject } from '../../repositories/artifacts'
 
 describe('createArtifact()', () => {
   it('with minimal args inserts null for optional fields', async () => {
@@ -15,6 +15,45 @@ describe('createArtifact()', () => {
   it('returns a UUID', async () => {
     const id = await createArtifact({ conversation_id: 'c1', version: 1 })
     expect(id).toMatch(/^[0-9a-f-]{36}$/)
+  })
+})
+
+describe('listArtifactsByProject()', () => {
+  it('SQL joins artifacts through conversations on project_id', async () => {
+    mockDb.queueResult([])
+    await listArtifactsByProject('proj-1')
+    const [sql, params] = mockDatabaseInstance.select.mock.calls[0]
+    expect(sql).toContain('JOIN conversations')
+    expect(sql).toContain('project_id = $1')
+    expect(params).toEqual(['proj-1'])
+  })
+
+  it('orders results by artifacts.updated_at DESC', async () => {
+    mockDb.queueResult([])
+    await listArtifactsByProject('proj-1')
+    const [sql] = mockDatabaseInstance.select.mock.calls[0]
+    expect(sql).toContain('ORDER BY a.updated_at DESC')
+  })
+
+  it('appends LIMIT clause when limit is provided', async () => {
+    mockDb.queueResult([])
+    await listArtifactsByProject('proj-1', 3)
+    const [sql] = mockDatabaseInstance.select.mock.calls[0]
+    expect(sql).toContain('LIMIT 3')
+  })
+
+  it('does not include LIMIT clause when limit is omitted', async () => {
+    mockDb.queueResult([])
+    await listArtifactsByProject('proj-1')
+    const [sql] = mockDatabaseInstance.select.mock.calls[0]
+    expect(sql).not.toContain('LIMIT')
+  })
+
+  it('returns whatever the DB returns', async () => {
+    const fakeArtifacts = [{ id: 'a1', title: 'Doc 1' }]
+    mockDb.queueResult(fakeArtifacts)
+    const result = await listArtifactsByProject('proj-1')
+    expect(result).toEqual(fakeArtifacts)
   })
 })
 

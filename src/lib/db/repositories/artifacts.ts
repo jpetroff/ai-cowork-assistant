@@ -42,6 +42,13 @@ export async function listArtifacts(conversationId: string): Promise<Artifact[]>
   )
 }
 
+export async function listArtifactsByProject(projectId: string, limit?: number): Promise<Artifact[]> {
+  const sql = limit != null
+    ? `SELECT a.* FROM artifacts a JOIN conversations c ON a.conversation_id = c.id WHERE c.project_id = $1 ORDER BY a.updated_at DESC LIMIT ${limit}`
+    : 'SELECT a.* FROM artifacts a JOIN conversations c ON a.conversation_id = c.id WHERE c.project_id = $1 ORDER BY a.updated_at DESC'
+  return db.select<Artifact>(sql, [projectId])
+}
+
 export async function updateArtifact(
   id: string,
   data: Partial<Pick<Artifact, 'title' | 'content' | 'file_path' | 'file_hash' | 'message_id'>>

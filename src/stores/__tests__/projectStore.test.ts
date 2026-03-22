@@ -243,3 +243,46 @@ describe('delete()', () => {
     expect(mockDeleteProject).toHaveBeenCalledWith(project.id)
   })
 })
+
+// ── update() ──────────────────────────────────────────────────────────────────
+
+describe('update()', () => {
+  it('persists the change and updates the store entry', async () => {
+    const project = makeProject({ folder_path: null })
+    useProjectStore.setState({ projects: [project] })
+    mockUpdateProject.mockResolvedValue(undefined)
+
+    await useProjectStore.getState().update(project.id, { folder_path: '/new/path' })
+
+    expect(mockUpdateProject).toHaveBeenCalledWith(project.id, { folder_path: '/new/path' })
+    const updated = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    expect(updated?.folder_path).toBe('/new/path')
+  })
+
+  it('pushes an error notification and does not update the store on failure', async () => {
+    const project = makeProject({ folder_path: null })
+    useProjectStore.setState({ projects: [project] })
+    mockUpdateProject.mockRejectedValue(new Error('write error'))
+
+    await useProjectStore.getState().update(project.id, { folder_path: '/fail' })
+
+    // Store unchanged
+    const unchanged = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    expect(unchanged?.folder_path).toBeNull()
+    // Notification fired
+    const { notifications } = useNotificationStore.getState()
+    expect(notifications[0].kind).toBe('error')
+  })
+
+  it('updates updated_at timestamp', async () => {
+    const before = Date.now()
+    const project = makeProject({ updated_at: before - 10_000 })
+    useProjectStore.setState({ projects: [project] })
+    mockUpdateProject.mockResolvedValue(undefined)
+
+    await useProjectStore.getState().update(project.id, { folder_path: '/path' })
+
+    const updated = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    expect(updated?.updated_at).toBeGreaterThanOrEqual(before)
+  })
+})

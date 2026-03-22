@@ -6,6 +6,8 @@ import {
   deleteProject,
 } from '@/lib/db/repositories/projects'
 import type { Project } from '@/lib/db/types'
+
+type ProjectUpdateData = Partial<Pick<Project, 'name' | 'folder_path'>>
 import { useNotificationStore } from './notificationStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -48,6 +50,11 @@ interface ProjectActions {
    * Pushes an error notification on failure.
    */
   delete: (id: string) => Promise<void>
+  /**
+   * Update project fields (e.g. folder_path). DB-first.
+   * Pushes an error notification on failure.
+   */
+  update: (id: string, data: ProjectUpdateData) => Promise<void>
   /** Set the active project ID (used when navigating into a project). */
   setActive: (id: string) => void
 }
@@ -133,6 +140,23 @@ export const useProjectStore = create<ProjectState & ProjectActions>((set, get) 
       useNotificationStore.getState().push({
         kind: 'error',
         message: 'Could not delete project',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
+  },
+
+  async update(id, data) {
+    try {
+      await updateProject(id, data)
+      set((s) => ({
+        projects: s.projects.map((p) =>
+          p.id === id ? { ...p, ...data, updated_at: Date.now() } : p
+        ),
+      }))
+    } catch (err) {
+      useNotificationStore.getState().push({
+        kind: 'error',
+        message: 'Could not update project',
         detail: err instanceof Error ? err.message : String(err),
       })
     }
