@@ -31,6 +31,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
     id: crypto.randomUUID(),
     project_id: 'proj-1',
     title: 'Test chat',
+    active_artifact_id: null,
     created_at: Date.now(),
     updated_at: Date.now(),
     ...overrides,

@@ -1,5 +1,6 @@
 export * from './projects'
 export * from './conversations'
 export * from './messages'
-export * from './artifacts'
+export * from './documents'
+export * from './revisions'
 export * from './llm-providers'

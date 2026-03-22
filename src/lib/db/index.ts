@@ -9,6 +9,7 @@ export {
   type Conversation,
   type Message,
   type Artifact,
+  type ArtifactRevision,
   type LlmProvider,
   type AppSetting,
   DatabaseError,

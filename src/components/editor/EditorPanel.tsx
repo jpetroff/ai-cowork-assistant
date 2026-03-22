@@ -6,6 +6,7 @@ import { ProjectEditor } from '@/components/ProjectEditor'
 export function EditorPanel() {
   const status = useArtifactStore((s) => s.status)
   const activeArtifact = useArtifactStore((s) => s.activeArtifact)
+  const headRevision = useArtifactStore((s) => s.headRevision)
   const updateContent = useArtifactStore((s) => s.updateContent)
   const isStreaming = useMessageStore((s) => s.isStreaming)
 
@@ -22,7 +23,7 @@ export function EditorPanel() {
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <ProjectEditor
-        value={activeArtifact.content}
+        value={headRevision?.content ?? ''}
         onChange={updateContent}
         isStreaming={isStreaming}
         className="flex-1 min-h-0"

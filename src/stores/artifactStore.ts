@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { listArtifacts, createArtifact, updateArtifact } from '@/lib/db/repositories/artifacts'
-import type { Artifact } from '@/lib/db/types'
+import { listArtifacts, createArtifact, updateArtifact } from '@/lib/db/repositories/documents'
+import { createRevision, getHeadRevision, updateRevisionContent } from '@/lib/db/repositories/revisions'
+import type { Artifact, ArtifactRevision } from '@/lib/db/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -10,6 +11,7 @@ interface ArtifactState {
   artifacts: Artifact[]
   activeArtifactId: string | null
   activeArtifact: Artifact | null
+  headRevision: ArtifactRevision | null
   conversationId: string | null
   status: StoreStatus
   isDirty: boolean
@@ -22,43 +24,30 @@ interface ArtifactState {
 
 interface ArtifactActions {
   /**
-   * Load artifacts for a conversation. Activates highest-version artifact.
-   * Creates an initial empty artifact if none found (safety net).
+   * Load artifacts for a conversation. Activates most-recently-updated artifact
+   * and loads its HEAD revision. Creates an initial empty artifact if none found.
    */
   loadForConversation: (id: string) => Promise<void>
   /**
-   * Optimistically update active artifact content in store, mark dirty,
+   * Optimistically update head revision content in store, mark dirty,
    * and schedule a 1-second debounced auto-save.
    */
   updateContent: (content: string) => void
   /**
-   * Persist the active artifact's content to SQLite immediately.
-   * Guards against concurrent saves with `isSaving` flag.
+   * Persist the active artifact's HEAD revision content to SQLite immediately.
    */
   saveNow: () => Promise<void>
   /**
    * Rename the active artifact title.
    */
   rename: (title: string | null) => Promise<void>
-  /**
-   * Link active artifact to a file on disk.
-   * TODO: implement file-link-to-disk (FR-EDT-010)
-   */
+  /** @stub FR-EDT-010 */
   linkToFile: (path: string) => void
-  /**
-   * Unlink active artifact from disk file.
-   * TODO: implement file-link-to-disk (FR-EDT-010)
-   */
+  /** @stub FR-EDT-010 */
   unlinkFile: () => void
-  /**
-   * Check if linked file has been modified externally.
-   * TODO: implement external change detection (FR-EDT-011)
-   */
+  /** @stub FR-EDT-011 */
   checkExternalChanges: () => void
-  /**
-   * Reload artifact content from the linked disk file.
-   * TODO: implement external change detection (FR-EDT-011)
-   */
+  /** @stub FR-EDT-011 */
   reloadFromDisk: () => void
 }
 
@@ -69,6 +58,7 @@ const INITIAL_STATE: ArtifactState = {
   artifacts: [],
   activeArtifactId: null,
   activeArtifact: null,
+  headRevision: null,
   conversationId: null,
   status: 'idle',
   isDirty: false,
@@ -84,31 +74,21 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   ...INITIAL_STATE,
 
   async loadForConversation(id) {
-    set({ status: 'loading', conversationId: id, artifacts: [], activeArtifact: null, activeArtifactId: null })
+    set({ status: 'loading', conversationId: id, artifacts: [], activeArtifact: null, activeArtifactId: null, headRevision: null })
     try {
       let artifacts = await listArtifacts(id)
 
       if (artifacts.length === 0) {
-        // Safety net: create initial empty artifact if none found
-        const newId = await createArtifact({ conversation_id: id, version: 1, content: '' })
-        const newArtifact: Artifact = {
-          id: newId,
-          conversation_id: id,
-          message_id: null,
-          title: null,
-          content: '',
-          file_path: null,
-          file_hash: null,
-          version: 1,
-          created_at: Date.now(),
-          updated_at: Date.now(),
-        }
-        artifacts = [newArtifact]
+        // Safety net: create initial empty artifact + first revision if none found
+        const artifactId = await createArtifact({ conversation_id: id })
+        await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
+        artifacts = await listArtifacts(id)
       }
 
-      // Activate highest-version artifact
-      const active = artifacts.reduce((prev, cur) => (cur.version > prev.version ? cur : prev))
-      set({ artifacts, activeArtifact: active, activeArtifactId: active.id, status: 'ready' })
+      // Activate most-recently-updated artifact
+      const active = artifacts.reduce((prev, cur) => (cur.updated_at > prev.updated_at ? cur : prev))
+      const headRevision = await getHeadRevision(active.id)
+      set({ artifacts, activeArtifact: active, activeArtifactId: active.id, headRevision, status: 'ready' })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load artifacts'
       console.error('[artifactStore] loadForConversation error:', message)
@@ -117,16 +97,14 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   },
 
   updateContent(content) {
-    const { activeArtifact } = get()
-    if (!activeArtifact) return
+    const { headRevision } = get()
+    if (!headRevision) return
 
-    // Optimistic update in store
     set((s) => ({
       isDirty: true,
-      activeArtifact: s.activeArtifact ? { ...s.activeArtifact, content } : null,
+      headRevision: s.headRevision ? { ...s.headRevision, content } : null,
     }))
 
-    // Debounced auto-save (1 second)
     if (saveDebounceTimer !== null) clearTimeout(saveDebounceTimer)
     saveDebounceTimer = setTimeout(() => {
       saveDebounceTimer = null
@@ -135,10 +113,9 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   },
 
   async saveNow() {
-    const { activeArtifact, isSaving, isDirty } = get()
-    if (!activeArtifact || !isDirty) return
+    const { headRevision, isSaving, isDirty } = get()
+    if (!headRevision || !isDirty) return
     if (isSaving) {
-      // Re-queue after current save completes
       if (saveDebounceTimer !== null) clearTimeout(saveDebounceTimer)
       saveDebounceTimer = setTimeout(() => {
         saveDebounceTimer = null
@@ -149,7 +126,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
     set({ isSaving: true })
     try {
-      await updateArtifact(activeArtifact.id, { content: activeArtifact.content })
+      await updateRevisionContent(headRevision.id, headRevision.content)
       set({ isSaving: false, isDirty: false, lastSavedAt: Date.now() })
     } catch (err) {
       console.error('[artifactStore] saveNow error:', err instanceof Error ? err.message : err)

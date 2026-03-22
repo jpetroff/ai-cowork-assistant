@@ -31,7 +31,7 @@ vi.mock('@/lib/db/repositories/conversations', () => ({
 import { NewTaskInput } from '../NewTaskInput'
 
 function makeConversation(id: string): Conversation {
-  return { id, project_id: 'proj-1', title: null, created_at: Date.now(), updated_at: Date.now() }
+  return { id, project_id: 'proj-1', title: null, active_artifact_id: null, created_at: Date.now(), updated_at: Date.now() }
 }
 
 afterEach(cleanup)

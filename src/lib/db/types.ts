@@ -9,6 +9,7 @@ export type TableName =
   | 'conversations'
   | 'messages'
   | 'artifacts'
+  | 'artifact_revisions'
   | 'llm_providers'
   | 'app_settings'
 
@@ -25,6 +26,7 @@ export interface Conversation {
   id: string
   project_id: string
   title: string | null
+  active_artifact_id: string | null
   created_at: number
   updated_at: number
 }
@@ -41,12 +43,20 @@ export interface Message {
 export interface Artifact {
   id: string
   conversation_id: string
-  message_id: string | null
   title: string | null
-  content: string
+  current_revision_id: string | null
   file_path: string | null
   file_hash: string | null
-  version: number
+  created_at: number
+  updated_at: number
+}
+
+export interface ArtifactRevision {
+  id: string
+  artifact_id: string
+  message_id: string | null
+  author: 'user' | 'ai'
+  content: string
   created_at: number
   updated_at: number
 }

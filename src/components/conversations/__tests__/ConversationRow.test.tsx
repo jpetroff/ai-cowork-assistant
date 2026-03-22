@@ -39,6 +39,7 @@ function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
     id: 'conv-1',
     project_id: 'proj-1',
     title: 'My Chat',
+    active_artifact_id: null,
     created_at: Date.now(),
     updated_at: Date.now(),
     ...overrides,

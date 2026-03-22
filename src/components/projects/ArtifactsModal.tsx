@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FilesIcon } from '@phosphor-icons/react'
-import { listArtifactsByProject } from '@/lib/db/repositories/artifacts'
+import { listArtifactsByProject } from '@/lib/db/repositories/documents'
 import type { Artifact } from '@/lib/db/types'
 import {
   Sheet,
