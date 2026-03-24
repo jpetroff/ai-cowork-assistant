@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useMessageStore } from '@/stores/messageStore'
+import { useArtifactStore } from '@/stores/artifactStore'
+import { buildThread } from '@/lib/revision-utils'
 import { MessageListSkeleton } from './MessageListSkeleton'
 import { MessageBubble } from './MessageBubble'
+import { RevisionCard } from './RevisionCard'
 
 function MessageListEmpty() {
   return (
@@ -34,22 +37,29 @@ export function MessageList() {
   const messages = useMessageStore((s) => s.messages)
   const isStreaming = useMessageStore((s) => s.isStreaming)
   const streamingContent = useMessageStore((s) => s.streamingContent)
+  const revisions = useArtifactStore((s) => s.revisions)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const thread = buildThread(messages, revisions)
 
   // Auto-scroll to bottom when messages change or streaming updates
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent])
+  }, [thread.length, streamingContent])
 
   if (status === 'loading') return <MessageListSkeleton />
 
   return (
     <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-3 min-h-0">
-      {messages.length === 0 && status === 'ready' && <MessageListEmpty />}
+      {thread.length === 0 && status === 'ready' && <MessageListEmpty />}
 
-      {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
-      ))}
+      {thread.map((item) =>
+        item.type === 'message' ? (
+          <MessageBubble key={item.data.id} message={item.data} />
+        ) : (
+          <RevisionCard key={item.data.id} revision={item.data} />
+        )
+      )}
 
       {/* STUB: tool-call-indicator — render AI tool call steps here (FR-AI-007) */}
 

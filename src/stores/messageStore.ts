@@ -93,14 +93,36 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
   },
 
   beginStreaming() {
-    // TODO: wire to sidecar WebSocket — set isStreaming true, clear streamingContent
+    set({ isStreaming: true, streamingContent: '', streamingMessageId: null })
   },
 
-  appendChunk(_chunk) {
-    // TODO: wire to sidecar WebSocket chunk event — append to streamingContent
+  appendChunk(chunk) {
+    set((s) => ({ streamingContent: s.streamingContent + chunk }))
   },
 
-  finalizeStreaming(_id, _content) {
-    // TODO: wire to sidecar WebSocket done event — persist assistant message, clear streaming state
+  finalizeStreaming(id, content) {
+    const { conversationId, messages } = get()
+    if (!conversationId) {
+      set({ isStreaming: false, streamingContent: '', streamingMessageId: null })
+      return
+    }
+    if (id && content) {
+      const newMessage = {
+        id,
+        conversation_id: conversationId,
+        role: 'assistant' as const,
+        content,
+        sequence_order: messages.length,
+        created_at: Date.now(),
+      }
+      set((s) => ({
+        messages: [...s.messages, newMessage],
+        isStreaming: false,
+        streamingContent: '',
+        streamingMessageId: null,
+      }))
+    } else {
+      set({ isStreaming: false, streamingContent: '', streamingMessageId: null })
+    }
   },
 }))

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mockDb, mockDatabaseInstance } from '../setup'
-import { createConversation, listConversations, updateConversation } from '../../repositories/conversations'
+import { createConversation, listConversations, updateConversation, setConversationActiveArtifact } from '../../repositories/conversations'
 
 describe('createConversation()', () => {
   it('inserts with provided project_id', async () => {
@@ -37,5 +37,15 @@ describe('updateConversation()', () => {
     expect(sql).toContain('updated_at =')
     expect(params).toContain('New Title')
     expect(params).toContain('c1')
+  })
+})
+
+describe('setConversationActiveArtifact()', () => {
+  it('updates active_artifact_id for the given conversation', async () => {
+    await setConversationActiveArtifact('conv-1', 'art-1')
+    const { sql, params } = mockDb.rows[0]
+    expect(sql).toContain('active_artifact_id = $1')
+    expect(params).toContain('art-1')
+    expect(params).toContain('conv-1')
   })
 })

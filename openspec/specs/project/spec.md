@@ -675,140 +675,139 @@ When user sends a message:
 
 ---
 
-### 5.4 Artifacts & Editor (`artifact.store.ts`, `EditorPanel`)
+### 5.4 Artifacts & Editor (`artifactStore.ts`, `EditorPanel`)
 
-**Purpose:** Manage artifact versions, connect TipTap editor instance to Zustand, handle auto-save and disk sync.
+**Purpose:** Manage artifact revision history, coordinate content swaps between store and TipTap editor, handle auto-save and disk sync.
 **Satisfies:** FR-EDT-001–012, FR-CHT-004, FR-CHT-008, BR-EDT-001–003, ERR-EDT-001–002
 
 #### 5.4.1 Data Model
 
 ```typescript
+// DB entity — src/lib/db/types.ts
 interface Artifact {
   id: string;
-  conversationId: string;
-  messageId: string | null; // null for initial empty artifact [FR-CHT-004]
+  conversation_id: string;
   title: string | null;
-  content: string; // markdown text
-  filePath: string | null; // relative to project folder [BR-EDT-003]
-  fileHash: string | null; // SHA-256 of last known disk content
-  version: number;
-  createdAt: number;
-  updatedAt: number;
+  current_revision_id: string | null; // points to HEAD revision
+  file_path: string | null;
+  file_hash: string | null;
+  created_at: number;
+  updated_at: number;
 }
+
+interface ArtifactRevision {
+  id: string;
+  artifact_id: string;
+  message_id: string | null; // null = user draft; set when sealed for send
+  author: 'user' | 'ai';
+  content: string;
+  created_at: number;
+  updated_at: number;
+}
+
+// Application types — src/lib/types.ts
+interface SaveRequest { revisionId: string; content: string; }
+interface ContentSwapRequest { revisionId: string; content: string; }
+interface SealResult { artifactId: string; revisionId: string; content: string; }
+type ThreadItem = { type: 'message'; data: Message } | { type: 'revision'; data: ArtifactRevision }
 ```
 
 #### 5.4.2 Store Interface
 
 ```typescript
 interface ArtifactState {
-  artifactsByConversation: Record<string, Artifact[]>;
-  activeArtifactId: string | null;
-  editorInstance: Editor | null; // TipTap Editor object
-  isDirty: boolean;
+  artifact: Artifact | null;
+  headRevision: ArtifactRevision | null;
+  loadedRevisionId: string | null; // revision ID currently in the TipTap editor
+  revisions: ArtifactRevision[];   // all revisions ASC
+  contentSwapRequest: ContentSwapRequest | null; // signal for EditorPanel
+  isSaving: boolean;
   saveError: string | null;
+  externalChangeDetected: boolean;
 }
 
 interface ArtifactActions {
+  reset: () => void;
   loadForConversation: (conversationId: string) => Promise<void>;
-  setActiveArtifact: (id: string) => Promise<void>;
-  setEditorInstance: (editor: Editor) => void;
-  onContentChange: (content: string) => void; // called by TipTap onUpdate
-  saveArtifact: () => Promise<void>; // debounced auto-save target
-  linkToDisk: (artifactId: string, relativePath: string) => Promise<void>;
-  checkExternalChange: (artifactId: string) => Promise<boolean>;
-  reloadFromDisk: (artifactId: string) => Promise<void>;
-  applyAiArtifact: (content: string, messageId: string) => Promise<Artifact>;
+  save: (request: SaveRequest) => Promise<void>;
+  sealForSend: (messageId: string) => Promise<SealResult | null>;
+  applyAiRevision: (content: string, messageId: string) => Promise<void>;
+  requestRevisionLoad: (revisionId: string) => void;
+  createNewArtifact: (conversationId: string) => Promise<void>;
+  rename: (title: string | null) => Promise<void>;
+  acknowledgeSwap: () => void;
+  checkExternalChange: () => Promise<void>;
+  reloadFromDisk: () => Promise<void>;
+  linkToDisk: (relativePath: string) => Promise<void>;
 }
+
+// Non-reactive bridge — plain mutable object (NOT Zustand state)
+// EditorPanel writes its flushPendingSave here; ChatInput reads it before sending
+export const artifactFlushRef: { current: (() => Promise<void>) | null }
 ```
 
-#### 5.4.3 Auto-Save Implementation
+#### 5.4.3 Save Chain (Chain-of-Responsibility)
 
-```typescript
-// src/stores/artifact.store.ts
-let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+`save({ revisionId, content })` is the single entry point. Two guards run first:
 
-// Inside store create():
-onContentChange: (content: string) => {
-  set({ isDirty: true });
-  // Update active artifact content in memory immediately
-  const id = get().activeArtifactId;
-  if (!id) return;
-  get()._updateInMemory(id, content);
-  // Debounce DB write [NFR-003, BR-EDT-001]
-  if (_saveTimer) clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(() => {
-    useArtifactStore.getState().saveArtifact();
-  }, 1000);
-},
+1. **Stale revision guard** — `loadedRevisionId !== revisionId` → silent discard
+2. **Concurrency guard** — `isSaving === true` → silent discard
 
-saveArtifact: async () => {
-  const { activeArtifactId, editorInstance } = get();
-  if (!activeArtifactId || !editorInstance) return;
-  const markdown = editorInstance.storage.markdown.getMarkdown();
-  try {
-    await db.updateArtifactContent(activeArtifactId, markdown);
-    // If linked to disk, write file too [FR-EDT-010]
-    const artifact = get()._getActiveArtifact();
-    if (artifact?.filePath) {
-      const absPath = `${projectStore.getState().activeProject?.folderPath}/${artifact.filePath}`;
-      await invoke('write_file', { path: absPath, content: markdown });
-      const hash = await invoke<string>('file_hash', { path: absPath });
-      await db.updateArtifactFileHash(activeArtifactId, hash);
-    }
-    set({ isDirty: false, saveError: null });
-  } catch (err) {
-    // [ERR-EDT-001, ERR-EDT-002]
-    set({ saveError: String(err) });
-  }
-}
-```
+Then routing:
 
-#### 5.4.4 TipTap Editor Setup
+- HEAD is a user draft (`message_id === null`) → **`_persistToHead`** — update content in place
+- HEAD is sealed, editing HEAD → **`_createDraftThenPersist`** — copy-on-write new user draft
+- Editing a non-HEAD revision → **`_createDraftFromOldRevision`** — fork new draft from it
 
-The `EditorPanel` component is the single place where `useEditor` is called:
+Both draft-creation paths update `loadedRevisionId` after creating the new revision. This triggers `useLayoutEffect #2` in `EditorPanel` which syncs `revisionIdRef` without a content swap.
+
+#### 5.4.4 EditorPanel — Refs, Debounce, and Content Swap
+
+`EditorPanel` owns the debounce timer and all coordination between the store and TipTap:
 
 ```typescript
 // src/components/editor/EditorPanel.tsx
-const EditorPanel: React.FC = () => {
-  const setEditorInstance = useArtifactStore(s => s.setEditorInstance);
-  const onContentChange = useArtifactStore(s => s.onContentChange);
-  const activeArtifact = useArtifactStore(s => {
-    const id = s.activeArtifactId;
-    return id ? s.artifactsByConversation[
-      useConversationStore.getState().activeConversationId ?? ''
-    ]?.find(a => a.id === id) : null;
-  });
+export function EditorPanel() {
+  const revisionIdRef = useRef<string | null>(null)    // sole authority for save targets
+  const debounceTimerRef = useRef<...>(null)           // 1s auto-save debounce
+  const editorRef = useRef<TiptapEditor | null>(null)  // live editor instance
 
-  const editor = useEditor({
-    extensions: TIPTAP_EXTENSIONS,
-    content: activeArtifact?.content ?? '',
-    onUpdate: ({ editor }) => {
-      onContentChange(editor.storage.markdown.getMarkdown());
-    },
-    onCreate: ({ editor }) => {
-      setEditorInstance(editor);
-    },
-    onDestroy: () => {
-      setEditorInstance(null);
-    },
-  });
-
-  // When active artifact changes, load new content into editor
-  // This is the controlled pattern — store tells editor what to display
-  const prevArtifactId = useRef<string | null>(null);
-  if (editor && activeArtifact && activeArtifact.id !== prevArtifactId.current) {
-    prevArtifactId.current = activeArtifact.id;
-    editor.commands.setContent(activeArtifact.content, false);
+  // flushPendingSave: written into artifactFlushRef (non-reactive, no re-render)
+  // Re-reads fresh content from editor — never a stale closure
+  artifactFlushRef.current = async () => {
+    clearTimeout(debounceTimerRef.current)
+    const content = editorRef.current?.getMarkdown()
+    await save({ revisionId: revisionIdRef.current, content })
   }
 
-  return (
-    <div className="editor-panel">
-      <EditorToolbar editor={editor} />
-      <EditorContent editor={editor} className="editor-content" />
-    </div>
-  );
-};
+  // useLayoutEffect #1 — content swap (contentSwapRequest changed)
+  // Cancels debounce, sets content, marks undo boundary, updates revisionIdRef
+  useLayoutEffect(() => {
+    if (!contentSwapRequest) return
+    clearTimeout(debounceTimerRef.current)
+    editorRef.current?.commands.setContent(contentSwapRequest.content)
+    editorRef.current?.view.dispatch(closeHistory(editor.state.tr).setMeta('addToHistory', false))
+    revisionIdRef.current = contentSwapRequest.revisionId
+    acknowledgeSwap()
+  }, [contentSwapRequest])
+
+  // useLayoutEffect #2 — revisionIdRef sync after draft creation (no swap)
+  useLayoutEffect(() => {
+    if (!contentSwapRequest && loadedRevisionId) {
+      revisionIdRef.current = loadedRevisionId
+    }
+  }, [loadedRevisionId])
+
+  // onChange: debounces save with revisionIdRef as the staleness token
+  const handleChange = (content: string) => {
+    clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() =>
+      save({ revisionId: revisionIdRef.current!, content }), 1000)
+  }
+}
 ```
+
+`revisionIdRef` is updated in exactly two places: (a) inside `useLayoutEffect #1` during a content swap, and (b) inside `useLayoutEffect #2` when `loadedRevisionId` changes without a swap. No other code path writes to it.
 
 #### 5.4.5 TipTap Extensions List
 

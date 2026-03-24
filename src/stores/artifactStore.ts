@@ -1,71 +1,113 @@
 import { create } from 'zustand'
-import { listArtifacts, createArtifact, updateArtifact } from '@/lib/db/repositories/documents'
-import { createRevision, getHeadRevision, updateRevisionContent } from '@/lib/db/repositories/revisions'
+import { invoke } from '@tauri-apps/api/core'
+import {
+  listArtifacts,
+  createArtifact,
+  updateArtifact,
+  getArtifact,
+} from '@/lib/db/repositories/documents'
+import {
+  createRevision,
+  listRevisions,
+  updateRevisionContent,
+  sealRevision,
+} from '@/lib/db/repositories/revisions'
+import { setConversationActiveArtifact } from '@/lib/db/repositories/conversations'
 import type { Artifact, ArtifactRevision } from '@/lib/db/types'
+import type { SaveRequest, ContentSwapRequest, SealResult } from '@/lib/types'
+import { canEditInPlace, findLastSealedRevision, hasContentChangedSinceLastSeal } from '@/lib/revision-utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
-
 interface ArtifactState {
-  artifacts: Artifact[]
-  activeArtifactId: string | null
-  activeArtifact: Artifact | null
+  artifact: Artifact | null
   headRevision: ArtifactRevision | null
-  conversationId: string | null
-  status: StoreStatus
-  isDirty: boolean
+  /** The revision ID currently loaded in the TipTap editor. Updated by EditorPanel via _flushRef pattern. */
+  loadedRevisionId: string | null
+  revisions: ArtifactRevision[]
+  contentSwapRequest: ContentSwapRequest | null
   isSaving: boolean
-  lastSavedAt: number | null
-  // TODO: stub fields for file-link-to-disk (FR-EDT-010, FR-EDT-011)
-  linkedFilePath: string | null
-  externalFileModified: boolean
+  saveError: string | null
+  externalChangeDetected: boolean
 }
 
 interface ArtifactActions {
   /**
-   * Load artifacts for a conversation. Activates most-recently-updated artifact
-   * and loads its HEAD revision. Creates an initial empty artifact if none found.
+   * Reset all state to initial values. Called when switching conversations.
    */
-  loadForConversation: (id: string) => Promise<void>
+  reset: () => void
   /**
-   * Optimistically update head revision content in store, mark dirty,
-   * and schedule a 1-second debounced auto-save.
+   * Load artifact + all revisions for a conversation. Creates an initial empty
+   * user-draft artifact+revision if none exist. Sets contentSwapRequest for the
+   * EditorPanel to process.
    */
-  updateContent: (content: string) => void
+  loadForConversation: (conversationId: string) => Promise<void>
   /**
-   * Persist the active artifact's HEAD revision content to SQLite immediately.
+   * Persist content from the editor. Entry point for the save chain.
+   * Stale revisionId → silently discarded. isSaving guard → silently discarded.
    */
-  saveNow: () => Promise<void>
+  save: (request: SaveRequest) => Promise<void>
+  /**
+   * Seal the active revision before sending. Returns the revision to attach to
+   * the outgoing message, or null if there is no artifact.
+   */
+  sealForSend: (messageId: string) => Promise<SealResult | null>
+  /**
+   * Apply an AI-generated revision. Inserts new author='ai' revision as HEAD
+   * and triggers a contentSwapRequest so the editor displays the new content.
+   */
+  applyAiRevision: (content: string, messageId: string) => Promise<void>
+  /**
+   * Load a historical revision into the editor without changing current_revision_id.
+   */
+  requestRevisionLoad: (revisionId: string) => void
+  /**
+   * Create a brand-new artifact for the conversation with an empty user-draft revision.
+   */
+  createNewArtifact: (conversationId: string) => Promise<void>
   /**
    * Rename the active artifact title.
    */
   rename: (title: string | null) => Promise<void>
-  /** @stub FR-EDT-010 */
-  linkToFile: (path: string) => void
-  /** @stub FR-EDT-010 */
-  unlinkFile: () => void
-  /** @stub FR-EDT-011 */
-  checkExternalChanges: () => void
-  /** @stub FR-EDT-011 */
-  reloadFromDisk: () => void
+  /**
+   * Acknowledge the content swap — clears contentSwapRequest. Called by EditorPanel
+   * after applying the swap in useLayoutEffect.
+   */
+  acknowledgeSwap: () => void
+  /** Check whether the linked disk file has changed since last sync. */
+  checkExternalChange: () => Promise<void>
+  /** Reload content from the linked disk file as a new user-draft revision. */
+  reloadFromDisk: () => Promise<void>
+  /** Link the artifact to a relative file path on disk. */
+  linkToDisk: (relativePath: string) => Promise<void>
+  // Internal helpers — not for direct use outside the store
+  _requestContentSwap: (revisionId: string, content: string) => void
+  _createUserDraft: (content: string) => Promise<ArtifactRevision>
+  _persistToHead: (content: string) => Promise<void>
+  _createDraftThenPersist: (content: string) => Promise<void>
+  _createDraftFromOldRevision: (content: string) => Promise<void>
+  _syncToDiskIfLinked: (content: string) => Promise<void>
+  _sealDraftInPlace: (messageId: string) => Promise<SealResult>
+  _reuseLastSealed: () => SealResult | null
+  _createSealedRevision: (messageId: string) => Promise<SealResult>
+  _reuseCurrentHead: () => SealResult | null
 }
 
-// Module-level debounce timer ref — survives re-renders
-let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null
+// ── Non-reactive bridge for EditorPanel flush ─────────────────────────────────
+// Plain mutable object — NOT Zustand state. No re-renders triggered.
+// EditorPanel writes its flushPendingSave function here on mount.
+// ChatInput reads from here before sealing.
+export const artifactFlushRef: { current: (() => Promise<void>) | null } = { current: null }
 
 const INITIAL_STATE: ArtifactState = {
-  artifacts: [],
-  activeArtifactId: null,
-  activeArtifact: null,
+  artifact: null,
   headRevision: null,
-  conversationId: null,
-  status: 'idle',
-  isDirty: false,
+  loadedRevisionId: null,
+  revisions: [],
+  contentSwapRequest: null,
   isSaving: false,
-  lastSavedAt: null,
-  linkedFilePath: null,
-  externalFileModified: false,
+  saveError: null,
+  externalChangeDetected: false,
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -73,93 +115,383 @@ const INITIAL_STATE: ArtifactState = {
 export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, get) => ({
   ...INITIAL_STATE,
 
-  async loadForConversation(id) {
-    set({ status: 'loading', conversationId: id, artifacts: [], activeArtifact: null, activeArtifactId: null, headRevision: null })
-    try {
-      let artifacts = await listArtifacts(id)
+  // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-      if (artifacts.length === 0) {
-        // Safety net: create initial empty artifact + first revision if none found
-        const artifactId = await createArtifact({ conversation_id: id })
-        await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
-        artifacts = await listArtifacts(id)
-      }
+  reset() {
+    set(INITIAL_STATE)
+  },
 
-      // Activate most-recently-updated artifact
-      const active = artifacts.reduce((prev, cur) => (cur.updated_at > prev.updated_at ? cur : prev))
-      const headRevision = await getHeadRevision(active.id)
-      set({ artifacts, activeArtifact: active, activeArtifactId: active.id, headRevision, status: 'ready' })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load artifacts'
-      console.error('[artifactStore] loadForConversation error:', message)
-      set({ status: 'error' })
+  async loadForConversation(conversationId) {
+    set({ ...INITIAL_STATE })
+
+    let artifacts = await listArtifacts(conversationId)
+    let artifact: Artifact
+
+    if (artifacts.length === 0) {
+      // No artifacts yet — create initial empty artifact + user-draft revision
+      const artifactId = await createArtifact({ conversation_id: conversationId })
+      const revisionId = await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
+      await updateArtifact(artifactId, { current_revision_id: revisionId })
+      await setConversationActiveArtifact(conversationId, artifactId)
+
+      artifact = (await getArtifact(artifactId))!
+    } else {
+      // Activate artifact referenced by active_artifact_id, fall back to most-recently-updated
+      // Note: conversations.active_artifact_id is loaded with the conversation — use artifacts list as source of truth
+      artifact = artifacts.reduce((prev, cur) => (cur.updated_at > prev.updated_at ? cur : prev))
+    }
+
+    const revisions = await listRevisions(artifact.id)
+    // listRevisions returns DESC, reverse to get ASC for store
+    const revisionsAsc = [...revisions].reverse()
+
+    const headRevision = artifact.current_revision_id
+      ? (revisionsAsc.find((r) => r.id === artifact.current_revision_id) ?? revisionsAsc[revisionsAsc.length - 1] ?? null)
+      : (revisionsAsc[revisionsAsc.length - 1] ?? null)
+
+    set({ artifact, headRevision, revisions: revisionsAsc })
+
+    if (headRevision) {
+      get()._requestContentSwap(headRevision.id, headRevision.content)
+    }
+
+    // Check external file change if artifact is linked to disk
+    if (artifact.file_path) {
+      get().checkExternalChange()
     }
   },
 
-  updateContent(content) {
-    const { headRevision } = get()
+  // ── Internal helpers ────────────────────────────────────────────────────────
+
+  _requestContentSwap(revisionId: string, content: string) {
+    set({ loadedRevisionId: revisionId, contentSwapRequest: { revisionId, content } })
+  },
+
+  acknowledgeSwap() {
+    set({ contentSwapRequest: null })
+  },
+
+  async _createUserDraft(content: string): Promise<ArtifactRevision> {
+    const { artifact, revisions } = get()
+    if (!artifact) throw new Error('No active artifact')
+
+    const revisionId = await createRevision({ artifact_id: artifact.id, author: 'user', content })
+    await updateArtifact(artifact.id, { current_revision_id: revisionId })
+
+    const newRevision: ArtifactRevision = {
+      id: revisionId,
+      artifact_id: artifact.id,
+      message_id: null,
+      author: 'user',
+      content,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }
+
+    const updatedArtifact = { ...artifact, current_revision_id: revisionId, updated_at: Date.now() }
+    set({
+      artifact: updatedArtifact,
+      headRevision: newRevision,
+      revisions: [...revisions, newRevision],
+    })
+
+    return newRevision
+  },
+
+  // ── Save chain ──────────────────────────────────────────────────────────────
+
+  /**
+   * Save entry point. Routes through the chain-of-responsibility:
+   * 1. Stale revision check (loadedRevisionId !== revisionId → discard)
+   * 2. isSaving concurrency guard → discard
+   * 3. headRevision.message_id === null && content unchanged → _persistToHead
+   * 4. headRevision.message_id === null → _persistToHead (same path, content changed)
+   * 5. headRevision is current HEAD and editing → _createDraftThenPersist
+   * 6. Editing a non-HEAD revision → _createDraftFromOldRevision
+   */
+  async save(request) {
+    const { loadedRevisionId, headRevision, isSaving } = get()
+
+    // Guard: stale revision ID — the editor is editing an outdated revision
+    if (loadedRevisionId !== request.revisionId) return
+
+    // Guard: concurrent save already in flight
+    if (isSaving) return
+
     if (!headRevision) return
 
-    set((s) => ({
-      isDirty: true,
-      headRevision: s.headRevision ? { ...s.headRevision, content } : null,
-    }))
-
-    if (saveDebounceTimer !== null) clearTimeout(saveDebounceTimer)
-    saveDebounceTimer = setTimeout(() => {
-      saveDebounceTimer = null
-      useArtifactStore.getState().saveNow()
-    }, 1000)
-  },
-
-  async saveNow() {
-    const { headRevision, isSaving, isDirty } = get()
-    if (!headRevision || !isDirty) return
-    if (isSaving) {
-      if (saveDebounceTimer !== null) clearTimeout(saveDebounceTimer)
-      saveDebounceTimer = setTimeout(() => {
-        saveDebounceTimer = null
-        useArtifactStore.getState().saveNow()
-      }, 200)
-      return
-    }
-
-    set({ isSaving: true })
+    set({ isSaving: true, saveError: null })
     try {
-      await updateRevisionContent(headRevision.id, headRevision.content)
-      set({ isSaving: false, isDirty: false, lastSavedAt: Date.now() })
+      const isHeadRevision = request.revisionId === headRevision.id
+
+      if (isHeadRevision && canEditInPlace(headRevision)) {
+        // HEAD is a user draft — persist in place
+        await get()._persistToHead(request.content)
+      } else if (isHeadRevision) {
+        // HEAD is sealed — copy-on-write: create new draft
+        await get()._createDraftThenPersist(request.content)
+      } else {
+        // Editing a non-HEAD revision — fork a new draft from it
+        await get()._createDraftFromOldRevision(request.content)
+      }
     } catch (err) {
-      console.error('[artifactStore] saveNow error:', err instanceof Error ? err.message : err)
+      const message = err instanceof Error ? err.message : 'Save failed'
+      console.error('[artifactStore] save error:', message)
+      set({ saveError: message })
+    } finally {
       set({ isSaving: false })
     }
   },
 
-  async rename(title) {
-    const { activeArtifact } = get()
-    if (!activeArtifact) return
-    const effectiveTitle = title && title.trim() !== '' ? title.trim() : null
-    await updateArtifact(activeArtifact.id, { title: effectiveTitle })
+  async _persistToHead(content: string) {
+    const { headRevision } = get()
+    if (!headRevision) return
+
+    await updateRevisionContent(headRevision.id, content)
     set((s) => ({
-      activeArtifact: s.activeArtifact ? { ...s.activeArtifact, title: effectiveTitle } : null,
-      artifacts: s.artifacts.map((a) =>
-        a.id === activeArtifact.id ? { ...a, title: effectiveTitle } : a
+      headRevision: s.headRevision ? { ...s.headRevision, content, updated_at: Date.now() } : null,
+      revisions: s.revisions.map((r) =>
+        r.id === headRevision.id ? { ...r, content, updated_at: Date.now() } : r
       ),
     }))
+
+    await get()._syncToDiskIfLinked(content)
   },
 
-  linkToFile(_path) {
-    // TODO: implement file-link-to-disk (FR-EDT-010)
+  async _createDraftThenPersist(content: string) {
+    const newDraft = await get()._createUserDraft(content)
+    // Update loadedRevisionId — second useLayoutEffect in EditorPanel will sync revisionIdRef
+    set({ loadedRevisionId: newDraft.id })
+    await get()._syncToDiskIfLinked(content)
   },
 
-  unlinkFile() {
-    // TODO: implement file-link-to-disk (FR-EDT-010)
+  async _createDraftFromOldRevision(content: string) {
+    const newDraft = await get()._createUserDraft(content)
+    set({ loadedRevisionId: newDraft.id })
+    await get()._syncToDiskIfLinked(content)
   },
 
-  checkExternalChanges() {
-    // TODO: implement external change detection (FR-EDT-011)
+  async _syncToDiskIfLinked(content: string) {
+    const { artifact } = get()
+    if (!artifact?.file_path) return
+
+    try {
+      await invoke('write_file', { path: artifact.file_path, content })
+      // Compute hash via Tauri command
+      const hash = await invoke<string>('hash_file_content', { content })
+      await updateArtifact(artifact.id, { file_hash: hash })
+      set((s) => ({ artifact: s.artifact ? { ...s.artifact, file_hash: hash } : null }))
+    } catch (err) {
+      // DB save already succeeded — only disk sync failed [ERR-EDT-002]
+      const message = err instanceof Error ? err.message : 'Disk sync failed'
+      console.error('[artifactStore] disk sync error:', message)
+      set({ saveError: `Disk sync failed: ${message}` })
+    }
   },
 
-  reloadFromDisk() {
-    // TODO: implement external change detection (FR-EDT-011)
+  // ── Seal chain ──────────────────────────────────────────────────────────────
+
+  /**
+   * Seal entry point. Routes through four links based on isDraft × changed matrix:
+   * - isDraft  && changed  → _sealDraftInPlace
+   * - isDraft  && !changed → _reuseLastSealed (or HEAD as fallback)
+   * - !isDraft && changed  → _createSealedRevision
+   * - !isDraft && !changed → _reuseCurrentHead
+   */
+  async sealForSend(messageId) {
+    const { headRevision, revisions, artifact } = get()
+    if (!headRevision || !artifact) return null
+
+    const isDraft = canEditInPlace(headRevision)
+    const changed = hasContentChangedSinceLastSeal(headRevision, revisions)
+
+    if (isDraft && changed) {
+      return get()._sealDraftInPlace(messageId)
+    } else if (isDraft && !changed) {
+      return get()._reuseLastSealed()
+    } else if (!isDraft && changed) {
+      return get()._createSealedRevision(messageId)
+    } else {
+      return get()._reuseCurrentHead()
+    }
+  },
+
+  async _sealDraftInPlace(messageId: string): Promise<SealResult> {
+    const { headRevision, artifact } = get()
+    if (!headRevision || !artifact) throw new Error('No active revision')
+
+    await sealRevision(headRevision.id, messageId)
+    const sealed = { ...headRevision, message_id: messageId }
+    set((s) => ({
+      headRevision: sealed,
+      revisions: s.revisions.map((r) => (r.id === headRevision.id ? sealed : r)),
+    }))
+
+    return { artifactId: artifact.id, revisionId: headRevision.id, content: headRevision.content }
+  },
+
+  _reuseLastSealed(): SealResult | null {
+    const { revisions, headRevision, artifact } = get()
+    if (!artifact) return null
+    const lastSealed = findLastSealedRevision(revisions)
+    const target = lastSealed ?? headRevision
+    if (!target) return null
+    return { artifactId: artifact.id, revisionId: target.id, content: target.content }
+  },
+
+  async _createSealedRevision(messageId: string): Promise<SealResult> {
+    const { headRevision, artifact, revisions } = get()
+    if (!headRevision || !artifact) throw new Error('No active revision')
+
+    const revisionId = await createRevision({
+      artifact_id: artifact.id,
+      author: 'user',
+      content: headRevision.content,
+      message_id: messageId,
+    })
+    await updateArtifact(artifact.id, { current_revision_id: revisionId })
+
+    const newRevision: ArtifactRevision = {
+      id: revisionId,
+      artifact_id: artifact.id,
+      message_id: messageId,
+      author: 'user',
+      content: headRevision.content,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }
+
+    const updatedArtifact = { ...artifact, current_revision_id: revisionId, updated_at: Date.now() }
+    set({
+      artifact: updatedArtifact,
+      headRevision: newRevision,
+      loadedRevisionId: revisionId,
+      revisions: [...revisions, newRevision],
+    })
+
+    return { artifactId: artifact.id, revisionId, content: headRevision.content }
+  },
+
+  _reuseCurrentHead(): SealResult | null {
+    const { headRevision, artifact } = get()
+    if (!headRevision || !artifact) return null
+    return { artifactId: artifact.id, revisionId: headRevision.id, content: headRevision.content }
+  },
+
+  // ── External triggers ────────────────────────────────────────────────────────
+
+  async applyAiRevision(content, messageId) {
+    const { artifact, revisions } = get()
+    if (!artifact) return
+
+    const revisionId = await createRevision({
+      artifact_id: artifact.id,
+      author: 'ai',
+      content,
+      message_id: messageId,
+    })
+    await updateArtifact(artifact.id, { current_revision_id: revisionId })
+
+    const newRevision: ArtifactRevision = {
+      id: revisionId,
+      artifact_id: artifact.id,
+      message_id: messageId,
+      author: 'ai',
+      content,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }
+
+    const updatedArtifact = { ...artifact, current_revision_id: revisionId, updated_at: Date.now() }
+    set({
+      artifact: updatedArtifact,
+      headRevision: newRevision,
+      revisions: [...revisions, newRevision],
+    })
+
+    get()._requestContentSwap(revisionId, content)
+  },
+
+  requestRevisionLoad(revisionId) {
+    const { revisions } = get()
+    const revision = revisions.find((r) => r.id === revisionId)
+    if (!revision) return
+    get()._requestContentSwap(revisionId, revision.content)
+  },
+
+  async createNewArtifact(conversationId) {
+    const artifactId = await createArtifact({ conversation_id: conversationId })
+    const revisionId = await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
+    await updateArtifact(artifactId, { current_revision_id: revisionId })
+    await setConversationActiveArtifact(conversationId, artifactId)
+
+    const artifact = (await getArtifact(artifactId))!
+    const newRevision: ArtifactRevision = {
+      id: revisionId,
+      artifact_id: artifactId,
+      message_id: null,
+      author: 'user',
+      content: '',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    }
+
+    set({
+      artifact,
+      headRevision: newRevision,
+      revisions: [newRevision],
+    })
+
+    get()._requestContentSwap(revisionId, '')
+  },
+
+  async rename(title) {
+    const { artifact } = get()
+    if (!artifact) return
+    const effectiveTitle = title && title.trim() !== '' ? title.trim() : null
+    await updateArtifact(artifact.id, { title: effectiveTitle })
+    set((s) => ({ artifact: s.artifact ? { ...s.artifact, title: effectiveTitle } : null }))
+  },
+
+  // ── File sync ────────────────────────────────────────────────────────────────
+
+  async checkExternalChange() {
+    const { artifact } = get()
+    if (!artifact?.file_path || !artifact.file_hash) return
+
+    try {
+      const diskHash = await invoke<string>('hash_file', { path: artifact.file_path })
+      if (diskHash !== artifact.file_hash) {
+        set({ externalChangeDetected: true })
+      }
+    } catch {
+      // File may not exist yet — ignore
+    }
+  },
+
+  async reloadFromDisk() {
+    const { artifact } = get()
+    if (!artifact?.file_path) return
+
+    const content = await invoke<string>('read_file', { path: artifact.file_path })
+    await get()._createUserDraft(content)
+    set({ externalChangeDetected: false })
+    get()._requestContentSwap(get().headRevision!.id, content)
+  },
+
+  async linkToDisk(relativePath) {
+    const { artifact, headRevision } = get()
+    if (!artifact || !headRevision) return
+
+    const content = headRevision.content
+    await invoke('write_file', { path: relativePath, content })
+    const hash = await invoke<string>('hash_file_content', { content })
+    await updateArtifact(artifact.id, { file_path: relativePath, file_hash: hash })
+    set((s) => ({
+      artifact: s.artifact ? { ...s.artifact, file_path: relativePath, file_hash: hash } : null,
+    }))
   },
 }))
+
+// Convenience accessor without subscribing to state — for use in non-React code (e.g. sidecar store)
+export const getArtifactStore = () => useArtifactStore.getState()

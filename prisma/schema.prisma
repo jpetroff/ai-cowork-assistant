@@ -12,8 +12,8 @@ datasource db {
 }
 
 model Project {
-  id          String @id
-  name        String @unique
+  id          String  @id
+  name        String  @unique
   folder_path String?
   created_at  Int
   updated_at  Int
@@ -22,11 +22,13 @@ model Project {
 }
 
 model Conversation {
-  id         String  @id
-  project_id String
-  title      String?
-  created_at Int
-  updated_at Int
+  id                 String  @id
+  project_id         String
+  title              String?
+  // Cross-ref: points to artifacts.id — updated by artifactStore whenever the active artifact changes
+  active_artifact_id String?
+  created_at         Int
+  updated_at         Int
 
   @@map("conversations")
 }
@@ -43,18 +45,30 @@ model Message {
 }
 
 model Artifact {
-  id              String  @id
-  conversation_id String
-  message_id      String?
-  title           String?
-  content         String
-  file_path       String?
-  file_hash       String?
-  version         Int
-  created_at      Int
-  updated_at      Int
+  id                  String  @id
+  conversation_id     String
+  title               String?
+  // Cross-ref: points to artifact_revisions.id — the HEAD (latest) revision
+  current_revision_id String?
+  file_path           String?
+  file_hash           String?
+  created_at          Int
+  updated_at          Int
 
   @@map("artifacts")
+}
+
+model ArtifactRevision {
+  id          String  @id
+  artifact_id String
+  // Cross-ref: points to messages.id — null while draft, set when sealed for send
+  message_id  String?
+  author      String
+  content     String
+  created_at  Int
+  updated_at  Int
+
+  @@map("artifact_revisions")
 }
 
 model LlmProvider {

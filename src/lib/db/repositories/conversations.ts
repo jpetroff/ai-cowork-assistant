@@ -42,3 +42,14 @@ export async function updateConversation(
 export async function deleteConversation(id: string): Promise<void> {
   return db.remove('conversations', id)
 }
+
+/** Update conversations.active_artifact_id for a conversation. */
+export async function setConversationActiveArtifact(
+  conversationId: string,
+  artifactId: string
+): Promise<void> {
+  await db.execute(
+    'UPDATE conversations SET active_artifact_id = $1, updated_at = $2 WHERE id = $3',
+    [artifactId, Date.now(), conversationId]
+  )
+}

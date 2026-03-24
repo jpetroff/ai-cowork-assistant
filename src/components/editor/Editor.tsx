@@ -97,14 +97,18 @@ import '@/styles/editor.css'
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface IEditorProps {
-  /** Initial HTML content */
+  /** Initial markdown content */
   content?: string
-  /** Called on every content change with updated HTML */
-  onChange?: (html: string) => void
+  /** Called on every content change with updated markdown */
+  onChange?: (markdown: string) => void
   /** Makes editor read-only while AI is streaming */
   isStreaming?: boolean
   /** Placeholder text shown in empty document */
   placeholder?: string
+  /** Called once the TipTap editor instance is ready — lets parent capture a ref */
+  onEditorReady?: (editor: TiptapEditor) => void
+  /** Called when the TipTap editor is destroyed */
+  onEditorDestroy?: () => void
 }
 
 // ─── Table Affordances Extension ──────────────────────────────────────────────
@@ -875,6 +879,8 @@ export function Editor({
   onChange,
   isStreaming = false,
   placeholder = 'Start writing…',
+  onEditorReady,
+  onEditorDestroy,
 }: IEditorProps) {
   const [linkOpen, setLinkOpen] = useState(false)
 
@@ -925,8 +931,14 @@ export function Editor({
     content: content ?? '',
     editable: !isStreaming,
     immediatelyRender: false,
+    onCreate({ editor: e }) {
+      onEditorReady?.(e)
+    },
+    onDestroy() {
+      onEditorDestroy?.()
+    },
     onUpdate({ editor: e }) {
-      onChange?.(e.getHTML())
+      onChange?.((e as TiptapEditor & { getMarkdown: () => string }).getMarkdown())
     },
   })
 

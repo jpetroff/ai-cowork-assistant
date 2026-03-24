@@ -1,21 +1,30 @@
 import { useEffect, useRef, useState } from 'react'
+import { FilePlus } from 'lucide-react'
 import { useArtifactStore } from '@/stores/artifactStore'
+import { Button } from '@/components/ui/button'
+import { RevisionPicker } from './RevisionPicker'
 import { cn } from '@/lib/utils'
 
-function SaveStatus({ isDirty, isSaving, lastSavedAt }: { isDirty: boolean; isSaving: boolean; lastSavedAt: number | null }) {
+function SaveStatus({ isSaving, saveError }: { isSaving: boolean; saveError: string | null }) {
   const [showSaved, setShowSaved] = useState(false)
-  const prevLastSavedAt = useRef(lastSavedAt)
+  const prevIsSaving = useRef(isSaving)
 
   useEffect(() => {
-    if (lastSavedAt !== null && lastSavedAt !== prevLastSavedAt.current) {
-      prevLastSavedAt.current = lastSavedAt
+    // Transition from saving → not saving (and no error) = just saved
+    if (prevIsSaving.current && !isSaving && !saveError) {
+      prevIsSaving.current = false
       setShowSaved(true)
       const timer = setTimeout(() => setShowSaved(false), 2000)
       return () => clearTimeout(timer)
     }
-  }, [lastSavedAt])
+    prevIsSaving.current = isSaving
+  }, [isSaving, saveError])
 
-  if (isDirty || isSaving) {
+  if (saveError) {
+    return <span className="text-xs text-destructive truncate max-w-32" title={saveError}>Save error</span>
+  }
+
+  if (isSaving) {
     return <span className="text-xs text-muted-foreground">Saving…</span>
   }
 
@@ -32,17 +41,17 @@ function SaveStatus({ isDirty, isSaving, lastSavedAt }: { isDirty: boolean; isSa
 }
 
 export function ArtifactTitleBar() {
-  const activeArtifact = useArtifactStore((s) => s.activeArtifact)
-  const isDirty = useArtifactStore((s) => s.isDirty)
+  const artifact = useArtifactStore((s) => s.artifact)
   const isSaving = useArtifactStore((s) => s.isSaving)
-  const lastSavedAt = useArtifactStore((s) => s.lastSavedAt)
+  const saveError = useArtifactStore((s) => s.saveError)
   const rename = useArtifactStore((s) => s.rename)
+  const createNewArtifact = useArtifactStore((s) => s.createNewArtifact)
 
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
 
   const handleTitleClick = () => {
-    setEditValue(activeArtifact?.title ?? '')
+    setEditValue(artifact?.title ?? '')
     setIsEditing(true)
   }
 
@@ -73,15 +82,24 @@ export function ArtifactTitleBar() {
             onClick={handleTitleClick}
             className="text-xl font-semibold text-left w-full truncate hover:opacity-70 transition-opacity"
           >
-            {activeArtifact?.title ?? <span className="text-muted-foreground/50">Untitled</span>}
+            {artifact?.title ?? <span className="text-muted-foreground/50">Untitled</span>}
           </button>
         )}
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        {/* STUB: artifact-version — show version badge/selector here (e.g. "v3 of 5") */}
+        <RevisionPicker />
         {/* STUB: link-to-file — file sync button here (FR-EDT-010) */}
-        <SaveStatus isDirty={isDirty} isSaving={isSaving} lastSavedAt={lastSavedAt} />
+        <SaveStatus isSaving={isSaving} saveError={saveError} />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => artifact && createNewArtifact(artifact.conversation_id)}
+          aria-label="New artifact"
+          title="New artifact"
+        >
+          <FilePlus className="size-4" />
+        </Button>
       </div>
     </div>
   )
