@@ -1,7 +1,7 @@
 import { useArtifactStore } from '@/stores/artifactStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { EditorSkeleton } from './EditorSkeleton'
-import { ProjectEditor } from '@/components/ProjectEditor'
+import { Editor } from './Editor'
 
 export function EditorPanel() {
   const status = useArtifactStore((s) => s.status)
@@ -14,19 +14,18 @@ export function EditorPanel() {
 
   if (!activeArtifact) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+      <div className='flex-1 flex items-center justify-center text-muted-foreground text-sm'>
         No artifact selected.
       </div>
     )
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <ProjectEditor
-        value={headRevision?.content ?? ''}
+    <div className='flex-1 min-h-0 flex flex-col overflow-hidden'>
+      <Editor
+        content={headRevision?.content ?? ''}
         onChange={updateContent}
         isStreaming={isStreaming}
-        className="flex-1 min-h-0"
       />
     </div>
   )

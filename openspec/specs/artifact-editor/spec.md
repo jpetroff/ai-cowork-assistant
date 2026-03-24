@@ -16,25 +16,28 @@ The system SHALL load all artifacts for the active conversation from SQLite into
 ---
 
 ### Requirement: Active artifact content is displayed and editable in the TipTap editor
-The system SHALL render the active artifact's `content` in the `ProjectEditor` component. The user SHALL be able to edit the content, and changes SHALL be auto-saved to SQLite with a 1-second debounce.
+The system SHALL render the active artifact's `content` in the `Editor` component via the `content` prop. The user SHALL be able to edit the content, and changes SHALL be propagated via the `onChange` callback. The `Editor` component SHALL accept a `isStreaming` prop that disables editing while the AI is writing. Auto-save behavior (debounce, SQLite write) is managed by `EditorPanel` and `artifactStore`, not by `Editor` itself.
 
 #### Scenario: Editor displays artifact content on load
+
 - **WHEN** `artifactStore.activeArtifact` is set
-- **THEN** `ProjectEditor` renders with `value={activeArtifact.content}`
+- **THEN** `EditorPanel` passes `content={headRevision?.content ?? ''}` to `Editor`
 
-#### Scenario: User edits trigger debounced auto-save
-- **WHEN** the user makes changes in the editor
-- **THEN** `artifactStore.updateContent(newContent)` is called, `isDirty` is set to `true`, and `saveNow()` is scheduled to fire 1 second after the last change
+#### Scenario: User edits propagate via onChange
 
-#### Scenario: Auto-save writes to SQLite
-- **WHEN** the debounce fires
-- **THEN** `updateArtifact({ content })` is called and on success `isDirty` is set to `false` and `lastSavedAt` is updated
+- **WHEN** the user makes changes in the `Editor`
+- **THEN** `Editor` calls `onChange(html)` with the updated HTML content
+- **AND** `EditorPanel` forwards this to `artifactStore.updateContent(html)`
 
-#### Scenario: Save status reflects current state
-- **WHEN** `isDirty` is `true` or `isSaving` is `true`
-- **THEN** `ArtifactTitleBar` displays "Saving…"
-- **WHEN** `isDirty` is `false` and `isSaving` is `false` and `lastSavedAt` is set
-- **THEN** `ArtifactTitleBar` displays "Saved"
+#### Scenario: Editor is read-only during streaming
+
+- **WHEN** `messageStore.isStreaming` is `true`
+- **THEN** `EditorPanel` passes `isStreaming={true}` to `Editor` and the editor surface is non-editable
+
+#### Scenario: Editor becomes editable after streaming
+
+- **WHEN** `messageStore.isStreaming` becomes `false`
+- **THEN** `EditorPanel` passes `isStreaming={false}` and the editor is editable again
 
 ---
 
@@ -56,19 +59,6 @@ The system SHALL display the artifact title in a large, Google Docs-style headin
 #### Scenario: Empty title reverts to null
 - **WHEN** the user clears the title input and blurs
 - **THEN** `title` is saved as `null` and the placeholder "Untitled" is shown again
-
----
-
-### Requirement: Editor is locked during AI streaming
-The system SHALL set `ProjectEditor`'s `isStreaming` prop to `true` when `messageStore.isStreaming` is `true`, making the editor read-only while the AI is writing content.
-
-#### Scenario: Editor is read-only during streaming
-- **WHEN** `messageStore.isStreaming` is `true`
-- **THEN** `ProjectEditor` receives `isStreaming={true}`, the editor's `editable` property is `false`, and a "Assistant is writing…" banner is shown
-
-#### Scenario: Editor becomes editable after streaming
-- **WHEN** `messageStore.isStreaming` becomes `false`
-- **THEN** `ProjectEditor` receives `isStreaming={false}` and the editor is editable again
 
 ---
 
