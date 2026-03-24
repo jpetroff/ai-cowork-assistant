@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useEditor, EditorContent, useEditorState } from '@tiptap/react'
 import { Extension } from '@tiptap/core'
 import type { Editor as TiptapEditor } from '@tiptap/core'
@@ -85,6 +86,10 @@ import {
   Trash2,
   TableRowsSplit,
   TableColumnsSplit,
+  Pilcrow,
+  FileCode2,
+  Copy,
+  Check,
 } from 'lucide-react'
 
 import '@/styles/editor.css'
@@ -465,6 +470,98 @@ function TableContextBar({
   )
 }
 
+// ─── Markdown Source Dialog ───────────────────────────────────────────────────
+// Uses createPortal + plain divs to avoid Base UI's @starting-style animation
+// issue in the Tauri WebView where opacity stays at 0 permanently.
+
+function MarkdownDialog({
+  editor,
+  open,
+  onOpenChange,
+}: {
+  editor: TiptapEditor
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const markdown = open
+    ? ((editor as unknown as { getMarkdown?: () => string }).getMarkdown?.() ?? '')
+    : ''
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onOpenChange(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [open, onOpenChange])
+
+  const copy = () => {
+    navigator.clipboard.writeText(markdown)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  if (!open) return null
+
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div
+        className='fixed inset-0 z-50 bg-black/20 backdrop-blur-sm'
+        onClick={() => onOpenChange(false)}
+      />
+      {/* Panel */}
+      <div className='fixed inset-[5%] z-50 flex flex-col bg-background ring-1 ring-foreground/10 overflow-hidden rounded-none'>
+        {/* Header */}
+        <div className='flex items-center justify-between px-5 py-3 border-b shrink-0'>
+          <div>
+            <div className='text-sm font-medium'>Markdown source</div>
+            <div className='text-xs text-muted-foreground mt-0.5'>
+              Read-only
+            </div>
+          </div>
+          <div className='flex items-center gap-2'>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={copy}
+              className='gap-1.5 rounded-none h-7 text-xs'
+            >
+              {copied ? (
+                <Check className='h-3.5 w-3.5' />
+              ) : (
+                <Copy className='h-3.5 w-3.5' />
+              )}
+              {copied ? 'Copied!' : 'Copy'}
+            </Button>
+            <Button
+              size='sm'
+              variant='ghost'
+              onClick={() => onOpenChange(false)}
+              className='rounded-none h-7 text-xs'
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+        {/* Content */}
+        <ScrollArea className='flex-1 min-h-0'>
+          <pre className='p-5 font-mono text-xs text-foreground/80 whitespace-pre-wrap wrap-break-word leading-relaxed'>
+            {markdown || (
+              <span className='text-muted-foreground italic'>
+                Empty document
+              </span>
+            )}
+          </pre>
+        </ScrollArea>
+      </div>
+    </>,
+    document.body
+  )
+}
+
 // ─── Editor Toolbar ───────────────────────────────────────────────────────────
 
 interface ToolbarInnerProps {
@@ -481,6 +578,7 @@ function EditorToolbarInner({
   onLinkOpenChange,
 }: ToolbarInnerProps) {
   const disabled = isStreaming
+  const [markdownOpen, setMarkdownOpen] = useState(false)
 
   const s = useEditorState({
     editor,
@@ -498,6 +596,8 @@ function EditorToolbarInner({
       isOrdered: e.isActive('orderedList'),
       isInTable: e.isActive('table'),
       blockLabel: getBlockLabel(e),
+      isInvisible:
+        ((e.storage as unknown as Record<string, unknown>).invisibleCharacters as { visibility?: () => boolean } | undefined)?.visibility?.() ?? false,
     }),
   })
 
@@ -700,6 +800,38 @@ function EditorToolbarInner({
 
       {/* Contextual table controls */}
       {s.isInTable && <TableContextBar editor={editor} disabled={disabled} />}
+
+      <div className='ml-auto flex items-center gap-0.5 pr-1'>
+        <Sep />
+
+        {/* Invisible characters */}
+        <TipBtn
+          label='Show invisible characters'
+          isActive={s.isInvisible}
+          disabled={disabled}
+          onClick={() => editor.commands.toggleInvisibleCharacters()}
+        >
+          <Pilcrow className='h-3.5 w-3.5' />
+        </TipBtn>
+
+        {/* Markdown source */}
+        <Toggle
+          size='sm'
+          pressed={false}
+          onPressedChange={() => setMarkdownOpen(true)}
+          aria-label='View markdown source'
+          title='View markdown source'
+          className='rounded-none'
+        >
+          <FileCode2 className='h-3.5 w-3.5' />
+        </Toggle>
+      </div>
+
+      <MarkdownDialog
+        editor={editor}
+        open={markdownOpen}
+        onOpenChange={setMarkdownOpen}
+      />
     </div>
   )
 }
