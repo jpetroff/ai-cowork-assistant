@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
 import { useMessageStore } from './messageStore'
-import { useArtifactStore } from './artifactStore'
+import { getArtifactStore } from './artifactStore'
 import { createMessage } from '@/lib/db/repositories/messages'
 import type { SealResult } from '@/lib/types'
 
@@ -38,6 +38,12 @@ interface SidecarActions {
    * @param sealResult  - The sealed artifact revision, or null if no artifact
    */
   sendChatRequest: (userMessage: string, sealResult: SealResult | null) => Promise<void>
+  /**
+   * Orchestrates applying an AI-generated artifact revision:
+   * creates the system message anchor then applies the revision to the store.
+   * @internal Called from sendChatRequest after the assistant message is finalized.
+   */
+  _handleAiArtifactResponse: (content: string) => Promise<void>
   /** @internal Dispatch a single SSE event to the message store. */
   _dispatch: (event: SidecarEvent) => Promise<void>
 }
@@ -71,7 +77,9 @@ export const useSidecarStore = create<SidecarState & SidecarActions>((set, get) 
     if (!conversationId) return
 
     const allMessages = messageStore.messages
-    const historyMessages = allMessages.map((m) => ({ role: m.role, content: m.content }))
+    const historyMessages = allMessages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
     const requestBody: ChatCompletionRequest = {
       conversation_id: conversationId,
@@ -156,13 +164,21 @@ export const useSidecarStore = create<SidecarState & SidecarActions>((set, get) 
 
         // Apply AI revision if the sidecar returned updated document content
         if (finalArtifactContent !== null) {
-          await useArtifactStore.getState().applyAiRevision(finalArtifactContent, finalMessageId)
+          await get()._handleAiArtifactResponse(finalArtifactContent)
         }
       }
     } catch (err) {
       console.error('[sidecarStore] sendChatRequest error:', err)
       messageStore.finalizeStreaming('', '')
     }
+  },
+
+  async _handleAiArtifactResponse(content: string) {
+    const messageStore = useMessageStore.getState()
+    await getArtifactStore().applyAiRevision(
+      content,
+      (revisionId, author) => messageStore.addSystemRevisionMessage(author, revisionId)
+    )
   },
 
   /**

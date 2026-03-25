@@ -34,8 +34,9 @@ export interface Conversation {
 export interface Message {
   id: string
   conversation_id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
+  metadata: string | null
   sequence_order: number
   created_at: number
 }

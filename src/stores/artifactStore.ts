@@ -19,6 +19,9 @@ import { canEditInPlace, findLastSealedRevision, hasContentChangedSinceLastSeal 
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** Callback injected into the seal chain to create a system message anchoring the revision in the thread. */
+type SysMsgCreator = (revisionId: string, author: 'user' | 'ai') => Promise<string>
+
 interface ArtifactState {
   artifact: Artifact | null
   headRevision: ArtifactRevision | null
@@ -50,13 +53,15 @@ interface ArtifactActions {
   /**
    * Seal the active revision before sending. Returns the revision to attach to
    * the outgoing message, or null if there is no artifact.
+   * `sysMsgCreator` is called only when a revision is actually sealed/created —
+   * reuse paths never invoke it.
    */
-  sealForSend: (messageId: string) => Promise<SealResult | null>
+  sealForSend: (sysMsgCreator?: SysMsgCreator) => Promise<SealResult | null>
   /**
    * Apply an AI-generated revision. Inserts new author='ai' revision as HEAD
    * and triggers a contentSwapRequest so the editor displays the new content.
    */
-  applyAiRevision: (content: string, messageId: string) => Promise<void>
+  applyAiRevision: (content: string, sysMsgCreator: SysMsgCreator) => Promise<void>
   /**
    * Load a historical revision into the editor without changing current_revision_id.
    */
@@ -87,9 +92,9 @@ interface ArtifactActions {
   _createDraftThenPersist: (content: string) => Promise<void>
   _createDraftFromOldRevision: (content: string) => Promise<void>
   _syncToDiskIfLinked: (content: string) => Promise<void>
-  _sealDraftInPlace: (messageId: string) => Promise<SealResult>
+  _sealDraftInPlace: (sysMsgCreator: SysMsgCreator) => Promise<SealResult>
   _reuseLastSealed: () => SealResult | null
-  _createSealedRevision: (messageId: string) => Promise<SealResult>
+  _createSealedRevision: (sysMsgCreator: SysMsgCreator) => Promise<SealResult>
   _reuseCurrentHead: () => SealResult | null
 }
 
@@ -298,7 +303,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
    * - !isDraft && changed  → _createSealedRevision
    * - !isDraft && !changed → _reuseCurrentHead
    */
-  async sealForSend(messageId) {
+  async sealForSend(sysMsgCreator) {
     const { headRevision, revisions, artifact } = get()
     if (!headRevision || !artifact) return null
 
@@ -306,22 +311,23 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     const changed = hasContentChangedSinceLastSeal(headRevision, revisions)
 
     if (isDraft && changed) {
-      return get()._sealDraftInPlace(messageId)
+      return get()._sealDraftInPlace(sysMsgCreator!)
     } else if (isDraft && !changed) {
       return get()._reuseLastSealed()
     } else if (!isDraft && changed) {
-      return get()._createSealedRevision(messageId)
+      return get()._createSealedRevision(sysMsgCreator!)
     } else {
       return get()._reuseCurrentHead()
     }
   },
 
-  async _sealDraftInPlace(messageId: string): Promise<SealResult> {
+  async _sealDraftInPlace(sysMsgCreator: SysMsgCreator): Promise<SealResult> {
     const { headRevision, artifact } = get()
     if (!headRevision || !artifact) throw new Error('No active revision')
 
-    await sealRevision(headRevision.id, messageId)
-    const sealed = { ...headRevision, message_id: messageId }
+    const sysMsgId = await sysMsgCreator(headRevision.id, 'user')
+    await sealRevision(headRevision.id, sysMsgId)
+    const sealed = { ...headRevision, message_id: sysMsgId }
     set((s) => ({
       headRevision: sealed,
       revisions: s.revisions.map((r) => (r.id === headRevision.id ? sealed : r)),
@@ -339,7 +345,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     return { artifactId: artifact.id, revisionId: target.id, content: target.content }
   },
 
-  async _createSealedRevision(messageId: string): Promise<SealResult> {
+  async _createSealedRevision(sysMsgCreator: SysMsgCreator): Promise<SealResult> {
     const { headRevision, artifact, revisions } = get()
     if (!headRevision || !artifact) throw new Error('No active revision')
 
@@ -347,14 +353,15 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
       artifact_id: artifact.id,
       author: 'user',
       content: headRevision.content,
-      message_id: messageId,
     })
+    const sysMsgId = await sysMsgCreator(revisionId, 'user')
+    await sealRevision(revisionId, sysMsgId)
     await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
     const newRevision: ArtifactRevision = {
       id: revisionId,
       artifact_id: artifact.id,
-      message_id: messageId,
+      message_id: sysMsgId,
       author: 'user',
       content: headRevision.content,
       created_at: Date.now(),
@@ -380,7 +387,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
   // ── External triggers ────────────────────────────────────────────────────────
 
-  async applyAiRevision(content, messageId) {
+  async applyAiRevision(content, sysMsgCreator) {
     const { artifact, revisions } = get()
     if (!artifact) return
 
@@ -388,14 +395,15 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
       artifact_id: artifact.id,
       author: 'ai',
       content,
-      message_id: messageId,
     })
+    const sysMsgId = await sysMsgCreator(revisionId, 'ai')
+    await sealRevision(revisionId, sysMsgId)
     await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
     const newRevision: ArtifactRevision = {
       id: revisionId,
       artifact_id: artifact.id,
-      message_id: messageId,
+      message_id: sysMsgId,
       author: 'ai',
       content,
       created_at: Date.now(),

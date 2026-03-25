@@ -3,7 +3,7 @@
  * DB entity types (Artifact, ArtifactRevision, Message, etc.) live in src/lib/db/types.ts.
  */
 
-import type { Message, ArtifactRevision } from '@/lib/db/types'
+import type { Message } from '@/lib/db/types'
 
 /** Payload for `artifactStore.save()` — carries the revision ID that was active when editing began. */
 export interface SaveRequest {
@@ -24,7 +24,11 @@ export interface SealResult {
   content: string
 }
 
-/** A single item in the merged chat thread: either a regular message or a sealed artifact revision card. */
-export type ThreadItem =
-  | { type: 'message'; data: Message }
-  | { type: 'revision'; data: ArtifactRevision }
+/** Parsed metadata on a system message that anchors an artifact revision in the thread. */
+export interface RevisionMessageMetadata {
+  revisionId: string
+  author: 'user' | 'ai'
+}
+
+/** A single item in the merged chat thread. */
+export type ThreadItem = { type: 'message'; data: Message }

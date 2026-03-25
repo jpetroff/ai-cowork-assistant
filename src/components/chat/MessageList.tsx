@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useMessageStore } from '@/stores/messageStore'
-import { useArtifactStore } from '@/stores/artifactStore'
 import { buildThread } from '@/lib/revision-utils'
 import { MessageListSkeleton } from './MessageListSkeleton'
 import { MessageBubble } from './MessageBubble'
-import { RevisionCard } from './RevisionCard'
+import { ArtifactRevisionCard } from './ArtifactRevisionCard'
 
 function MessageListEmpty() {
   return (
@@ -37,10 +36,9 @@ export function MessageList() {
   const messages = useMessageStore((s) => s.messages)
   const isStreaming = useMessageStore((s) => s.isStreaming)
   const streamingContent = useMessageStore((s) => s.streamingContent)
-  const revisions = useArtifactStore((s) => s.revisions)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const thread = buildThread(messages, revisions)
+  const thread = buildThread(messages)
 
   // Auto-scroll to bottom when messages change or streaming updates
   useEffect(() => {
@@ -54,10 +52,10 @@ export function MessageList() {
       {thread.length === 0 && status === 'ready' && <MessageListEmpty />}
 
       {thread.map((item) =>
-        item.type === 'message' ? (
-          <MessageBubble key={item.data.id} message={item.data} />
+        item.data.role === 'system' ? (
+          <ArtifactRevisionCard key={item.data.id} message={item.data} />
         ) : (
-          <RevisionCard key={item.data.id} revision={item.data} />
+          <MessageBubble key={item.data.id} message={item.data} />
         )
       )}
 

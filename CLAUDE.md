@@ -14,6 +14,7 @@
 - do not hard code colors
 - do not use divs if we have a component already
 - do not add new heavy dependencies without approval
+- do not create new migrations in @src-tauri/db.rs unless specifically instructed, assume clean slate development implementation
 
 ## Commands
 

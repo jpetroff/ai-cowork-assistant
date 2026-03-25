@@ -6,6 +6,8 @@ import { useMessageStore } from '@/stores/messageStore'
 import { useArtifactStore, artifactFlushRef } from '@/stores/artifactStore'
 import { useSidecarStore } from '@/stores/sidecarStore'
 
+const getMessageStore = () => useMessageStore.getState()
+
 export function ChatInput() {
   const [value, setValue] = useState('')
   const isStreaming = useMessageStore((s) => s.isStreaming)
@@ -24,13 +26,13 @@ export function ChatInput() {
     // 1. Flush any pending debounced editor save before sealing
     await artifactFlushRef.current?.()
 
-    // 2. Persist user message to DB and get its ID
+    // 2. Persist user message to DB
     await addUserMessage(content)
-    const msgs = useMessageStore.getState().messages
-    const msgId = msgs[msgs.length - 1]?.id ?? crypto.randomUUID()
 
-    // 3. Seal the active artifact revision and attach to this message
-    const sealResult = await sealForSend(msgId)
+    // 3. Seal the active artifact revision; system message created lazily only if a revision is sealed
+    const sealResult = await sealForSend(
+      (revisionId, author) => getMessageStore().addSystemRevisionMessage(author, revisionId)
+    )
 
     // 4. Send to sidecar
     await sendChatRequest(content, sealResult)

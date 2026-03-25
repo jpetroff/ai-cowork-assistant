@@ -162,55 +162,53 @@ describe('save chain', () => {
 // ── Seal chain ─────────────────────────────────────────────────────────────────
 
 describe('sealForSend', () => {
-  it('1: isDraft && changed → _sealDraftInPlace (sets message_id on HEAD)', async () => {
+  const makeSysMsgCreator = (id = 'sys-msg-1') => vi.fn(async () => id)
+
+  it('1: isDraft && changed → _sealDraftInPlace — calls sysMsgCreator and seals revision with returned id', async () => {
     const artifact = makeArtifact()
     const draft = makeRevision({ content: 'new content', message_id: null })
     seedStore(artifact, [draft])
-    const result = await useArtifactStore.getState().sealForSend('msg-send')
-    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'msg-send')
+    const creator = makeSysMsgCreator('sys-1')
+    const result = await useArtifactStore.getState().sealForSend(creator)
+    expect(creator).toHaveBeenCalledWith('rev-1', 'user')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'sys-1')
     expect(result?.revisionId).toBe('rev-1')
   })
 
-  it('2: isDraft && !changed → _reuseLastSealed (returns last sealed, no DB write)', async () => {
+  it('2: isDraft && !changed → _reuseLastSealed — sysMsgCreator NOT called', async () => {
     const artifact = makeArtifact({ current_revision_id: 'rev-2' })
     const sealed = makeRevision({ id: 'rev-1', message_id: 'msg-old', content: 'base' })
-    const draft = makeRevision({ id: 'rev-2', message_id: null, content: 'base' }) // same content
+    const draft = makeRevision({ id: 'rev-2', message_id: null, content: 'base' })
     seedStore(artifact, [sealed, draft])
-    const result = await useArtifactStore.getState().sealForSend('msg-send')
+    const creator = makeSysMsgCreator()
+    const result = await useArtifactStore.getState().sealForSend(creator)
+    expect(creator).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
-    expect(result?.revisionId).toBe('rev-1') // last sealed
+    expect(result?.revisionId).toBe('rev-1')
   })
 
-  it('3: !isDraft && changed → _createSealedRevision (inserts new sealed revision)', async () => {
-    const artifact = makeArtifact()
-    const sealedHead = makeRevision({ message_id: 'msg-1', content: 'original' })
-    // HEAD is sealed, but content differs from last sealed (no drafts, so head IS last sealed)
-    // Force changed: make head content different from baseline. With one sealed rev,
-    // baseline = that rev's content. So make head content different:
-    const sealedHeadChanged = makeRevision({ message_id: 'msg-1', content: 'edited externally' })
-    const artifactWithSealed = makeArtifact({ current_revision_id: 'rev-sealed' })
+  it('3: !isDraft && changed → _createSealedRevision — calls sysMsgCreator, seals new revision', async () => {
+    const artifactWithSealed = makeArtifact({ current_revision_id: 'rev-sealed2' })
     const sealedRev = makeRevision({ id: 'rev-sealed', message_id: 'msg-1', content: 'v1' })
-    // Add a second sealed revision with different content to trigger "changed"
     const sealedRev2 = makeRevision({ id: 'rev-sealed2', message_id: 'msg-2', content: 'v2' })
-    seedStore({ ...artifactWithSealed, current_revision_id: 'rev-sealed2' }, [sealedRev, sealedRev2])
-    // Force headRevision to have different content
-    useArtifactStore.setState({
-      headRevision: { ...sealedRev2, content: 'v3-different' },
-    })
+    seedStore(artifactWithSealed, [sealedRev, sealedRev2])
+    useArtifactStore.setState({ headRevision: { ...sealedRev2, content: 'v3-different' } })
     mockCreateRevision.mockResolvedValue('rev-new-sealed')
-    const result = await useArtifactStore.getState().sealForSend('msg-send')
-    expect(mockCreateRevision).toHaveBeenCalled()
+    const creator = makeSysMsgCreator('sys-2')
+    const result = await useArtifactStore.getState().sealForSend(creator)
+    expect(creator).toHaveBeenCalledWith('rev-new-sealed', 'user')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-new-sealed', 'sys-2')
     expect(result?.revisionId).toBe('rev-new-sealed')
   })
 
-  it('4: !isDraft && !changed → _reuseCurrentHead (returns HEAD, no DB write)', async () => {
+  it('4: !isDraft && !changed → _reuseCurrentHead — sysMsgCreator NOT called', async () => {
     const sealed = makeRevision({ message_id: 'msg-1', content: 'same' })
     const artifact = makeArtifact({ current_revision_id: 'rev-1' })
-    // HEAD is sealed, content equals last sealed (same revision)
     seedStore(artifact, [sealed])
-    const result = await useArtifactStore.getState().sealForSend('msg-send')
+    const creator = makeSysMsgCreator()
+    const result = await useArtifactStore.getState().sealForSend(creator)
+    expect(creator).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
-    expect(mockCreateRevision).not.toHaveBeenCalled()
     expect(result?.revisionId).toBe('rev-1')
   })
 })
@@ -247,17 +245,21 @@ describe('loadForConversation', () => {
 })
 
 describe('applyAiRevision', () => {
-  it('inserts ai revision, updates HEAD, and sets contentSwapRequest', async () => {
+  it('inserts ai revision, calls sysMsgCreator with revisionId and "ai", seals revision, sets contentSwapRequest', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     seedStore(artifact, [rev])
     mockCreateRevision.mockResolvedValue('rev-ai')
+    const creator = vi.fn(async () => 'sys-ai')
 
-    await useArtifactStore.getState().applyAiRevision('ai content', 'msg-ai')
+    await useArtifactStore.getState().applyAiRevision('ai content', creator)
 
     expect(mockCreateRevision).toHaveBeenCalledWith(
-      expect.objectContaining({ author: 'ai', message_id: 'msg-ai' })
+      expect.objectContaining({ author: 'ai' })
     )
+    expect(creator).toHaveBeenCalledWith('rev-ai', 'ai')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-ai', 'sys-ai')
+    expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-ai')
     expect(useArtifactStore.getState().contentSwapRequest?.revisionId).toBe('rev-ai')
   })
 })
@@ -297,5 +299,66 @@ describe('createNewArtifact', () => {
 
     expect(mockSetConversationActiveArtifact).toHaveBeenCalledWith('conv-1', 'art-new')
     expect(useArtifactStore.getState().contentSwapRequest?.content).toBe('')
+  })
+})
+
+// ── Revision system message integration ───────────────────────────────────────
+
+describe('system message integration — send flow', () => {
+  it('9.9: user sends with changed content — sysMsgCreator called, revision sealed to system msg id', async () => {
+    const artifact = makeArtifact()
+    const draft = makeRevision({ content: 'edited content', message_id: null })
+    seedStore(artifact, [draft])
+    const creator = vi.fn(async () => 'sys-msg-new')
+
+    const result = await useArtifactStore.getState().sealForSend(creator)
+
+    expect(creator).toHaveBeenCalledWith('rev-1', 'user')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'sys-msg-new')
+    expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-msg-new')
+    expect(result?.revisionId).toBe('rev-1')
+  })
+
+  it('9.10: user sends without changes — sysMsgCreator NOT called, no new revision', async () => {
+    const artifact = makeArtifact({ current_revision_id: 'rev-2' })
+    const sealed = makeRevision({ id: 'rev-1', message_id: 'sys-old', content: 'same' })
+    const draft = makeRevision({ id: 'rev-2', message_id: null, content: 'same' })
+    seedStore(artifact, [sealed, draft])
+    const creator = vi.fn(async () => 'sys-never')
+
+    await useArtifactStore.getState().sealForSend(creator)
+
+    expect(creator).not.toHaveBeenCalled()
+    expect(mockSealRevision).not.toHaveBeenCalled()
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+  })
+
+  it('9.11: AI responds with artifact content — sysMsgCreator called with "ai", revision sealed', async () => {
+    const artifact = makeArtifact()
+    const rev = makeRevision()
+    seedStore(artifact, [rev])
+    mockCreateRevision.mockResolvedValue('rev-ai-new')
+    const creator = vi.fn(async () => 'sys-ai')
+
+    await useArtifactStore.getState().applyAiRevision('AI wrote this', creator)
+
+    expect(creator).toHaveBeenCalledWith('rev-ai-new', 'ai')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-ai-new', 'sys-ai')
+    expect(useArtifactStore.getState().headRevision?.author).toBe('ai')
+    expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-ai')
+  })
+
+  it('9.12: initial draft revision has message_id=null — no system message at creation', async () => {
+    // loadForConversation creates an initial draft — no sealRevision called, no system message
+    mockListArtifacts.mockResolvedValue([])
+    mockCreateArtifact.mockResolvedValue('art-new')
+    mockCreateRevision.mockResolvedValue('rev-draft')
+    mockGetArtifact.mockResolvedValue(makeArtifact({ id: 'art-new', current_revision_id: 'rev-draft' }))
+    mockListRevisions.mockResolvedValue([makeRevision({ id: 'rev-draft', artifact_id: 'art-new', message_id: null })])
+
+    await useArtifactStore.getState().loadForConversation('conv-new')
+
+    expect(mockSealRevision).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().headRevision?.message_id).toBeNull()
   })
 })
