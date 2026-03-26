@@ -12,7 +12,7 @@ vi.mock('@/stores/artifactStore', () => ({
   useArtifactStore: (selector: (s: object) => unknown) =>
     selector({
       requestRevisionLoad: mockRequestRevisionLoad,
-      loadedRevisionId: 'rev-loaded',
+      activeRevisionId: 'rev-loaded',
       artifact: { title: 'My Document' },
     }),
 }))

@@ -59,11 +59,9 @@ export const router = createHashRouter([
 
           useConversationStore.getState().setActive(chatId)
 
-          // Load messages and artifacts in parallel
-          await Promise.all([
-            useMessageStore.getState().loadForConversation(chatId),
-            useArtifactStore.getState().loadForConversation(chatId),
-          ])
+          // Fire independently — each section loads and renders with its own state
+          void useMessageStore.getState().loadForConversation(chatId)
+          void useArtifactStore.getState().loadForConversation(chatId)
 
           return null
         },

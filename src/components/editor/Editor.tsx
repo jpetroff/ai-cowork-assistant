@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditor, EditorContent, useEditorState } from '@tiptap/react'
 import { Extension } from '@tiptap/core'
@@ -99,17 +99,17 @@ import '@/styles/editor.css'
 export interface IEditorProps {
   /** Initial markdown content */
   content?: string
-  /** Called on every content change with updated markdown */
-  onChange?: (markdown: string) => void
+  /** Called on content change (debounced) with the updated markdown. May return a Promise. */
+  onSave?: (content: string) => Promise<void> | void
+  /** Populated with an async flush function for immediate save — cleared on destroy */
+  flushRef?: { current: (() => Promise<void>) | null }
   /** Makes editor read-only while AI is streaming */
   isStreaming?: boolean
   /** Placeholder text shown in empty document */
   placeholder?: string
-  /** Called once the TipTap editor instance is ready — lets parent capture a ref */
-  onEditorReady?: (editor: TiptapEditor) => void
-  /** Called when the TipTap editor is destroyed */
-  onEditorDestroy?: () => void
 }
+
+const DEBOUNCE_MS = 1000
 
 // ─── Table Affordances Extension ──────────────────────────────────────────────
 // Injects "+ Row" and "+ Column" widget buttons after each table via ProseMirror
@@ -876,13 +876,17 @@ function EditorToolbar({
 
 export function Editor({
   content,
-  onChange,
+  onSave,
+  flushRef,
   isStreaming = false,
   placeholder = 'Start writing…',
-  onEditorReady,
-  onEditorDestroy,
 }: IEditorProps) {
   const [linkOpen, setLinkOpen] = useState(false)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorInstanceRef = useRef<TiptapEditor | null>(null)
+  // Always-current ref so TipTap callbacks don't capture a stale onSave
+  const onSaveRef = useRef(onSave)
+  onSaveRef.current = onSave
 
   const editor = useEditor({
     extensions: [
@@ -929,18 +933,49 @@ export function Editor({
       InvisibleCharacters,
     ],
     content: content ?? '',
+    // Tells the Markdown extension to parse the initial content string as markdown
+    // in onBeforeCreate — without this flag the raw string is treated as HTML.
+    contentType: 'markdown',
     editable: !isStreaming,
     immediatelyRender: false,
     onCreate({ editor: e }) {
-      onEditorReady?.(e)
+      editorInstanceRef.current = e
+      if (flushRef) {
+        flushRef.current = async () => {
+          if (debounceTimerRef.current !== null) {
+            clearTimeout(debounceTimerRef.current)
+            debounceTimerRef.current = null
+          }
+          await onSaveRef.current?.((e as TiptapEditor & { getMarkdown: () => string }).getMarkdown())
+        }
+      }
     },
     onDestroy() {
-      onEditorDestroy?.()
+      editorInstanceRef.current = null
+      if (flushRef) flushRef.current = null
     },
     onUpdate({ editor: e }) {
-      onChange?.((e as TiptapEditor & { getMarkdown: () => string }).getMarkdown())
+      if (debounceTimerRef.current !== null) clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null
+        onSaveRef.current?.((e as TiptapEditor & { getMarkdown: () => string }).getMarkdown())
+      }, DEBOUNCE_MS)
     },
   })
+
+  // Flush pending debounced save on unmount (e.g. navigation away)
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current !== null) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
+      const ed = editorInstanceRef.current
+      if (ed) {
+        onSaveRef.current?.((ed as TiptapEditor & { getMarkdown: () => string }).getMarkdown())
+      }
+    }
+  }, [])
 
   // Sync editable state when isStreaming changes
   useEffect(() => {

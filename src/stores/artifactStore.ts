@@ -14,71 +14,79 @@ import {
 } from '@/lib/db/repositories/revisions'
 import { setConversationActiveArtifact } from '@/lib/db/repositories/conversations'
 import type { Artifact, ArtifactRevision } from '@/lib/db/types'
-import type { SaveRequest, ContentSwapRequest, SealResult } from '@/lib/types'
+import type { SealResult } from '@/lib/types'
 import { canEditInPlace, findLastSealedRevision, hasContentChangedSinceLastSeal } from '@/lib/revision-utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 /** Callback injected into the seal chain to create a system message anchoring the revision in the thread. */
 type SysMsgCreator = (revisionId: string, author: 'user' | 'ai') => Promise<string>
 
 interface ArtifactState {
+  status: StoreStatus
   artifact: Artifact | null
   headRevision: ArtifactRevision | null
-  /** The revision ID currently loaded in the TipTap editor. Updated by EditorPanel via _flushRef pattern. */
-  loadedRevisionId: string | null
+  /**
+   * The revision ID the editor is currently persisting to.
+   * null = no revision exists yet (new document) or viewing a historical revision
+   * (next save will create a new user-draft revision).
+   */
+  activeRevisionId: string | null
+  /** The content to initialize the editor with on mount. Owned by the store; editor owns its own live state. */
+  loadedContent: string
+  /** Changes when the editor should remount with fresh content (e.g. AI revision, history load). */
+  editorKey: string
   revisions: ArtifactRevision[]
-  contentSwapRequest: ContentSwapRequest | null
   isSaving: boolean
   saveError: string | null
   externalChangeDetected: boolean
 }
 
 interface ArtifactActions {
-  /**
-   * Reset all state to initial values. Called when switching conversations.
-   */
+  /** Reset all state to initial values. Called when switching conversations. */
   reset: () => void
   /**
-   * Load artifact + all revisions for a conversation. Creates an initial empty
-   * user-draft artifact+revision if none exist. Sets contentSwapRequest for the
-   * EditorPanel to process.
+   * Load artifact for a conversation. If no artifact exists, creates one (no revision —
+   * first editor save will create the initial revision).
+   * Sets status to 'loading' while fetching, then 'ready'.
    */
   loadForConversation: (conversationId: string) => Promise<void>
   /**
-   * Persist content from the editor. Entry point for the save chain.
-   * Stale revisionId → silently discarded. isSaving guard → silently discarded.
+   * Persist content from the editor. Routes through the save chain based on activeRevisionId:
+   * - status !== 'ready' → silently discarded (guards transition saves from unmount cleanup)
+   * - isSaving → silently discarded
+   * - activeRevisionId === null → creates new user-draft revision
+   * - activeRevisionId === headRevision.id && isDraft → _persistToHead
+   * - activeRevisionId === headRevision.id && sealed → _createDraftThenPersist
    */
-  save: (request: SaveRequest) => Promise<void>
+  save: (content: string) => Promise<void>
   /**
    * Seal the active revision before sending. Returns the revision to attach to
-   * the outgoing message, or null if there is no artifact.
-   * `sysMsgCreator` is called only when a revision is actually sealed/created —
-   * reuse paths never invoke it.
+   * the outgoing message, or null if there is no artifact / no revisions.
+   * `sysMsgCreator` is called only when a revision is actually sealed/created.
    */
   sealForSend: (sysMsgCreator?: SysMsgCreator) => Promise<SealResult | null>
   /**
-   * Apply an AI-generated revision. Inserts new author='ai' revision as HEAD
-   * and triggers a contentSwapRequest so the editor displays the new content.
+   * Apply an AI-generated revision. Inserts a new author='ai' sealed revision as HEAD
+   * and remounts the editor with the new content.
    */
   applyAiRevision: (content: string, sysMsgCreator: SysMsgCreator) => Promise<void>
   /**
-   * Load a historical revision into the editor without changing current_revision_id.
+   * Load a revision into the editor.
+   * - Flushes any pending save and waits for it to complete.
+   * - Sets status to 'loading' (drops saves from unmount cleanup).
+   * - If the revision is HEAD: sets activeRevisionId = revisionId.
+   * - If historical: sets activeRevisionId = null (next edit forks a new draft).
    */
-  requestRevisionLoad: (revisionId: string) => void
+  requestRevisionLoad: (revisionId: string) => Promise<void>
   /**
-   * Create a brand-new artifact for the conversation with an empty user-draft revision.
+   * Create a brand-new artifact for the conversation with no initial revision.
    */
   createNewArtifact: (conversationId: string) => Promise<void>
-  /**
-   * Rename the active artifact title.
-   */
+  /** Rename the active artifact title. */
   rename: (title: string | null) => Promise<void>
-  /**
-   * Acknowledge the content swap — clears contentSwapRequest. Called by EditorPanel
-   * after applying the swap in useLayoutEffect.
-   */
-  acknowledgeSwap: () => void
   /** Check whether the linked disk file has changed since last sync. */
   checkExternalChange: () => Promise<void>
   /** Reload content from the linked disk file as a new user-draft revision. */
@@ -86,16 +94,21 @@ interface ArtifactActions {
   /** Link the artifact to a relative file path on disk. */
   linkToDisk: (relativePath: string) => Promise<void>
   // Internal helpers — not for direct use outside the store
-  _requestContentSwap: (revisionId: string, content: string) => void
   _createUserDraft: (content: string) => Promise<ArtifactRevision>
   _persistToHead: (content: string) => Promise<void>
   _createDraftThenPersist: (content: string) => Promise<void>
-  _createDraftFromOldRevision: (content: string) => Promise<void>
   _syncToDiskIfLinked: (content: string) => Promise<void>
   _sealDraftInPlace: (sysMsgCreator: SysMsgCreator) => Promise<SealResult>
   _reuseLastSealed: () => SealResult | null
   _createSealedRevision: (sysMsgCreator: SysMsgCreator) => Promise<SealResult>
   _reuseCurrentHead: () => SealResult | null
+  /**
+   * Set editor-relevant state and transition to 'ready'.
+   * Shared between loadForConversation and requestRevisionLoad.
+   * - isHead=true  → activeRevisionId = revision.id (editor persists to this revision)
+   * - isHead=false → activeRevisionId = null (next save forks a new draft)
+   */
+  _mountRevision: (revision: ArtifactRevision | null, isHead: boolean) => void
 }
 
 // ── Non-reactive bridge for EditorPanel flush ─────────────────────────────────
@@ -105,11 +118,13 @@ interface ArtifactActions {
 export const artifactFlushRef: { current: (() => Promise<void>) | null } = { current: null }
 
 const INITIAL_STATE: ArtifactState = {
+  status: 'idle',
   artifact: null,
   headRevision: null,
-  loadedRevisionId: null,
+  activeRevisionId: null,
+  loadedContent: '',
+  editorKey: 'initial',
   revisions: [],
-  contentSwapRequest: null,
   isSaving: false,
   saveError: null,
   externalChangeDetected: false,
@@ -127,53 +142,54 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   },
 
   async loadForConversation(conversationId) {
-    set({ ...INITIAL_STATE })
+    set({ ...INITIAL_STATE, status: 'loading' })
 
-    let artifacts = await listArtifacts(conversationId)
-    let artifact: Artifact
+    try {
+      let artifacts = await listArtifacts(conversationId)
+      let artifact: Artifact
 
-    if (artifacts.length === 0) {
-      // No artifacts yet — create initial empty artifact + user-draft revision
-      const artifactId = await createArtifact({ conversation_id: conversationId })
-      const revisionId = await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
-      await updateArtifact(artifactId, { current_revision_id: revisionId })
-      await setConversationActiveArtifact(conversationId, artifactId)
+      if (artifacts.length === 0) {
+        // No artifact yet — create one, but do NOT create a revision.
+        // The editor will start empty; the first save creates the initial revision.
+        const artifactId = await createArtifact({ conversation_id: conversationId })
+        await setConversationActiveArtifact(conversationId, artifactId)
+        artifact = (await getArtifact(artifactId))!
+      } else {
+        artifact = artifacts.reduce((prev, cur) => (cur.updated_at > prev.updated_at ? cur : prev))
+      }
 
-      artifact = (await getArtifact(artifactId))!
-    } else {
-      // Activate artifact referenced by active_artifact_id, fall back to most-recently-updated
-      // Note: conversations.active_artifact_id is loaded with the conversation — use artifacts list as source of truth
-      artifact = artifacts.reduce((prev, cur) => (cur.updated_at > prev.updated_at ? cur : prev))
-    }
+      const revisions = await listRevisions(artifact.id)
+      // listRevisions returns DESC, reverse to get ASC for store
+      const revisionsAsc = [...revisions].reverse()
 
-    const revisions = await listRevisions(artifact.id)
-    // listRevisions returns DESC, reverse to get ASC for store
-    const revisionsAsc = [...revisions].reverse()
+      const headRevision = artifact.current_revision_id
+        ? (revisionsAsc.find((r) => r.id === artifact.current_revision_id) ?? revisionsAsc[revisionsAsc.length - 1] ?? null)
+        : (revisionsAsc[revisionsAsc.length - 1] ?? null)
 
-    const headRevision = artifact.current_revision_id
-      ? (revisionsAsc.find((r) => r.id === artifact.current_revision_id) ?? revisionsAsc[revisionsAsc.length - 1] ?? null)
-      : (revisionsAsc[revisionsAsc.length - 1] ?? null)
+      set({ artifact, headRevision, revisions: revisionsAsc })
+      get()._mountRevision(headRevision, true)
 
-    set({ artifact, headRevision, revisions: revisionsAsc })
-
-    if (headRevision) {
-      get()._requestContentSwap(headRevision.id, headRevision.content)
-    }
-
-    // Check external file change if artifact is linked to disk
-    if (artifact.file_path) {
-      get().checkExternalChange()
+      if (artifact.file_path) {
+        get().checkExternalChange()
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load artifact'
+      console.error('[artifactStore] loadForConversation error:', message)
+      set({ status: 'error' })
     }
   },
 
   // ── Internal helpers ────────────────────────────────────────────────────────
 
-  _requestContentSwap(revisionId: string, content: string) {
-    set({ loadedRevisionId: revisionId, contentSwapRequest: { revisionId, content } })
-  },
-
-  acknowledgeSwap() {
-    set({ contentSwapRequest: null })
+  _mountRevision(revision, isHead) {
+    set({
+      activeRevisionId: isHead ? (revision?.id ?? null) : null,
+      loadedContent: revision?.content ?? '',
+      editorKey: revision
+        ? (isHead ? revision.id : `hist-${Date.now()}`)
+        : 'empty',
+      status: 'ready',
+    })
   },
 
   async _createUserDraft(content: string): Promise<ArtifactRevision> {
@@ -197,6 +213,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     set({
       artifact: updatedArtifact,
       headRevision: newRevision,
+      activeRevisionId: revisionId,
       revisions: [...revisions, newRevision],
     })
 
@@ -205,39 +222,33 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
   // ── Save chain ──────────────────────────────────────────────────────────────
 
-  /**
-   * Save entry point. Routes through the chain-of-responsibility:
-   * 1. Stale revision check (loadedRevisionId !== revisionId → discard)
-   * 2. isSaving concurrency guard → discard
-   * 3. headRevision.message_id === null && content unchanged → _persistToHead
-   * 4. headRevision.message_id === null → _persistToHead (same path, content changed)
-   * 5. headRevision is current HEAD and editing → _createDraftThenPersist
-   * 6. Editing a non-HEAD revision → _createDraftFromOldRevision
-   */
-  async save(request) {
-    const { loadedRevisionId, headRevision, isSaving } = get()
+  async save(content) {
+    const { status, activeRevisionId, headRevision, isSaving, artifact } = get()
 
-    // Guard: stale revision ID — the editor is editing an outdated revision
-    if (loadedRevisionId !== request.revisionId) return
+    // Guard: drop saves during loading transitions (e.g. from editor unmount cleanup)
+    if (status !== 'ready') return
 
     // Guard: concurrent save already in flight
     if (isSaving) return
 
-    if (!headRevision) return
+    // Guard: no artifact to save to
+    if (!artifact) return
 
     set({ isSaving: true, saveError: null })
     try {
-      const isHeadRevision = request.revisionId === headRevision.id
-
-      if (isHeadRevision && canEditInPlace(headRevision)) {
+      if (activeRevisionId === null) {
+        // No revision yet (new document or detached historical view) — create first draft
+        await get()._createUserDraft(content)
+      } else if (activeRevisionId === headRevision?.id && canEditInPlace(headRevision)) {
         // HEAD is a user draft — persist in place
-        await get()._persistToHead(request.content)
-      } else if (isHeadRevision) {
+        await get()._persistToHead(content)
+      } else if (activeRevisionId === headRevision?.id) {
         // HEAD is sealed — copy-on-write: create new draft
-        await get()._createDraftThenPersist(request.content)
+        await get()._createDraftThenPersist(content)
       } else {
-        // Editing a non-HEAD revision — fork a new draft from it
-        await get()._createDraftFromOldRevision(request.content)
+        // activeRevisionId doesn't match head — shouldn't happen in normal flow,
+        // treat as a new draft to avoid data loss
+        await get()._createDraftThenPersist(content)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed'
@@ -264,15 +275,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   },
 
   async _createDraftThenPersist(content: string) {
-    const newDraft = await get()._createUserDraft(content)
-    // Update loadedRevisionId — second useLayoutEffect in EditorPanel will sync revisionIdRef
-    set({ loadedRevisionId: newDraft.id })
-    await get()._syncToDiskIfLinked(content)
-  },
-
-  async _createDraftFromOldRevision(content: string) {
-    const newDraft = await get()._createUserDraft(content)
-    set({ loadedRevisionId: newDraft.id })
+    // _createUserDraft sets activeRevisionId to the new draft's id
+    await get()._createUserDraft(content)
     await get()._syncToDiskIfLinked(content)
   },
 
@@ -282,12 +286,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
     try {
       await invoke('write_file', { path: artifact.file_path, content })
-      // Compute hash via Tauri command
       const hash = await invoke<string>('hash_file_content', { content })
       await updateArtifact(artifact.id, { file_hash: hash })
       set((s) => ({ artifact: s.artifact ? { ...s.artifact, file_hash: hash } : null }))
     } catch (err) {
-      // DB save already succeeded — only disk sync failed [ERR-EDT-002]
       const message = err instanceof Error ? err.message : 'Disk sync failed'
       console.error('[artifactStore] disk sync error:', message)
       set({ saveError: `Disk sync failed: ${message}` })
@@ -372,7 +374,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     set({
       artifact: updatedArtifact,
       headRevision: newRevision,
-      loadedRevisionId: revisionId,
+      activeRevisionId: revisionId,
       revisions: [...revisions, newRevision],
     })
 
@@ -414,43 +416,46 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     set({
       artifact: updatedArtifact,
       headRevision: newRevision,
+      activeRevisionId: revisionId,
+      loadedContent: content,
+      editorKey: revisionId,
       revisions: [...revisions, newRevision],
     })
-
-    get()._requestContentSwap(revisionId, content)
   },
 
-  requestRevisionLoad(revisionId) {
-    const { revisions } = get()
+  async requestRevisionLoad(revisionId) {
+    const { revisions, headRevision } = get()
     const revision = revisions.find((r) => r.id === revisionId)
     if (!revision) return
-    get()._requestContentSwap(revisionId, revision.content)
+
+    const isHead = revisionId === headRevision?.id
+
+    // Flush any pending debounced save and await its completion
+    await artifactFlushRef.current?.()
+
+    // Set loading — any saves fired by editor unmount cleanup will be dropped
+    set({ status: 'loading' })
+
+    // Yield to let React commit the loading state (editor unmounts, cleanup saves are dropped)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    get()._mountRevision(revision, isHead)
   },
 
   async createNewArtifact(conversationId) {
     const artifactId = await createArtifact({ conversation_id: conversationId })
-    const revisionId = await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
-    await updateArtifact(artifactId, { current_revision_id: revisionId })
     await setConversationActiveArtifact(conversationId, artifactId)
-
     const artifact = (await getArtifact(artifactId))!
-    const newRevision: ArtifactRevision = {
-      id: revisionId,
-      artifact_id: artifactId,
-      message_id: null,
-      author: 'user',
-      content: '',
-      created_at: Date.now(),
-      updated_at: Date.now(),
-    }
 
     set({
       artifact,
-      headRevision: newRevision,
-      revisions: [newRevision],
+      headRevision: null,
+      activeRevisionId: null,
+      loadedContent: '',
+      editorKey: `new-${artifactId}`,
+      revisions: [],
+      status: 'ready',
     })
-
-    get()._requestContentSwap(revisionId, '')
   },
 
   async rename(title) {
@@ -481,10 +486,20 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     const { artifact } = get()
     if (!artifact?.file_path) return
 
+    // Flush any pending save and await completion
+    await artifactFlushRef.current?.()
+
+    set({ status: 'loading' })
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
     const content = await invoke<string>('read_file', { path: artifact.file_path })
-    await get()._createUserDraft(content)
-    set({ externalChangeDetected: false })
-    get()._requestContentSwap(get().headRevision!.id, content)
+    const newDraft = await get()._createUserDraft(content)
+    set({
+      externalChangeDetected: false,
+      loadedContent: content,
+      editorKey: newDraft.id,
+      status: 'ready',
+    })
   },
 
   async linkToDisk(relativePath) {

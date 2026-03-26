@@ -19,13 +19,13 @@ function formatTimestamp(ts: number): string {
 
 export function ArtifactRevisionCard({ message }: ArtifactRevisionCardProps) {
   const requestRevisionLoad = useArtifactStore((s) => s.requestRevisionLoad)
-  const loadedRevisionId = useArtifactStore((s) => s.loadedRevisionId)
+  const activeRevisionId = useArtifactStore((s) => s.activeRevisionId)
   const artifactTitle = useArtifactStore((s) => s.artifact?.title ?? 'Untitled')
 
   const meta = parseRevisionMetadata(message)
   if (!meta) return null
 
-  const isLoaded = meta.revisionId === loadedRevisionId
+  const isLoaded = meta.revisionId === activeRevisionId
   const authorLabel = meta.author === 'ai' ? 'AI' : 'You'
 
   return (

@@ -21,13 +21,13 @@ function formatTimestamp(ts: number): string {
 export function RevisionPicker() {
   const revisions = useArtifactStore((s) => s.revisions)
   const artifact = useArtifactStore((s) => s.artifact)
-  const loadedRevisionId = useArtifactStore((s) => s.loadedRevisionId)
+  const activeRevisionId = useArtifactStore((s) => s.activeRevisionId)
   const requestRevisionLoad = useArtifactStore((s) => s.requestRevisionLoad)
 
   // Hide when there is only one revision or fewer
   if (revisions.length <= 1) return null
 
-  const currentIndex = revisions.findIndex((r) => r.id === loadedRevisionId)
+  const currentIndex = revisions.findIndex((r) => r.id === activeRevisionId)
   const displayN = currentIndex >= 0 ? currentIndex + 1 : revisions.length
   const total = revisions.length
 
@@ -43,7 +43,7 @@ export function RevisionPicker() {
       <DropdownMenuContent align="end" className="w-64">
         {revisionItems.map((revision, idx) => {
           const versionN = revisions.length - idx
-          const isLoaded = revision.id === loadedRevisionId
+          const isLoaded = revision.id === activeRevisionId
           const isCurrent = revision.id === artifact?.current_revision_id
           const isDraft = revision.message_id === null
           const authorLabel = revision.author === 'ai' ? 'AI' : 'You'

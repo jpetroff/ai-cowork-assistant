@@ -35,3 +35,6 @@ __pycache__/
 .serena
 .claude/settings*.*
 .mcp.json
+
+# App directories starting with $ to mimic Tauri env variables: $APPDIR etc
+$*
