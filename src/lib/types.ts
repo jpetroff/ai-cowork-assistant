@@ -14,6 +14,7 @@ export interface SealResult {
 
 /** Parsed metadata on a system message that anchors an artifact revision in the thread. */
 export interface RevisionMessageMetadata {
+  artifactId?: string
   revisionId: string
   author: 'user' | 'ai'
 }

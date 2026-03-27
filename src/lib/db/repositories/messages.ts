@@ -22,13 +22,14 @@ export async function createMessage(data: {
 export async function createSystemRevisionMessage(data: {
   conversation_id: string
   author: 'user' | 'ai'
+  artifactId: string
   revisionId: string
   sequence_order: number
 }): Promise<string> {
   const id = crypto.randomUUID()
   const now = Date.now()
   const content = `${data.author} created artifact revision`
-  const metadata: RevisionMessageMetadata = { revisionId: data.revisionId, author: data.author }
+  const metadata: RevisionMessageMetadata = { artifactId: data.artifactId, revisionId: data.revisionId, author: data.author }
   await db.execute(
     `INSERT INTO messages (id, conversation_id, role, content, metadata, sequence_order, created_at)
      VALUES ($1, $2, 'system', $3, $4, $5, $6)`,

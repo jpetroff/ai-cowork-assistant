@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useMessageStore } from '@/stores/messageStore'
-import { buildThread } from '@/lib/revision-utils'
+import { useArtifactStore } from '@/stores/artifactStore'
+import { buildThread, parseRevisionMetadata } from '@/lib/revision-utils'
 import { MessageListSkeleton } from './MessageListSkeleton'
 import { MessageBubble } from './MessageBubble'
 import { ArtifactRevisionCard } from './ArtifactRevisionCard'
@@ -36,6 +37,7 @@ export function MessageList() {
   const messages = useMessageStore((s) => s.messages)
   const isStreaming = useMessageStore((s) => s.isStreaming)
   const streamingContent = useMessageStore((s) => s.streamingContent)
+  const activeRevisionId = useArtifactStore((s) => s.activeRevisionId)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const thread = buildThread(messages)
@@ -51,13 +53,19 @@ export function MessageList() {
     <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-3 min-h-0">
       {thread.length === 0 && status === 'ready' && <MessageListEmpty />}
 
-      {thread.map((item) =>
-        item.data.role === 'system' ? (
-          <ArtifactRevisionCard key={item.data.id} message={item.data} />
-        ) : (
-          <MessageBubble key={item.data.id} message={item.data} />
-        )
-      )}
+      {thread.map((item) => {
+        if (item.data.role === 'system') {
+          const revisionId = parseRevisionMetadata(item.data)?.revisionId
+          return (
+            <ArtifactRevisionCard
+              key={revisionId ?? item.data.id}
+              message={item.data}
+              isActive={!!revisionId && revisionId === activeRevisionId}
+            />
+          )
+        }
+        return <MessageBubble key={item.data.id} message={item.data} />
+      })}
 
       {/* STUB: tool-call-indicator — render AI tool call steps here (FR-AI-007) */}
 

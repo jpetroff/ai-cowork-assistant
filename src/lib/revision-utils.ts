@@ -39,27 +39,15 @@ export function hasContentChangedSinceLastSeal(
 
 /**
  * Builds the ordered chat thread from messages alone.
- * System messages without a valid `metadata.revisionId` are excluded.
- * Revision cards are represented as system messages with `role: 'system'`
- * and parsed metadata — no separate revisions array is needed.
+ * All messages are included — system messages are always meaningful at creation time.
  *
  * @param messages - All messages for the conversation, ordered by sequence_order ASC
  * @returns ThreadItem[] sorted by created_at ASC
  */
 export function buildThread(messages: Message[]): ThreadItem[] {
-  const items: ThreadItem[] = []
-
-  for (const message of messages) {
-    if (message.role === 'system') {
-      // Only include system messages that carry valid revision metadata
-      if (!hasRevisionMetadata(message)) continue
-    }
-    items.push({ type: 'message', data: message })
-  }
-
-  items.sort((a, b) => a.data.created_at - b.data.created_at)
-
-  return items
+  return [...messages]
+    .sort((a, b) => a.created_at - b.created_at)
+    .map((m) => ({ type: 'message', data: m }))
 }
 
 /**

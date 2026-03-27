@@ -10,8 +10,9 @@ export async function createRevision(data: {
   author: 'user' | 'ai'
   content?: string
   message_id?: string
+  id?: string
 }): Promise<string> {
-  const id = crypto.randomUUID()
+  const id = data.id ?? crypto.randomUUID()
   const now = Date.now()
   await db.execute(
     `INSERT INTO artifact_revisions (id, artifact_id, message_id, author, content, created_at, updated_at)

@@ -1,6 +1,4 @@
-# Spec: Revision Chat Cards
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Every sealed revision has a corresponding system message in the chat thread
 The system SHALL create a `role: 'system'` message in the `messages` table whenever an artifact revision is sealed (either by user send or AI response). This system message SHALL be the revision's `message_id` anchor. The content SHALL be `"<author> created artifact revision"` where `<author>` is `"user"` or `"ai"`. The `metadata` column SHALL contain a JSON object `{ "artifactId": "<id>", "revisionId": "<id>", "author": "<author>" }`.
@@ -24,29 +22,23 @@ The system SHALL create a `role: 'system'` message in the `messages` table whene
 ---
 
 ### Requirement: System message appears in the chat thread as an artifact revision card
-
 The system SHALL render a compact two-line card in the chat thread for every `role: 'system'` message that has a `metadata.revisionId`. The card SHALL use `getArtifactRevisionMeta(meta.artifactId, { revisionId: meta.revisionId })` to resolve display data. The card SHALL display:
-
 - Line 1: the artifact title resolved via `getArtifactRevisionMeta`
 - Line 2: author label ("user" or "AI") and formatted timestamp
 
 #### Scenario: User revision card rendered for currently loaded artifact
-
 - **WHEN** `MessageList` renders a `role: 'system'` message with `metadata.author: 'user'` and `metadata.artifactId` matching the loaded artifact
 - **THEN** an `ArtifactRevisionCard` is shown with the correct artifact title and a "user" author label
 
 #### Scenario: AI revision card rendered for currently loaded artifact
-
 - **WHEN** `MessageList` renders a `role: 'system'` message with `metadata.author: 'ai'` and `metadata.artifactId` matching the loaded artifact
 - **THEN** an `ArtifactRevisionCard` is shown with the correct artifact title and an "AI" author label
 
 #### Scenario: System message without revisionId metadata is not rendered as a card
-
 - **WHEN** a `role: 'system'` message has no `metadata` or no `metadata.revisionId`
 - **THEN** it is not rendered in the thread (filtered out)
 
 #### Scenario: Card for a revision whose artifact is not currently loaded returns null
-
 - **WHEN** `getArtifactRevisionMeta` returns `null` (e.g. `meta.artifactId` is absent or does not match the loaded artifact)
 - **THEN** the `ArtifactRevisionCard` renders nothing (`null`)
 
@@ -58,20 +50,3 @@ The `ArtifactRevisionCard` SHALL include a Load button that calls `requestRevisi
 #### Scenario: Load button restores revision into editor
 - **WHEN** the user clicks Load on a revision card
 - **THEN** `requestRevisionLoad(metadata.revisionId)` is called and the editor renders that revision's content without changing HEAD
-
-#### Scenario: Load button shows Loaded state when revision is active
-- **WHEN** `loadedRevisionId === metadata.revisionId`
-- **THEN** the Load button shows "Loaded" and is disabled
-
----
-
-### Requirement: First artifact revision card only appears after the user's first send
-The system SHALL NOT create a system message when a conversation is first created or when the initial empty draft revision is created. A system message SHALL only be created when the user first sends a message that seals the draft.
-
-#### Scenario: New conversation has no revision cards
-- **WHEN** a conversation is created and the user has not yet sent a message
-- **THEN** the chat thread contains no `role: 'system'` messages and no revision cards are shown
-
-#### Scenario: First send creates the first revision card
-- **WHEN** the user first sends a message in a new conversation with content in the artifact
-- **THEN** exactly one `role: 'system'` message is created and appears as a revision card in the thread

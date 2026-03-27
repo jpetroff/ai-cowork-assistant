@@ -49,7 +49,7 @@ interface MessageActions {
    * Create a system message anchoring an artifact revision in the thread.
    * Returns the new message id.
    */
-  addSystemRevisionMessage: (author: 'user' | 'ai', revisionId: string) => Promise<string>
+  addSystemRevisionMessage: (author: 'user' | 'ai', artifactId: string, revisionId: string) => Promise<string>
 }
 
 const INITIAL_STATE: MessageState = {
@@ -134,12 +134,12 @@ export const useMessageStore = create<MessageState & MessageActions>((set, get) 
     }
   },
 
-  async addSystemRevisionMessage(author, revisionId) {
+  async addSystemRevisionMessage(author, artifactId, revisionId) {
     const { conversationId, messages } = get()
     if (!conversationId) throw new Error('No active conversation')
     const sequence_order = messages.length > 0 ? messages[messages.length - 1].sequence_order + 1 : 0
-    const id = await createSystemRevisionMessage({ conversation_id: conversationId, author, revisionId, sequence_order })
-    const metadata: RevisionMessageMetadata = { revisionId, author }
+    const id = await createSystemRevisionMessage({ conversation_id: conversationId, author, artifactId, revisionId, sequence_order })
+    const metadata: RevisionMessageMetadata = { artifactId, revisionId, author }
     const newMessage: Message = {
       id,
       conversation_id: conversationId,

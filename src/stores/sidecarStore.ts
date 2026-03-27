@@ -174,11 +174,7 @@ export const useSidecarStore = create<SidecarState & SidecarActions>((set, get) 
   },
 
   async _handleAiArtifactResponse(content: string) {
-    const messageStore = useMessageStore.getState()
-    await getArtifactStore().applyAiRevision(
-      content,
-      (revisionId, author) => messageStore.addSystemRevisionMessage(author, revisionId)
-    )
+    await getArtifactStore().applyAiRevision(content)
   },
 
   /**

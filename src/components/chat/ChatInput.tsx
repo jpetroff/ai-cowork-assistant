@@ -3,10 +3,8 @@ import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useMessageStore } from '@/stores/messageStore'
-import { useArtifactStore, artifactFlushRef } from '@/stores/artifactStore'
+import { useArtifactStore } from '@/stores/artifactStore'
 import { useSidecarStore } from '@/stores/sidecarStore'
-
-const getMessageStore = () => useMessageStore.getState()
 
 export function ChatInput() {
   const [value, setValue] = useState('')
@@ -23,16 +21,11 @@ export function ChatInput() {
     if (!content || isStreaming) return
     setValue('')
 
-    // 1. Flush any pending debounced editor save before sealing
-    await artifactFlushRef.current?.()
-
     // 2. Persist user message to DB
     await addUserMessage(content)
 
-    // 3. Seal the active artifact revision; system message created lazily only if a revision is sealed
-    const sealResult = await sealForSend(
-      (revisionId, author) => getMessageStore().addSystemRevisionMessage(author, revisionId)
-    )
+    // 3. Seal the active artifact revision; system message created automatically if a revision is sealed
+    const sealResult = await sealForSend()
 
     // 4. Send to sidecar
     await sendChatRequest(content, sealResult)

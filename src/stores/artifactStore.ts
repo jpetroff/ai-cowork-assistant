@@ -8,6 +8,7 @@ import {
 } from '@/lib/db/repositories/documents'
 import {
   createRevision,
+  getRevision,
   listRevisions,
   updateRevisionContent,
   sealRevision,
@@ -15,14 +16,26 @@ import {
 import { setConversationActiveArtifact } from '@/lib/db/repositories/conversations'
 import type { Artifact, ArtifactRevision } from '@/lib/db/types'
 import type { SealResult } from '@/lib/types'
-import { canEditInPlace, findLastSealedRevision, hasContentChangedSinceLastSeal } from '@/lib/revision-utils'
+import { canEditInPlace, findLastSealedRevision, hasContentChangedSinceLastSeal, parseRevisionMetadata } from '@/lib/revision-utils'
+import { useMessageStore } from '@/stores/messageStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
 
-/** Callback injected into the seal chain to create a system message anchoring the revision in the thread. */
-type SysMsgCreator = (revisionId: string, author: 'user' | 'ai') => Promise<string>
+/** @property revisionId - specific revision to look up; defaults to head revision */
+/** @property includeContent - whether to include revision content (default: false) */
+interface ArtifactRevisionMetaOptions {
+  revisionId?: string
+  includeContent?: boolean
+}
+
+/** @property artifact - the artifact metadata */
+/** @property revision - revision metadata, content omitted unless includeContent is true */
+interface ArtifactRevisionMeta {
+  artifact: Artifact
+  revision: Omit<ArtifactRevision, 'content'> | ArtifactRevision
+}
 
 interface ArtifactState {
   status: StoreStatus
@@ -37,7 +50,7 @@ interface ArtifactState {
   /** The content to initialize the editor with on mount. Owned by the store; editor owns its own live state. */
   loadedContent: string
   /** Changes when the editor should remount with fresh content (e.g. AI revision, history load). */
-  editorKey: string
+  editorKey: string | null
   revisions: ArtifactRevision[]
   isSaving: boolean
   saveError: string | null
@@ -57,7 +70,8 @@ interface ArtifactActions {
    * Persist content from the editor. Routes through the save chain based on activeRevisionId:
    * - status !== 'ready' → silently discarded (guards transition saves from unmount cleanup)
    * - isSaving → silently discarded
-   * - activeRevisionId === null → creates new user-draft revision
+   * - activeRevisionId === null && revisions empty → creates first draft + anchor system message
+   * - activeRevisionId === null → creates new user-draft revision (fork from historical view)
    * - activeRevisionId === headRevision.id && isDraft → _persistToHead
    * - activeRevisionId === headRevision.id && sealed → _createDraftThenPersist
    */
@@ -65,14 +79,14 @@ interface ArtifactActions {
   /**
    * Seal the active revision before sending. Returns the revision to attach to
    * the outgoing message, or null if there is no artifact / no revisions.
-   * `sysMsgCreator` is called only when a revision is actually sealed/created.
+   * A system message is created automatically when a revision is actually sealed/created.
    */
-  sealForSend: (sysMsgCreator?: SysMsgCreator) => Promise<SealResult | null>
+  sealForSend: () => Promise<SealResult | null>
   /**
    * Apply an AI-generated revision. Inserts a new author='ai' sealed revision as HEAD
    * and remounts the editor with the new content.
    */
-  applyAiRevision: (content: string, sysMsgCreator: SysMsgCreator) => Promise<void>
+  applyAiRevision: (content: string) => Promise<void>
   /**
    * Load a revision into the editor.
    * - Flushes any pending save and waits for it to complete.
@@ -93,14 +107,22 @@ interface ArtifactActions {
   reloadFromDisk: () => Promise<void>
   /** Link the artifact to a relative file path on disk. */
   linkToDisk: (relativePath: string) => Promise<void>
+  /**
+   * Look up artifact and revision metadata by artifact ID.
+   * Returns null if the artifact ID doesn't match the loaded artifact, or if no artifact is loaded.
+   * @param artifactId - must match the currently loaded artifact
+   * @param options.revisionId - specific revision to return; defaults to head revision
+   * @param options.includeContent - include revision content in result (default: false)
+   */
+  getArtifactRevisionMeta: (artifactId: string, options?: ArtifactRevisionMetaOptions) => ArtifactRevisionMeta | null
   // Internal helpers — not for direct use outside the store
   _createUserDraft: (content: string) => Promise<ArtifactRevision>
   _persistToHead: (content: string) => Promise<void>
   _createDraftThenPersist: (content: string) => Promise<void>
   _syncToDiskIfLinked: (content: string) => Promise<void>
-  _sealDraftInPlace: (sysMsgCreator: SysMsgCreator) => Promise<SealResult>
+  _sealDraftInPlace: () => Promise<SealResult>
   _reuseLastSealed: () => SealResult | null
-  _createSealedRevision: (sysMsgCreator: SysMsgCreator) => Promise<SealResult>
+  _createSealedRevision: () => Promise<SealResult>
   _reuseCurrentHead: () => SealResult | null
   /**
    * Set editor-relevant state and transition to 'ready'.
@@ -111,23 +133,17 @@ interface ArtifactActions {
   _mountRevision: (revision: ArtifactRevision | null, isHead: boolean) => void
 }
 
-// ── Non-reactive bridge for EditorPanel flush ─────────────────────────────────
-// Plain mutable object — NOT Zustand state. No re-renders triggered.
-// EditorPanel writes its flushPendingSave function here on mount.
-// ChatInput reads from here before sealing.
-export const artifactFlushRef: { current: (() => Promise<void>) | null } = { current: null }
-
 const INITIAL_STATE: ArtifactState = {
-  status: 'idle',
+  status: 'loading',
   artifact: null,
   headRevision: null,
   activeRevisionId: null,
   loadedContent: '',
-  editorKey: 'initial',
+  editorKey: null,
   revisions: [],
   isSaving: false,
   saveError: null,
-  externalChangeDetected: false,
+  externalChangeDetected: false
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -182,21 +198,27 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   // ── Internal helpers ────────────────────────────────────────────────────────
 
   _mountRevision(revision, isHead) {
+
+    // editorKey serves as new revision ID for an unsaved draft
+    // when saving with revisionId == null → new revision gets editorKey as ID 
+    // no re-render on draft persist
+    let newRevisionId = crypto.randomUUID()
+
     set({
       activeRevisionId: isHead ? (revision?.id ?? null) : null,
       loadedContent: revision?.content ?? '',
       editorKey: revision
-        ? (isHead ? revision.id : `hist-${Date.now()}`)
-        : 'empty',
+        ? (isHead ? revision.id : newRevisionId)
+        : newRevisionId,
       status: 'ready',
     })
   },
 
   async _createUserDraft(content: string): Promise<ArtifactRevision> {
-    const { artifact, revisions } = get()
+    const { artifact, revisions, editorKey } = get()
     if (!artifact) throw new Error('No active artifact')
 
-    const revisionId = await createRevision({ artifact_id: artifact.id, author: 'user', content })
+    const revisionId = await createRevision({ artifact_id: artifact.id, author: 'user', content, id: editorKey ?? undefined })
     await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
     const newRevision: ArtifactRevision = {
@@ -223,8 +245,9 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   // ── Save chain ──────────────────────────────────────────────────────────────
 
   async save(content) {
-    const { status, activeRevisionId, headRevision, isSaving, artifact } = get()
+    const { status, activeRevisionId, headRevision, isSaving, artifact, revisions } = get()
 
+    console.debug('[artifactStore] save trigger:', status, isSaving, artifact)
     // Guard: drop saves during loading transitions (e.g. from editor unmount cleanup)
     if (status !== 'ready') return
 
@@ -236,9 +259,17 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
     set({ isSaving: true, saveError: null })
     try {
+
+      // begin actual save
+      console.debug(`[artifactStore] activeRevisionId=${activeRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`)
+
       if (activeRevisionId === null) {
-        // No revision yet (new document or detached historical view) — create first draft
-        await get()._createUserDraft(content)
+        const isFirstRevision = revisions.length === 0
+        const draft = await get()._createUserDraft(content)
+        // Create a chat anchor for the very first revision so users can always navigate back to it
+        if (isFirstRevision) {
+          await useMessageStore.getState().addSystemRevisionMessage('user', artifact.id, draft.id, )
+        }
       } else if (activeRevisionId === headRevision?.id && canEditInPlace(headRevision)) {
         // HEAD is a user draft — persist in place
         await get()._persistToHead(content)
@@ -261,6 +292,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
   async _persistToHead(content: string) {
     const { headRevision } = get()
+    console.debug(`[artifactStore._persistToHead] headRevision=${headRevision} ← should be always not NULL!`)
     if (!headRevision) return
 
     await updateRevisionContent(headRevision.id, content)
@@ -305,7 +337,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
    * - !isDraft && changed  → _createSealedRevision
    * - !isDraft && !changed → _reuseCurrentHead
    */
-  async sealForSend(sysMsgCreator) {
+  async sealForSend() {
     const { headRevision, revisions, artifact } = get()
     if (!headRevision || !artifact) return null
 
@@ -313,21 +345,29 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     const changed = hasContentChangedSinceLastSeal(headRevision, revisions)
 
     if (isDraft && changed) {
-      return get()._sealDraftInPlace(sysMsgCreator!)
+      return get()._sealDraftInPlace()
     } else if (isDraft && !changed) {
       return get()._reuseLastSealed()
     } else if (!isDraft && changed) {
-      return get()._createSealedRevision(sysMsgCreator!)
+      return get()._createSealedRevision()
     } else {
       return get()._reuseCurrentHead()
     }
   },
 
-  async _sealDraftInPlace(sysMsgCreator: SysMsgCreator): Promise<SealResult> {
+  async _sealDraftInPlace(): Promise<SealResult> {
     const { headRevision, artifact } = get()
     if (!headRevision || !artifact) throw new Error('No active revision')
 
-    const sysMsgId = await sysMsgCreator(headRevision.id, 'user')
+    // If an anchor message already exists for this revision (created at first-draft time),
+    // reuse it as the seal message to avoid a duplicate card in the chat thread.
+    const existingAnchor = useMessageStore.getState().messages.find(
+      (m) => parseRevisionMetadata(m)?.revisionId === headRevision.id
+    )
+    const sysMsgId = existingAnchor
+      ? existingAnchor.id
+      : await useMessageStore.getState().addSystemRevisionMessage('user', artifact.id, headRevision.id, )
+
     await sealRevision(headRevision.id, sysMsgId)
     const sealed = { ...headRevision, message_id: sysMsgId }
     set((s) => ({
@@ -347,7 +387,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     return { artifactId: artifact.id, revisionId: target.id, content: target.content }
   },
 
-  async _createSealedRevision(sysMsgCreator: SysMsgCreator): Promise<SealResult> {
+  async _createSealedRevision(): Promise<SealResult> {
     const { headRevision, artifact, revisions } = get()
     if (!headRevision || !artifact) throw new Error('No active revision')
 
@@ -356,7 +396,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
       author: 'user',
       content: headRevision.content,
     })
-    const sysMsgId = await sysMsgCreator(revisionId, 'user')
+    const sysMsgId = await useMessageStore.getState().addSystemRevisionMessage('user', artifact.id, revisionId, )
     await sealRevision(revisionId, sysMsgId)
     await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
@@ -389,7 +429,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
   // ── External triggers ────────────────────────────────────────────────────────
 
-  async applyAiRevision(content, sysMsgCreator) {
+  async applyAiRevision(content: string) {
     const { artifact, revisions } = get()
     if (!artifact) return
 
@@ -398,7 +438,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
       author: 'ai',
       content,
     })
-    const sysMsgId = await sysMsgCreator(revisionId, 'ai')
+    const sysMsgId = await useMessageStore.getState().addSystemRevisionMessage('ai', artifact.id, revisionId, )
     await sealRevision(revisionId, sysMsgId)
     await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
@@ -424,21 +464,33 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   },
 
   async requestRevisionLoad(revisionId) {
-    const { revisions, headRevision } = get()
-    const revision = revisions.find((r) => r.id === revisionId)
-    if (!revision) return
-
-    const isHead = revisionId === headRevision?.id
-
-    // Flush any pending debounced save and await its completion
-    await artifactFlushRef.current?.()
-
     // Set loading — any saves fired by editor unmount cleanup will be dropped
     set({ status: 'loading' })
 
     // Yield to let React commit the loading state (editor unmounts, cleanup saves are dropped)
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
 
+    const { revisions: currentRevisions, artifact: currentArtifact } = get()
+
+    const revision = currentRevisions.find((r) => r.id === revisionId) ?? await getRevision(revisionId)
+    if (!revision) { set({ status: 'ready' }); return }
+
+    // If the revision belongs to a different artifact, load that artifact's full context first
+    if (revision.artifact_id !== currentArtifact?.id) {
+      const targetArtifact = await getArtifact(revision.artifact_id)
+      if (!targetArtifact) { set({ status: 'ready' }); return }
+
+      const allRevisions = await listRevisions(targetArtifact.id)
+      const revisionsAsc = [...allRevisions].reverse()
+      const targetHead = targetArtifact.current_revision_id
+        ? (revisionsAsc.find((r) => r.id === targetArtifact.current_revision_id) ?? revisionsAsc[revisionsAsc.length - 1] ?? null)
+        : (revisionsAsc[revisionsAsc.length - 1] ?? null)
+
+      set({ artifact: targetArtifact, headRevision: targetHead, revisions: revisionsAsc })
+    }
+
+    const { headRevision } = get()
+    const isHead = revisionId === headRevision?.id
     get()._mountRevision(revision, isHead)
   },
 
@@ -452,7 +504,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
       headRevision: null,
       activeRevisionId: null,
       loadedContent: '',
-      editorKey: `new-${artifactId}`,
+      editorKey: crypto.randomUUID(),
       revisions: [],
       status: 'ready',
     })
@@ -486,9 +538,6 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     const { artifact } = get()
     if (!artifact?.file_path) return
 
-    // Flush any pending save and await completion
-    await artifactFlushRef.current?.()
-
     set({ status: 'loading' })
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
 
@@ -500,6 +549,25 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
       editorKey: newDraft.id,
       status: 'ready',
     })
+  },
+
+  getArtifactRevisionMeta(artifactId, options = {}) {
+    const { artifact, headRevision, revisions } = get()
+    if (!artifact || artifact.id !== artifactId) return null
+
+    const { revisionId, includeContent = false } = options
+    let revision: ArtifactRevision | undefined
+
+    if (revisionId) {
+      revision = revisions.find((r) => r.id === revisionId)
+    } else {
+      revision = headRevision ?? undefined
+    }
+
+    if (!revision) return null
+
+    const revisionOut = includeContent ? revision : (({ content: _c, ...rest }) => rest)(revision)
+    return { artifact, revision: revisionOut }
   },
 
   async linkToDisk(relativePath) {

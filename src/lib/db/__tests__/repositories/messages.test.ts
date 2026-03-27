@@ -45,10 +45,11 @@ describe('listMessages()', () => {
 })
 
 describe('createSystemRevisionMessage()', () => {
-  it('inserts with role=system, correct content, and serialized metadata', async () => {
+  it('inserts with role=system, correct content, and serialized metadata including artifactId', async () => {
     await createSystemRevisionMessage({
       conversation_id: 'c1',
       author: 'user',
+      artifactId: 'art-1',
       revisionId: 'rev-abc',
       sequence_order: 3,
     })
@@ -60,13 +61,14 @@ describe('createSystemRevisionMessage()', () => {
     const metadataArg = params.find((p) => typeof p === 'string' && p.includes('rev-abc'))
     expect(metadataArg).toBeDefined()
     const parsed = JSON.parse(metadataArg as string)
-    expect(parsed).toEqual({ revisionId: 'rev-abc', author: 'user' })
+    expect(parsed).toEqual({ artifactId: 'art-1', revisionId: 'rev-abc', author: 'user' })
   })
 
-  it('inserts AI system message with author=ai in metadata', async () => {
+  it('inserts AI system message with author=ai and artifactId in metadata', async () => {
     await createSystemRevisionMessage({
       conversation_id: 'c2',
       author: 'ai',
+      artifactId: 'art-2',
       revisionId: 'rev-xyz',
       sequence_order: 5,
     })
@@ -75,12 +77,14 @@ describe('createSystemRevisionMessage()', () => {
     const metadataArg = params.find((p) => typeof p === 'string' && p.includes('rev-xyz'))
     const parsed = JSON.parse(metadataArg as string)
     expect(parsed.author).toBe('ai')
+    expect(parsed.artifactId).toBe('art-2')
   })
 
   it('does not include updated_at column', async () => {
     await createSystemRevisionMessage({
       conversation_id: 'c1',
       author: 'user',
+      artifactId: 'art-1',
       revisionId: 'rev-1',
       sequence_order: 0,
     })
