@@ -138,7 +138,7 @@ export class SqliteDatabase implements DbInterface {
       await db.execute(sql, params)
     } catch (error) {
       throw new DatabaseError(
-        `Failed to execute command: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to execute command: ${error instanceof Error ? error.message : String(error)}`,
         undefined,
         error instanceof Error ? error : undefined
       )

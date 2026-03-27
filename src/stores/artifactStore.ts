@@ -218,7 +218,12 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     const { artifact, revisions, editorKey } = get()
     if (!artifact) throw new Error('No active artifact')
 
-    const revisionId = await createRevision({ artifact_id: artifact.id, author: 'user', content, id: editorKey ?? undefined })
+    // Only use editorKey as the pre-allocated ID when it is a truly fresh UUID
+    // (not the ID of an existing revision). If editorKey matches an existing revision
+    // (e.g. head was sealed since mount, editorKey still points to it), a fresh UUID
+    // is generated instead to avoid a UNIQUE constraint violation on INSERT.
+    const keyIsFresh = editorKey && !revisions.some((r) => r.id === editorKey)
+    const revisionId = await createRevision({ artifact_id: artifact.id, author: 'user', content, id: keyIsFresh ? editorKey : undefined })
     await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
     const newRevision: ArtifactRevision = {
