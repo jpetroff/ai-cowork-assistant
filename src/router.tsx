@@ -1,4 +1,4 @@
-import { createHashRouter, Outlet } from 'react-router-dom'
+import { createMemoryRouter, Outlet } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoadingPage } from '@/pages/LoadingPage'
 import { SetupPage } from '@/pages/SetupPage'
@@ -12,16 +12,16 @@ import { useLlmProviderStore } from '@/stores/llmProviderStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { useArtifactStore } from '@/stores/artifactStore'
 
-export const router = createHashRouter([
-  {
+export const router = createMemoryRouter([
+  { 
     path: '/',
     element: (
       <AppShell>
-        <Outlet />
+        <Outlet />  
       </AppShell>
     ),
     children: [
-      { path: 'loading', element: <LoadingPage /> },
+      { path: 'loading', element: <LoadingPage / > },
       { path: 'setup', element: <SetupPage /> },
       {
         index: true,

@@ -69,7 +69,6 @@ export const useProjectSettingsStore = create<ProjectSettingsState & ProjectSett
       }))
     }
   },
-
   async saveAiConfig(projectId, config) {
     set((s) => ({ aiConfigs: { ...s.aiConfigs, [projectId]: config } }))
     try {
