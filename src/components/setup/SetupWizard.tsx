@@ -1,18 +1,5 @@
 import { useState } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { Card } from '@/components/ui/card'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/stores/appStore'
 import { WizardStepper } from './WizardStepper'
 import { ProfileStep } from './ProfileStep'
@@ -51,39 +38,6 @@ export function SetupWizard() {
         </div>
       </Card>
 
-      {/* Dev-only reset button */}
-      {import.meta.env.DEV && <DevResetButton />}
     </div>
-  )
-}
-
-function DevResetButton() {
-  async function handleReset() {
-    await invoke('clear_app_data')
-  }
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger
-        className="text-muted-foreground/50 text-xs px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
-      >
-        Reset App Data
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Reset all app data?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently delete the local database and all stored data. The app will
-            restart. This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleReset} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-            Delete & Restart
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   )
 }

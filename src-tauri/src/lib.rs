@@ -1,5 +1,4 @@
 mod db;
-mod dev;
 mod sidecar;
 mod system;
 
@@ -21,14 +20,17 @@ pub fn run() {
         .manage(std::sync::Mutex::new(sidecar::State::default()));
 
     #[cfg(debug_assertions)]
-    let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    let builder = if std::env::var("TAURI_MCP").map(|v| v == "1" || v == "true").unwrap_or(false) {
+        builder.plugin(tauri_plugin_mcp_bridge::init())
+    } else {
+        builder
+    };
 
     builder
         .invoke_handler(tauri::generate_handler![
             sidecar::init,
             system::get_os_username,
             system::get_os_avatar_path,
-            dev::clear_app_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

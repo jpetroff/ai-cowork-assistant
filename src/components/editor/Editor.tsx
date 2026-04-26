@@ -932,7 +932,8 @@ export function Editor({
     editable: !isStreaming,
     immediatelyRender: false,
     onCreate({ editor: e }) {
-      console.debug('[Editor] onCreate, editor:', e)
+      console.log(undefined)
+      ;(l => l && console.log(...l))(console.logger('EDITOR', 'onCreate, editor:', e))
       isReady.current = false
       setTimeout(() => { isReady.current = true }, 0)
     },
@@ -942,8 +943,8 @@ export function Editor({
     onUpdate({ editor: e }) {
       if (!isReady.current) return
       let content = (e as TiptapEditor & { getMarkdown: () => string }).getMarkdown()
-      console.debug('[Editor] onUpdate, editor:', e)
-      console.debug('[Editor] |— content:', content)
+      ;(l => l && console.log(...l))(console.logger('EDITOR', 'onUpdate, editor:', e))
+      ;(l => l && console.log(...l))(console.logger('EDITOR', '|— content:', content))
       if (content == '' || content == '&nbsp;') return
 
       onSave(content)

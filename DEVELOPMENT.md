@@ -87,6 +87,43 @@ rm ~/Library/Application\ Support/asc.evgn.aicoworklab/app_data.db
 
 This resets all app data while preserving the ChromaDB index.
 
+## Codex Setup
+
+Codex does not read the Claude Code settings in `.claude/`. For this project, the MCP server wiring now lives in workspace-owned files and the Codex-side approval/sandbox defaults should be added to your user config.
+
+### Workspace MCP servers
+
+- `.vscode/mcp.json` configures the project MCP servers for VS Code agent tooling.
+- `make serena` now starts Serena with `--context codex`.
+- `.mcp.json` is left in place for existing non-Codex clients that still use it.
+
+### Codex CLI / desktop config
+
+Per the OpenAI Codex docs, Codex CLI and the IDE extension share MCP configuration through `~/.codex/config.toml`.
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[mcp_servers.tauri-mcp-server]
+command = "bunx"
+args = ["@hypothesi/tauri-mcp-server"]
+
+[mcp_servers.serena]
+command = "uvx"
+args = ["--from", "git+https://github.com/oraios/serena", "serena", "start-mcp-server", "--transport", "streamable-http", "--port", "9121", "--project-from-cwd", "--context", "codex"]
+startup_timeout_sec = 15
+```
+
+If you prefer CLI commands instead of editing TOML directly:
+
+```bash
+codex mcp add tauri-mcp-server -- bunx @hypothesi/tauri-mcp-server
+codex mcp add serena -- uvx --from git+https://github.com/oraios/serena serena start-mcp-server --transport streamable-http --port 9121 --project-from-cwd --context codex
+```
+
 ## Available Commands
 
 ### Bun (frontend + Tauri)

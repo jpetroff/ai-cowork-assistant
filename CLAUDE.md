@@ -7,7 +7,9 @@
 - default to small components
 - always use bun package manager to check or install dependencies
 - always check Context7 MCP for up-to-date knowledge about libraries and packages used in this project
-- use minimal JSDoc for type declarations (@property tags only), comprehensive JSDoc for store/method implementations inside create()
+- use minimal JSDoc for type declarations (@property tags only), comprehensive JSDoc for store/method implementations inside create() 
+
+test
 
 ## Don't
 
@@ -43,5 +45,7 @@ Refer to ./openspec/specs/project/spec.md for detailed project specifications
 
 ## Design system
 
-- use shadcn with baseUI for any frontend component
+
 - use tailwind to change component styles only if required styles are not provided by default
+
+#f470674d

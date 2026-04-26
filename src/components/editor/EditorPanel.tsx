@@ -12,7 +12,7 @@ export function EditorPanel() {
   const save = useArtifactStore((s) => s.save)
   const isStreaming = useMessageStore((s) => s.isStreaming)
 
-  console.debug('EditorPanel: what changed', artifact, editorKey, loadedContent, save, isStreaming)
+  ;(l => l && console.log(...l))(console.logger('EDITOR', 'EditorPanel: what changed', artifact, editorKey, loadedContent, save, isStreaming))
 
   // Editor is only mounted when status is 'ready' — loading/idle show skeleton
   if (editorKey == null) return <EditorSkeleton />

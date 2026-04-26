@@ -252,7 +252,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
   async save(content) {
     const { status, activeRevisionId, headRevision, isSaving, artifact, revisions } = get()
 
-    console.debug('[artifactStore] save trigger:', status, isSaving, artifact)
+    ;(l => l && console.log(...l))(console.logger('EDITOR', 'artifactStore save trigger:', status, isSaving, artifact))
     // Guard: drop saves during loading transitions (e.g. from editor unmount cleanup)
     if (status !== 'ready') return
 
@@ -266,7 +266,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
     try {
 
       // begin actual save
-      console.debug(`[artifactStore] activeRevisionId=${activeRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`)
+      ;(l => l && console.log(...l))(console.logger('EDITOR', `activeRevisionId=${activeRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`))
 
       if (activeRevisionId === null) {
         const isFirstRevision = revisions.length === 0
@@ -297,7 +297,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>((set, ge
 
   async _persistToHead(content: string) {
     const { headRevision } = get()
-    console.debug(`[artifactStore._persistToHead] headRevision=${headRevision} ← should be always not NULL!`)
+    ;(l => l && console.log(...l))(console.logger('EDITOR', `_persistToHead: headRevision=${headRevision} ← should be always not NULL!`))
     if (!headRevision) return
 
     await updateRevisionContent(headRevision.id, content)
