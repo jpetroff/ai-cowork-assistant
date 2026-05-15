@@ -16,7 +16,7 @@ import {
 import { setConversationActiveArtifact } from '@/lib/db/repositories/conversations'
 import type { Artifact, ArtifactRevision } from '@/lib/db/types'
 import type { SealResult } from '@/lib/types'
-import { isDebugLogEnabled } from '@/lib/logger'
+import { console_if } from '@/lib/logger'
 import {
   canEditInPlace,
   findLastSealedRevision,
@@ -76,8 +76,7 @@ interface ArtifactActions {
    * Persist content from the editor. Routes through the save chain based on activeRevisionId:
    * - status !== 'ready' → silently discarded (guards transition saves from unmount cleanup)
    * - isSaving → silently discarded
-   * - activeRevisionId === null && revisions empty → creates first draft + anchor system message
-   * - activeRevisionId === null → creates new user-draft revision (fork from historical view)
+   * - activeRevisionId === null → creates a new user-draft revision (first save or historical fork)
    * - activeRevisionId === headRevision.id && isDraft → _persistToHead
    * - activeRevisionId === headRevision.id && sealed → _createDraftThenPersist
    */
@@ -286,15 +285,13 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         revisions,
       } = get()
 
-      if (isDebugLogEnabled('EDITOR')) {
-        console.log(
-          '[EDITOR]',
-          'artifactStore save trigger:',
-          status,
-          isSaving,
-          artifact
-        )
-      }
+      console_if('EDITOR').log(
+        '[EDITOR]',
+        'artifactStore save trigger:',
+        status,
+        isSaving,
+        artifact
+      )
       // Guard: drop saves during loading transitions (e.g. from editor unmount cleanup)
       if (status !== 'ready') return
 
@@ -307,22 +304,13 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({ isSaving: true, saveError: null })
       try {
         // begin actual save
-        if (isDebugLogEnabled('EDITOR')) {
-          console.log(
-            '[EDITOR]',
-            `activeRevisionId=${activeRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`
-          )
-        }
+        console_if('EDITOR').log(
+          '[EDITOR]',
+          `activeRevisionId=${activeRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`
+        )
 
         if (activeRevisionId === null) {
-          const isFirstRevision = revisions.length === 0
-          const draft = await get()._createUserDraft(content)
-          // Create a chat anchor for the very first revision so users can always navigate back to it
-          if (isFirstRevision) {
-            await useMessageStore
-              .getState()
-              .addSystemRevisionMessage('user', artifact.id, draft.id)
-          }
+          await get()._createUserDraft(content)
         } else if (
           activeRevisionId === headRevision?.id &&
           canEditInPlace(headRevision)
@@ -348,12 +336,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     async _persistToHead(content: string) {
       const { headRevision } = get()
-      if (isDebugLogEnabled('EDITOR')) {
-        console.log(
-          '[EDITOR]',
-          `_persistToHead: headRevision=${headRevision} ← should be always not NULL!`
-        )
-      }
+      console_if('EDITOR').log(
+        '[EDITOR]',
+        `_persistToHead: headRevision=${headRevision} ← should be always not NULL!`
+      )
       if (!headRevision) return
 
       await updateRevisionContent(headRevision.id, content)

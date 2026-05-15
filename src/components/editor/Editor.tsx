@@ -65,7 +65,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { isDebugLogEnabled } from '@/lib/logger'
+import { console_if } from '@/lib/logger'
 
 import {
   Bold as BoldIcon,
@@ -937,9 +937,7 @@ export function Editor({
     editable: !isStreaming,
     immediatelyRender: false,
     onCreate({ editor: e }) {
-      if (isDebugLogEnabled('EDITOR')) {
-        console.log('[EDITOR]', 'onCreate, editor:', e)
-      }
+      console_if('EDITOR').log('[EDITOR]', 'onCreate, editor:', e)
       isReady.current = false
       setTimeout(() => {
         isReady.current = true
@@ -953,10 +951,8 @@ export function Editor({
       let content = (
         e as TiptapEditor & { getMarkdown: () => string }
       ).getMarkdown()
-      if (isDebugLogEnabled('EDITOR')) {
-        console.log('[EDITOR]', 'onUpdate, editor:', e)
-        console.log('[EDITOR]', '|— content:', content)
-      }
+      console_if('EDITOR').log('[EDITOR]', 'onUpdate, editor:', e)
+      console_if('EDITOR').log('[EDITOR]', '|— content:', content)
       if (content == '' || content == '&nbsp;') return
 
       onSave(content)

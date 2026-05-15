@@ -11,7 +11,9 @@ import {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function makeRevision(overrides: Partial<ArtifactRevision> = {}): ArtifactRevision {
+function makeRevision(
+  overrides: Partial<ArtifactRevision> = {}
+): ArtifactRevision {
   return {
     id: crypto.randomUUID(),
     artifact_id: 'art-1',
@@ -37,11 +39,15 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
   }
 }
 
-function makeSystemRevisionMessage(revisionId: string, author: 'user' | 'ai', overrides: Partial<Message> = {}): Message {
+function makeSystemRevisionMessage(
+  revisionId: string,
+  author: 'user' | 'ai',
+  overrides: Partial<Message> = {}
+): Message {
   return makeMessage({
     role: 'system',
     content: `${author} created artifact revision`,
-    metadata: JSON.stringify({ revisionId, author }),
+    metadata: JSON.stringify({ artifactId: 'art-1', revisionId, author }),
     ...overrides,
   })
 }
@@ -55,6 +61,12 @@ describe('canEditInPlace', () => {
 
   it('returns false when message_id is set (sealed)', () => {
     expect(canEditInPlace(makeRevision({ message_id: 'msg-1' }))).toBe(false)
+  })
+
+  it('returns false when an AI revision is unsealed', () => {
+    expect(
+      canEditInPlace(makeRevision({ author: 'ai', message_id: null }))
+    ).toBe(false)
   })
 })
 
@@ -98,7 +110,9 @@ describe('hasContentChangedSinceLastSeal', () => {
     expect(hasContentChangedSinceLastSeal(head, [head])).toBe(false)
 
     const headWithContent = makeRevision({ content: 'something' })
-    expect(hasContentChangedSinceLastSeal(headWithContent, [headWithContent])).toBe(true)
+    expect(
+      hasContentChangedSinceLastSeal(headWithContent, [headWithContent])
+    ).toBe(true)
   })
 })
 
@@ -119,7 +133,9 @@ describe('buildThread', () => {
   })
 
   it('includes system messages with valid revisionId metadata', () => {
-    const sysMsg = makeSystemRevisionMessage('rev-1', 'user', { created_at: 150 })
+    const sysMsg = makeSystemRevisionMessage('rev-1', 'user', {
+      created_at: 150,
+    })
     const thread = buildThread([sysMsg])
     expect(thread).toHaveLength(1)
     expect(thread[0]).toEqual({ type: 'message', data: sysMsg })
@@ -131,16 +147,27 @@ describe('buildThread', () => {
   })
 
   it('excludes system messages with invalid/empty metadata', () => {
-    const noRevId = makeMessage({ role: 'system', metadata: JSON.stringify({ author: 'user' }) })
+    const noRevId = makeMessage({
+      role: 'system',
+      metadata: JSON.stringify({ artifactId: 'art-1', author: 'user' }),
+    })
+    const noArtifactId = makeMessage({
+      role: 'system',
+      metadata: JSON.stringify({ revisionId: 'rev-1', author: 'user' }),
+    })
     const badJson = makeMessage({ role: 'system', metadata: 'not-json' })
-    expect(buildThread([noRevId, badJson])).toHaveLength(0)
+    expect(buildThread([noRevId, noArtifactId, badJson])).toHaveLength(0)
   })
 
   it('sorts all items by created_at ASC', () => {
     const msg1 = makeMessage({ role: 'user', created_at: 100 })
-    const sysMsg = makeSystemRevisionMessage('rev-1', 'user', { created_at: 150 })
+    const sysMsg = makeSystemRevisionMessage('rev-1', 'user', {
+      created_at: 150,
+    })
     const msg2 = makeMessage({ role: 'assistant', created_at: 200 })
-    const aiSysMsg = makeSystemRevisionMessage('rev-2', 'ai', { created_at: 250 })
+    const aiSysMsg = makeSystemRevisionMessage('rev-2', 'ai', {
+      created_at: 250,
+    })
 
     const thread = buildThread([msg1, sysMsg, msg2, aiSysMsg])
     expect(thread).toHaveLength(4)
@@ -165,11 +192,24 @@ describe('hasRevisionMetadata', () => {
   })
 
   it('returns false for system message with null metadata', () => {
-    expect(hasRevisionMetadata(makeMessage({ role: 'system', metadata: null }))).toBe(false)
+    expect(
+      hasRevisionMetadata(makeMessage({ role: 'system', metadata: null }))
+    ).toBe(false)
   })
 
   it('returns false for system message with no revisionId in metadata', () => {
-    const msg = makeMessage({ role: 'system', metadata: JSON.stringify({ author: 'user' }) })
+    const msg = makeMessage({
+      role: 'system',
+      metadata: JSON.stringify({ artifactId: 'art-1', author: 'user' }),
+    })
+    expect(hasRevisionMetadata(msg)).toBe(false)
+  })
+
+  it('returns false for system message with no artifactId in metadata', () => {
+    const msg = makeMessage({
+      role: 'system',
+      metadata: JSON.stringify({ revisionId: 'rev-1', author: 'user' }),
+    })
     expect(hasRevisionMetadata(msg)).toBe(false)
   })
 })
@@ -178,7 +218,11 @@ describe('parseRevisionMetadata', () => {
   it('returns parsed metadata for valid system message', () => {
     const msg = makeSystemRevisionMessage('rev-abc', 'ai')
     const meta = parseRevisionMetadata(msg)
-    expect(meta).toEqual({ revisionId: 'rev-abc', author: 'ai' })
+    expect(meta).toEqual({
+      artifactId: 'art-1',
+      revisionId: 'rev-abc',
+      author: 'ai',
+    })
   })
 
   it('returns null for invalid system message', () => {

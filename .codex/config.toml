@@ -1,0 +1,16 @@
+model = "gpt-5.5"
+approval_policy = "untrusted"
+sandbox_mode    = "workspace-write"
+web_search = "cached"
+model_reasoning_effort = "high"
+
+[profiles.full_auto]
+approval_policy = "never"
+sandbox_mode    = "workspace-write"
+
+[mcp_servers.tauri-mcp-server]
+command = "bunx"
+args = ["@hypothesi/tauri-mcp-server"]
+
+[mcp_servers.serena]
+url = "http://localhost:9121/mcp"

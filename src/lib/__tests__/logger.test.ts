@@ -1,6 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const DEBUG_LOG_STORAGE_KEY = 'debug.log.labels'
+const CONSOLE_METHODS = [
+  'assert',
+  'clear',
+  'count',
+  'countReset',
+  'debug',
+  'dir',
+  'dirxml',
+  'error',
+  'group',
+  'groupCollapsed',
+  'groupEnd',
+  'info',
+  'log',
+  'profile',
+  'profileEnd',
+  'table',
+  'time',
+  'timeEnd',
+  'timeLog',
+  'timeStamp',
+  'trace',
+  'warn',
+] as const
 
 function installMockWindow(storedLabels?: string) {
   const storage = new Map<string, string>()
@@ -35,6 +59,7 @@ describe('logger', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     Reflect.deleteProperty(globalThis, 'window')
   })
 
@@ -71,5 +96,38 @@ describe('logger', () => {
     expect(logger.debugLogs.enableAll()).toEqual(['*'])
     expect(logger.isDebugLogEnabled('editor')).toBe(true)
     expect(logger.isDebugLogEnabled('anything-else')).toBe(true)
+  })
+
+  it('returns the real console only for enabled labels', async () => {
+    installMockWindow('editor')
+
+    const logger = await import('../logger')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    expect(logger.console_if('EDITOR')).toBe(console)
+    logger.console_if('EDITOR').log('visible')
+    expect(logSpy).toHaveBeenCalledWith('visible')
+
+    logSpy.mockClear()
+
+    const disabledConsole = logger.console_if('DB')
+    expect(disabledConsole).not.toBe(console)
+    disabledConsole.log('hidden')
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('provides no-op console methods for disabled labels', async () => {
+    installMockWindow()
+
+    const logger = await import('../logger')
+    logger.debugLogs.only('DB')
+    const disabledConsole = logger.console_if('EDITOR')
+
+    for (const method of CONSOLE_METHODS) {
+      expect(typeof disabledConsole[method]).toBe('function')
+      expect(() =>
+        (disabledConsole[method] as (...args: unknown[]) => void)('ignored')
+      ).not.toThrow()
+    }
   })
 })

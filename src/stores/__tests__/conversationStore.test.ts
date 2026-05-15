@@ -4,9 +4,9 @@ import type { Conversation } from '@/lib/db/types'
 // ── Mock repositories ─────────────────────────────────────────────────────────
 
 const mockListConversations = vi.fn<() => Promise<Conversation[]>>()
-const mockCreateConversation = vi.fn<() => Promise<string>>()
-const mockUpdateConversation = vi.fn<() => Promise<void>>()
-const mockDeleteConversation = vi.fn<() => Promise<void>>()
+const mockCreateConversation = vi.fn<(...args: unknown[]) => Promise<string>>()
+const mockUpdateConversation = vi.fn<(...args: unknown[]) => Promise<void>>()
+const mockDeleteConversation = vi.fn<(...args: unknown[]) => Promise<void>>()
 
 vi.mock('@/lib/db/repositories/conversations', () => ({
   listConversations: () => mockListConversations(),
@@ -55,7 +55,10 @@ beforeEach(() => {
 
 describe('loadForProject()', () => {
   it('populates conversations and sets status to ready on success', async () => {
-    const conversations = [makeConversation({ title: 'A' }), makeConversation({ title: 'B' })]
+    const conversations = [
+      makeConversation({ title: 'A' }),
+      makeConversation({ title: 'B' }),
+    ]
     mockListConversations.mockResolvedValue(conversations)
 
     await useConversationStore.getState().loadForProject('proj-1')
@@ -147,13 +150,17 @@ describe('rename()', () => {
     const capturedStates: string[] = []
 
     mockUpdateConversation.mockImplementation(async () => {
-      capturedStates.push(useConversationStore.getState().operationStates[conv.id] ?? 'none')
+      capturedStates.push(
+        useConversationStore.getState().operationStates[conv.id] ?? 'none'
+      )
     })
 
     await useConversationStore.getState().rename(conv.id, 'Renamed')
 
     expect(capturedStates[0]).toBe('renaming')
-    expect(useConversationStore.getState().operationStates[conv.id]).toBeUndefined()
+    expect(
+      useConversationStore.getState().operationStates[conv.id]
+    ).toBeUndefined()
   })
 
   it('updates title in store on success', async () => {
@@ -163,7 +170,9 @@ describe('rename()', () => {
 
     await useConversationStore.getState().rename(conv.id, 'New Title')
 
-    const updated = useConversationStore.getState().conversations.find((c) => c.id === conv.id)
+    const updated = useConversationStore
+      .getState()
+      .conversations.find((c) => c.id === conv.id)
     expect(updated?.title).toBe('New Title')
   })
 
@@ -174,7 +183,9 @@ describe('rename()', () => {
 
     await useConversationStore.getState().rename(conv.id, 'Fail')
 
-    expect(useConversationStore.getState().operationStates[conv.id]).toBeUndefined()
+    expect(
+      useConversationStore.getState().operationStates[conv.id]
+    ).toBeUndefined()
     expect(useNotificationStore.getState().notifications[0].kind).toBe('error')
   })
 
@@ -200,14 +211,18 @@ describe('delete()', () => {
     const capturedStates: string[] = []
 
     mockDeleteConversation.mockImplementation(async () => {
-      capturedStates.push(useConversationStore.getState().operationStates[conv.id] ?? 'none')
+      capturedStates.push(
+        useConversationStore.getState().operationStates[conv.id] ?? 'none'
+      )
     })
 
     await useConversationStore.getState().delete(conv.id)
 
     expect(capturedStates[0]).toBe('deleting')
     expect(useConversationStore.getState().conversations).toHaveLength(0)
-    expect(useConversationStore.getState().operationStates[conv.id]).toBeUndefined()
+    expect(
+      useConversationStore.getState().operationStates[conv.id]
+    ).toBeUndefined()
   })
 
   it('clears operationState and pushes notification on failure', async () => {
@@ -218,7 +233,9 @@ describe('delete()', () => {
     await useConversationStore.getState().delete(conv.id)
 
     expect(useConversationStore.getState().conversations).toHaveLength(1)
-    expect(useConversationStore.getState().operationStates[conv.id]).toBeUndefined()
+    expect(
+      useConversationStore.getState().operationStates[conv.id]
+    ).toBeUndefined()
     expect(useNotificationStore.getState().notifications[0].kind).toBe('error')
   })
 

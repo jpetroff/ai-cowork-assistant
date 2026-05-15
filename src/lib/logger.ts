@@ -1,6 +1,35 @@
 const DEBUG_LOG_STORAGE_KEY = 'debug.log.labels'
 const ENABLE_ALL_DEBUG_LABELS = '*'
 
+const noop = () => {}
+const noopConsoleConstructor = function () {} as unknown as Console['Console']
+
+const noopConsole: Console = {
+  Console: noopConsoleConstructor,
+  assert: noop,
+  clear: noop,
+  count: noop,
+  countReset: noop,
+  debug: noop,
+  dir: noop,
+  dirxml: noop,
+  error: noop,
+  group: noop,
+  groupCollapsed: noop,
+  groupEnd: noop,
+  info: noop,
+  log: noop,
+  profile: noop,
+  profileEnd: noop,
+  table: noop,
+  time: noop,
+  timeEnd: noop,
+  timeLog: noop,
+  timeStamp: noop,
+  trace: noop,
+  warn: noop,
+}
+
 function normalizeDebugLabel(label: string): string {
   return label.trim().toUpperCase()
 }
@@ -58,6 +87,10 @@ export function isDebugLogEnabled(label: string): boolean {
     enabledDebugLabels.has(ENABLE_ALL_DEBUG_LABELS) ||
     enabledDebugLabels.has(normalizedLabel)
   )
+}
+
+export function console_if(label: string): Console {
+  return isDebugLogEnabled(label) ? console : noopConsole
 }
 
 export function setDebugLogLabels(labels: string | string[]): string[] {

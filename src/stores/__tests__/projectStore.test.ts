@@ -4,9 +4,9 @@ import type { Project } from '@/lib/db/types'
 // ── Mock repositories ─────────────────────────────────────────────────────────
 
 const mockListProjects = vi.fn<() => Promise<Project[]>>()
-const mockCreateProject = vi.fn<() => Promise<string>>()
-const mockUpdateProject = vi.fn<() => Promise<void>>()
-const mockDeleteProject = vi.fn<() => Promise<void>>()
+const mockCreateProject = vi.fn<(...args: unknown[]) => Promise<string>>()
+const mockUpdateProject = vi.fn<(...args: unknown[]) => Promise<void>>()
+const mockDeleteProject = vi.fn<(...args: unknown[]) => Promise<void>>()
 
 vi.mock('@/lib/db/repositories/projects', () => ({
   listProjects: () => mockListProjects(),
@@ -140,13 +140,17 @@ describe('rename()', () => {
     const states: string[] = []
 
     mockUpdateProject.mockImplementation(async () => {
-      states.push(useProjectStore.getState().operationStates[project.id] ?? 'none')
+      states.push(
+        useProjectStore.getState().operationStates[project.id] ?? 'none'
+      )
     })
 
     await useProjectStore.getState().rename(project.id, 'Renamed')
 
     expect(states[0]).toBe('renaming')
-    expect(useProjectStore.getState().operationStates[project.id]).toBeUndefined()
+    expect(
+      useProjectStore.getState().operationStates[project.id]
+    ).toBeUndefined()
   })
 
   it('updates project name in place on success', async () => {
@@ -156,7 +160,9 @@ describe('rename()', () => {
 
     await useProjectStore.getState().rename(project.id, 'New Name')
 
-    const updated = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    const updated = useProjectStore
+      .getState()
+      .projects.find((p) => p.id === project.id)
     expect(updated?.name).toBe('New Name')
   })
 
@@ -167,7 +173,9 @@ describe('rename()', () => {
 
     await useProjectStore.getState().rename(project.id, 'Fail')
 
-    expect(useProjectStore.getState().operationStates[project.id]).toBeUndefined()
+    expect(
+      useProjectStore.getState().operationStates[project.id]
+    ).toBeUndefined()
     const { notifications } = useNotificationStore.getState()
     expect(notifications[0].kind).toBe('error')
   })
@@ -194,14 +202,18 @@ describe('delete()', () => {
     const states: string[] = []
 
     mockDeleteProject.mockImplementation(async () => {
-      states.push(useProjectStore.getState().operationStates[project.id] ?? 'none')
+      states.push(
+        useProjectStore.getState().operationStates[project.id] ?? 'none'
+      )
     })
 
     await useProjectStore.getState().delete(project.id)
 
     expect(states[0]).toBe('deleting')
     expect(useProjectStore.getState().projects).toHaveLength(0)
-    expect(useProjectStore.getState().operationStates[project.id]).toBeUndefined()
+    expect(
+      useProjectStore.getState().operationStates[project.id]
+    ).toBeUndefined()
   })
 
   it('recovers card and pushes toast on DB failure', async () => {
@@ -214,7 +226,9 @@ describe('delete()', () => {
     // Project still in list
     expect(useProjectStore.getState().projects).toHaveLength(1)
     // Operation state cleared
-    expect(useProjectStore.getState().operationStates[project.id]).toBeUndefined()
+    expect(
+      useProjectStore.getState().operationStates[project.id]
+    ).toBeUndefined()
     // Toast fired
     expect(useNotificationStore.getState().notifications[0].kind).toBe('error')
   })
@@ -252,10 +266,16 @@ describe('update()', () => {
     useProjectStore.setState({ projects: [project] })
     mockUpdateProject.mockResolvedValue(undefined)
 
-    await useProjectStore.getState().update(project.id, { folder_path: '/new/path' })
+    await useProjectStore
+      .getState()
+      .update(project.id, { folder_path: '/new/path' })
 
-    expect(mockUpdateProject).toHaveBeenCalledWith(project.id, { folder_path: '/new/path' })
-    const updated = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    expect(mockUpdateProject).toHaveBeenCalledWith(project.id, {
+      folder_path: '/new/path',
+    })
+    const updated = useProjectStore
+      .getState()
+      .projects.find((p) => p.id === project.id)
     expect(updated?.folder_path).toBe('/new/path')
   })
 
@@ -264,10 +284,14 @@ describe('update()', () => {
     useProjectStore.setState({ projects: [project] })
     mockUpdateProject.mockRejectedValue(new Error('write error'))
 
-    await useProjectStore.getState().update(project.id, { folder_path: '/fail' })
+    await useProjectStore
+      .getState()
+      .update(project.id, { folder_path: '/fail' })
 
     // Store unchanged
-    const unchanged = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    const unchanged = useProjectStore
+      .getState()
+      .projects.find((p) => p.id === project.id)
     expect(unchanged?.folder_path).toBeNull()
     // Notification fired
     const { notifications } = useNotificationStore.getState()
@@ -280,9 +304,13 @@ describe('update()', () => {
     useProjectStore.setState({ projects: [project] })
     mockUpdateProject.mockResolvedValue(undefined)
 
-    await useProjectStore.getState().update(project.id, { folder_path: '/path' })
+    await useProjectStore
+      .getState()
+      .update(project.id, { folder_path: '/path' })
 
-    const updated = useProjectStore.getState().projects.find((p) => p.id === project.id)
+    const updated = useProjectStore
+      .getState()
+      .projects.find((p) => p.id === project.id)
     expect(updated?.updated_at).toBeGreaterThanOrEqual(before)
   })
 })
