@@ -65,6 +65,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { isDebugLogEnabled } from '@/lib/logger'
 
 import {
   Bold as BoldIcon,
@@ -487,7 +488,8 @@ function MarkdownDialog({
 }) {
   const [copied, setCopied] = useState(false)
   const markdown = open
-    ? ((editor as unknown as { getMarkdown?: () => string }).getMarkdown?.() ?? '')
+    ? ((editor as unknown as { getMarkdown?: () => string }).getMarkdown?.() ??
+      '')
     : ''
 
   useEffect(() => {
@@ -599,7 +601,10 @@ function EditorToolbarInner({
       isInTable: e.isActive('table'),
       blockLabel: getBlockLabel(e),
       isInvisible:
-        ((e.storage as unknown as Record<string, unknown>).invisibleCharacters as { visibility?: () => boolean } | undefined)?.visibility?.() ?? false,
+        (
+          (e.storage as unknown as Record<string, unknown>)
+            .invisibleCharacters as { visibility?: () => boolean } | undefined
+        )?.visibility?.() ?? false,
     }),
   })
 
@@ -923,7 +928,7 @@ export function Editor({
       UndoRedo,
       Dropcursor,
       Gapcursor,
-      InvisibleCharacters.configure({visible: false}),
+      InvisibleCharacters.configure({ visible: false }),
     ],
     content: content ?? '',
     // Tells the Markdown extension to parse the initial content string as markdown
@@ -932,19 +937,26 @@ export function Editor({
     editable: !isStreaming,
     immediatelyRender: false,
     onCreate({ editor: e }) {
-      console.log(undefined)
-      ;(l => l && console.log(...l))(console.logger('EDITOR', 'onCreate, editor:', e))
+      if (isDebugLogEnabled('EDITOR')) {
+        console.log('[EDITOR]', 'onCreate, editor:', e)
+      }
       isReady.current = false
-      setTimeout(() => { isReady.current = true }, 0)
+      setTimeout(() => {
+        isReady.current = true
+      }, 0)
     },
     onDestroy() {
       isReady.current = false
     },
     onUpdate({ editor: e }) {
       if (!isReady.current) return
-      let content = (e as TiptapEditor & { getMarkdown: () => string }).getMarkdown()
-      ;(l => l && console.log(...l))(console.logger('EDITOR', 'onUpdate, editor:', e))
-      ;(l => l && console.log(...l))(console.logger('EDITOR', '|— content:', content))
+      let content = (
+        e as TiptapEditor & { getMarkdown: () => string }
+      ).getMarkdown()
+      if (isDebugLogEnabled('EDITOR')) {
+        console.log('[EDITOR]', 'onUpdate, editor:', e)
+        console.log('[EDITOR]', '|— content:', content)
+      }
       if (content == '' || content == '&nbsp;') return
 
       onSave(content)
