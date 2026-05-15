@@ -1,5 +1,5 @@
 types:
-	cd ./src-python && .venv/bin/python generate_types.py
+	uv run --python ./src-python/.venv/bin/python python ./src-python/generate_types.py
 	bun run db:generate
 
 dev-python:

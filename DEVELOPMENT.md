@@ -2,18 +2,19 @@
 
 ## Prerequisites
 
-| Tool | Purpose | Install |
-|------|---------|---------|
-| Rust + Cargo | Tauri backend | [rustup.rs](https://rustup.rs) |
-| Bun | Frontend + package manager | `curl -fsSL https://bun.sh/install \| bash` |
-| uv | Python package manager | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| Python 3.11+ | FastAPI sidecar | via uv or system |
+| Tool         | Purpose                    | Install                                            |
+| ------------ | -------------------------- | -------------------------------------------------- |
+| Rust + Cargo | Tauri backend              | [rustup.rs](https://rustup.rs)                     |
+| Bun          | Frontend + package manager | `curl -fsSL https://bun.sh/install \| bash`        |
+| uv           | Python package manager     | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| Python 3.11+ | FastAPI sidecar            | via uv or system                                   |
 
 ## Running for Development
 
 The app has two independent processes that must both be running:
 
 **Terminal 1 — Python sidecar** (start this first):
+
 ```bash
 make dev-python
 # equivalent: cd src-python && .venv/bin/python main.py
@@ -23,6 +24,7 @@ The sidecar starts a FastAPI server on `http://127.0.0.1:9720`. The Tauri dev bu
 hardcodes this address and does not spawn the sidecar binary itself.
 
 **Terminal 2 — Tauri app**:
+
 ```bash
 bun run tauri dev
 ```
@@ -43,13 +45,14 @@ uv pip install -r requirements.txt
 
 All persistent state lives in the OS application data directory:
 
-| Platform | Path |
-|----------|------|
-| macOS | `~/Library/Application Support/asc.evgn.aicoworklab/` |
-| Linux | `~/.local/share/asc.evgn.aicoworklab/` |
-| Windows | `%APPDATA%\asc.evgn.aicoworklab\` |
+| Platform | Path                                                  |
+| -------- | ----------------------------------------------------- |
+| macOS    | `~/Library/Application Support/asc.evgn.aicoworklab/` |
+| Linux    | `~/.local/share/asc.evgn.aicoworklab/`                |
+| Windows  | `%APPDATA%\asc.evgn.aicoworklab\`                     |
 
 The directory contains:
+
 - `app_data.db` — SQLite database (projects, conversations, LLM providers, settings)
 - ChromaDB vector store directory (when indexing is active)
 
@@ -128,48 +131,49 @@ codex mcp add serena -- uvx --from git+https://github.com/oraios/serena serena s
 
 ### Bun (frontend + Tauri)
 
-| Command | Description |
-|---------|-------------|
-| `bun run tauri dev` | Run the full app in dev mode |
-| `bun run tauri build` | Build a production bundle |
-| `bun run dev` | Vite dev server only (no Tauri shell) |
-| `bun run build` | Frontend production build |
-| `bun run test` | Run Vitest unit tests once |
-| `bun run test:watch` | Run Vitest in watch mode |
-| `bun run db:generate` | Regenerate Prisma client |
+| Command               | Description                                                      |
+| --------------------- | ---------------------------------------------------------------- |
+| `bun run tauri dev`   | Run the full app in dev mode                                     |
+| `bun run tauri build` | Build a production bundle                                        |
+| `bun run dev`         | Vite dev server only (no Tauri shell)                            |
+| `bun run build`       | Frontend production build                                        |
+| `bun run test`        | Run Vitest unit tests once                                       |
+| `bun run test:watch`  | Run Vitest in watch mode                                         |
+| `bun run db:generate` | Regenerate TypeScript DB row types from the shared SQLite schema |
+| `bun run db:check`    | Verify generated TypeScript DB row types are up to date          |
 
 ### Make
 
-| Command | Description |
-|---------|-------------|
-| `make dev-python` | Start the FastAPI sidecar on port 9720 |
-| `make types` | Regenerate Python → TypeScript types |
-| `make serena` | Start Serena MCP server (code intelligence for AI agents) |
+| Command           | Description                                               |
+| ----------------- | --------------------------------------------------------- |
+| `make dev-python` | Start the FastAPI sidecar on port 9720                    |
+| `make types`      | Regenerate Python → TypeScript types                      |
+| `make serena`     | Start Serena MCP server (code intelligence for AI agents) |
 
 ### Type generation
 
 ```bash
 make types
 # equivalent:
-#   cd src-python && .venv/bin/python generate_types.py
+#   uv run --python ./src-python/.venv/bin/python python ./src-python/generate_types.py
 #   bun run db:generate
 ```
 
-Run this when Python schemas (`src-python/schemas.py`) or the database schema change.
+Run this when Python schemas (`src-python/schemas.py`) or the SQLite database schema (`src-tauri/migrations/001_initial.sql`) changes.
 
 ## Configuration
 
 The Python sidecar is configured via environment variables (prefix `PYTHON_`) or a
 `.env` file in `src-python/`:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PYTHON_PORT` | `9720` | Sidecar HTTP port |
-| `PYTHON_API_BASE` | `http://llama.intranet/v1` | Default LLM API endpoint |
-| `PYTHON_DOCUMENTS_PATH` | `./documents` | Local document storage |
-| `PYTHON_VECTOR_DB_PATH` | `vector_storage.db` | ChromaDB persistence path |
-| `PYTHON_OBSERVABILITY_ENABLED` | `true` | Enable Phoenix tracing |
-| `PYTHON_PHOENIX_ENDPOINT` | `http://phoenix.intranet/v1/traces` | OTLP trace endpoint |
+| Variable                       | Default                             | Description               |
+| ------------------------------ | ----------------------------------- | ------------------------- |
+| `PYTHON_PORT`                  | `9720`                              | Sidecar HTTP port         |
+| `PYTHON_API_BASE`              | `http://llama.intranet/v1`          | Default LLM API endpoint  |
+| `PYTHON_DOCUMENTS_PATH`        | `./documents`                       | Local document storage    |
+| `PYTHON_VECTOR_DB_PATH`        | `vector_storage.db`                 | ChromaDB persistence path |
+| `PYTHON_OBSERVABILITY_ENABLED` | `true`                              | Enable Phoenix tracing    |
+| `PYTHON_PHOENIX_ENDPOINT`      | `http://phoenix.intranet/v1/traces` | OTLP trace endpoint       |
 
 ## Architecture Notes
 

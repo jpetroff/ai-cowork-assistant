@@ -1,81 +1,16 @@
 import type { QueryBuilder } from './query-builder'
+import type { TableName } from './schema-types'
 
-/**
- * Database types and shared definitions
- */
-
-export type TableName =
-  | 'projects'
-  | 'conversations'
-  | 'messages'
-  | 'artifacts'
-  | 'artifact_revisions'
-  | 'llm_providers'
-  | 'app_settings'
-
-// Entity types matching the SQLite schema in src-tauri/src/db.rs
-export interface Project {
-  id: string
-  name: string
-  folder_path: string | null
-  created_at: number
-  updated_at: number
-}
-
-export interface Conversation {
-  id: string
-  project_id: string
-  title: string | null
-  active_artifact_id: string | null
-  created_at: number
-  updated_at: number
-}
-
-export interface Message {
-  id: string
-  conversation_id: string
-  role: 'user' | 'assistant' | 'system'
-  content: string
-  metadata: string | null
-  sequence_order: number
-  created_at: number
-}
-
-export interface Artifact {
-  id: string
-  conversation_id: string
-  title: string | null
-  current_revision_id: string | null
-  file_path: string | null
-  file_hash: string | null
-  created_at: number
-  updated_at: number
-}
-
-export interface ArtifactRevision {
-  id: string
-  artifact_id: string
-  message_id: string | null
-  author: 'user' | 'ai'
-  content: string
-  created_at: number
-  updated_at: number
-}
-
-export interface LlmProvider {
-  id: string
-  name: string
-  provider_type: string
-  base_url: string
-  api_key: string | null
-  is_default: number
-  created_at: number
-}
-
-export interface AppSetting {
-  key: string
-  value: string
-}
+export type {
+  AppSetting,
+  Artifact,
+  ArtifactRevision,
+  Conversation,
+  LlmProvider,
+  Message,
+  Project,
+  TableName,
+} from './schema-types'
 
 export interface DbConfig {
   name: string

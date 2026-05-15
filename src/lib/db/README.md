@@ -22,25 +22,42 @@ src/lib/db/
 
 ## Tables
 
-| Table | Entity type | Notes |
-| --- | --- | --- |
-| `projects` | `Project` | Top-level workspace folders |
-| `conversations` | `Conversation` | Belongs to a project |
-| `messages` | `Message` | Belongs to a conversation; no `updated_at` |
-| `artifacts` | `Artifact` | Files/content produced in a conversation |
-| `llm_providers` | `LlmProvider` | AI provider config; no `updated_at` |
-| `app_settings` | `AppSetting` | Key-value store for app preferences |
+| Table           | Entity type    | Notes                                      |
+| --------------- | -------------- | ------------------------------------------ |
+| `projects`      | `Project`      | Top-level workspace folders                |
+| `conversations` | `Conversation` | Belongs to a project                       |
+| `messages`      | `Message`      | Belongs to a conversation; no `updated_at` |
+| `artifacts`     | `Artifact`     | Files/content produced in a conversation   |
+| `llm_providers` | `LlmProvider`  | AI provider config; no `updated_at`        |
+| `app_settings`  | `AppSetting`   | Key-value store for app preferences        |
 
 ## Importing
 
 ```typescript
 // Preferred: use repository functions directly
 import {
-  createProject, getProject, listProjects, updateProject, deleteProject,
-  createConversation, getConversation, listConversations, updateConversation, deleteConversation,
-  createMessage, listMessages,
-  createArtifact, getArtifact, listArtifacts, updateArtifact,
-  createLlmProvider, getLlmProvider, listLlmProviders, updateLlmProvider, deleteLlmProvider, setDefaultProvider,
+  createProject,
+  getProject,
+  listProjects,
+  updateProject,
+  deleteProject,
+  createConversation,
+  getConversation,
+  listConversations,
+  updateConversation,
+  deleteConversation,
+  createMessage,
+  listMessages,
+  createArtifact,
+  getArtifact,
+  listArtifacts,
+  updateArtifact,
+  createLlmProvider,
+  getLlmProvider,
+  listLlmProviders,
+  updateLlmProvider,
+  deleteLlmProvider,
+  setDefaultProvider,
 } from '@/lib/db'
 
 // Settings
@@ -48,7 +65,13 @@ import { getSetting, setSetting, SETTING_KEYS } from '@/lib/db'
 
 // Low-level access (only when needed)
 import { db } from '@/lib/db'
-import type { Project, Conversation, Message, Artifact, LlmProvider } from '@/lib/db'
+import type {
+  Project,
+  Conversation,
+  Message,
+  Artifact,
+  LlmProvider,
+} from '@/lib/db'
 ```
 
 ## Repositories
@@ -56,15 +79,24 @@ import type { Project, Conversation, Message, Artifact, LlmProvider } from '@/li
 ### Projects
 
 ```typescript
-import { createProject, getProject, listProjects, updateProject, deleteProject } from '@/lib/db'
+import {
+  createProject,
+  getProject,
+  listProjects,
+  updateProject,
+  deleteProject,
+} from '@/lib/db'
 
-const id = await createProject({ name: 'My Project', folder_path: '/home/user/my-project' })
+const id = await createProject({
+  name: 'My Project',
+  folder_path: '/home/user/my-project',
+})
 
-const project = await getProject(id)          // Project | null
+const project = await getProject(id) // Project | null
 
-const all = await listProjects()               // Project[], ordered by updated_at DESC
+const all = await listProjects() // Project[], ordered by updated_at DESC
 
-await updateProject(id, { name: 'Renamed' })  // partial update, auto-bumps updated_at
+await updateProject(id, { name: 'Renamed' }) // partial update, auto-bumps updated_at
 
 await deleteProject(id)
 ```
@@ -72,13 +104,22 @@ await deleteProject(id)
 ### Conversations
 
 ```typescript
-import { createConversation, getConversation, listConversations, updateConversation, deleteConversation } from '@/lib/db'
+import {
+  createConversation,
+  getConversation,
+  listConversations,
+  updateConversation,
+  deleteConversation,
+} from '@/lib/db'
 
-const id = await createConversation({ project_id: projectId, title: 'Optional title' })
+const id = await createConversation({
+  project_id: projectId,
+  title: 'Optional title',
+})
 
-const conv = await getConversation(id)                  // Conversation | null
+const conv = await getConversation(id) // Conversation | null
 
-const all = await listConversations(projectId)           // Conversation[], ordered by updated_at DESC
+const all = await listConversations(projectId) // Conversation[], ordered by updated_at DESC
 
 await updateConversation(id, { title: 'New title' })
 
@@ -94,18 +135,23 @@ import { createMessage, listMessages } from '@/lib/db'
 
 const id = await createMessage({
   conversation_id: convId,
-  role: 'user',           // 'user' | 'assistant'
+  role: 'user', // 'user' | 'assistant'
   content: 'Hello',
-  sequence_order: 0,      // caller manages ordering
+  sequence_order: 0, // caller manages ordering
 })
 
-const msgs = await listMessages(convId)   // Message[], ordered by sequence_order ASC
+const msgs = await listMessages(convId) // Message[], ordered by sequence_order ASC
 ```
 
 ### Artifacts
 
 ```typescript
-import { createArtifact, getArtifact, listArtifacts, updateArtifact } from '@/lib/db'
+import {
+  createArtifact,
+  getArtifact,
+  listArtifacts,
+  updateArtifact,
+} from '@/lib/db'
 
 const id = await createArtifact({
   conversation_id: convId,
@@ -118,9 +164,9 @@ const id = await createArtifact({
   file_hash: 'abc123',
 })
 
-const artifact = await getArtifact(id)              // Artifact | null
+const artifact = await getArtifact(id) // Artifact | null
 
-const all = await listArtifacts(convId)              // Artifact[], ordered by version ASC
+const all = await listArtifacts(convId) // Artifact[], ordered by version ASC
 
 await updateArtifact(id, {
   content: '# Updated',
@@ -132,19 +178,26 @@ await updateArtifact(id, {
 ### LLM Providers
 
 ```typescript
-import { createLlmProvider, getLlmProvider, listLlmProviders, updateLlmProvider, deleteLlmProvider, setDefaultProvider } from '@/lib/db'
+import {
+  createLlmProvider,
+  getLlmProvider,
+  listLlmProviders,
+  updateLlmProvider,
+  deleteLlmProvider,
+  setDefaultProvider,
+} from '@/lib/db'
 
 const id = await createLlmProvider({
   name: 'Anthropic',
   provider_type: 'anthropic',
   base_url: 'https://api.anthropic.com',
-  api_key: 'sk-...',   // optional
-  is_default: 1,       // optional, defaults to 0
+  api_key: 'sk-...', // optional
+  is_default: 1, // optional, defaults to 0
 })
 
-const provider = await getLlmProvider(id)    // LlmProvider | null
+const provider = await getLlmProvider(id) // LlmProvider | null
 
-const all = await listLlmProviders()          // LlmProvider[], ordered by created_at ASC
+const all = await listLlmProviders() // LlmProvider[], ordered by created_at ASC
 
 await updateLlmProvider(id, { api_key: 'new-key' })
 
@@ -165,7 +218,7 @@ import { getSetting, setSetting, SETTING_KEYS } from '@/lib/db'
 
 await setSetting(SETTING_KEYS.THEME, 'dark')
 
-const theme = await getSetting(SETTING_KEYS.THEME)   // string | null
+const theme = await getSetting(SETTING_KEYS.THEME) // string | null
 ```
 
 ## Low-Level DbInterface
@@ -179,7 +232,10 @@ import { db } from '@/lib/db'
 const project = await db.get<Project>('projects', id)
 
 // Insert (auto-generates id, created_at, updated_at)
-const newId = await db.insert<Project>('projects', { name: 'X', folder_path: '/x' })
+const newId = await db.insert<Project>('projects', {
+  name: 'X',
+  folder_path: '/x',
+})
 
 // Upsert (update if exists, insert if not)
 await db.upsert<Project>('projects', { id, name: 'Updated' })
@@ -217,13 +273,13 @@ const messages = await db
 const first = await db
   .query<Message>('messages')
   .filter('conversation_id', '=', convId)
-  .first()    // Message | null
+  .first() // Message | null
 
 // Count
 const total = await db
   .query<Message>('messages')
   .filter('conversation_id', '=', convId)
-  .count()    // number
+  .count() // number
 
 // IN operator
 const selected = await db
@@ -258,32 +314,25 @@ try {
   await createProject({ name: 'X', folder_path: '/x' })
 } catch (error) {
   if (error instanceof DatabaseError) {
-    console.error(error.message)        // human-readable description
-    console.error(error.originalError)  // underlying plugin error, if any
+    console.error(error.message) // human-readable description
+    console.error(error.originalError) // underlying plugin error, if any
   }
 }
 ```
 
 ## Adding a New Table
 
-1. Define the model in `prisma/schema.prisma` and run `bun run db:generate`
+1. Add the table definition to `src-tauri/migrations/001_initial.sql`
 
-2. Add the table name to `TableName` in [types.ts](types.ts):
+2. Run `bun run db:generate`
 
-   ```typescript
-   export type TableName = 'projects' | 'conversations' | ... | 'new_table'
-   ```
+3. Create `repositories/new-table.ts` following the existing repository pattern
 
-3. Add the entity interface to [types.ts](types.ts)
-
-4. Create `repositories/new-table.ts` following the existing repository pattern
-
-5. Re-export from [repositories/index.ts](repositories/index.ts)
+4. Re-export from [repositories/index.ts](repositories/index.ts)
 
 ## Scripts
 
 ```bash
-bun run db:generate   # Regenerate TypeScript types from Prisma schema
-bun run db:migrate    # Run migrations
-bun run db:studio     # Open Prisma Studio
+bun run db:generate   # Regenerate TypeScript DB row types from SQLite schema
+bun run db:check      # Verify generated TypeScript DB row types are current
 ```
