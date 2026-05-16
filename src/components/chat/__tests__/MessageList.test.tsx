@@ -20,12 +20,12 @@ const { messageState, artifactState } = vi.hoisted(() => ({
   },
 }))
 
-vi.mock('@/stores/messageStore', () => ({
+vi.mock('@/components/chat/messageStore', () => ({
   useMessageStore: (selector: (s: typeof messageState) => unknown) =>
     selector(messageState),
 }))
 
-vi.mock('@/stores/artifactStore', () => ({
+vi.mock('@/components/editor/artifactStore', () => ({
   useArtifactStore: (selector: (s: typeof artifactState) => unknown) =>
     selector(artifactState),
 }))

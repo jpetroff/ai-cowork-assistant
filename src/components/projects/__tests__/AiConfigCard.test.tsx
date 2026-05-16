@@ -2,8 +2,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import type { LlmProvider } from '@/lib/db/types'
-import { useLlmProviderStore } from '@/stores/llmProviderStore'
-import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
+import { useLlmProviderStore } from '@/components/projects/llmProviderStore'
+import { useProjectSettingsStore } from '@/components/projects/projectSettingsStore'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -50,7 +50,11 @@ function makeProvider(overrides: Partial<LlmProvider> = {}): LlmProvider {
 afterEach(cleanup)
 
 beforeEach(() => {
-  useLlmProviderStore.setState({ providers: [], modelsByProvider: {}, status: 'idle' })
+  useLlmProviderStore.setState({
+    providers: [],
+    modelsByProvider: {},
+    status: 'idle',
+  })
   useProjectSettingsStore.setState({ aiConfigs: {} })
   mockNavigate.mockReset()
 })
@@ -59,7 +63,7 @@ beforeEach(() => {
 
 describe('AiConfigCard — no providers configured', () => {
   it('renders three disabled select triggers', () => {
-    render(<AiConfigCard projectId="proj-1" />)
+    render(<AiConfigCard projectId='proj-1' />)
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]')
     expect(triggers.length).toBe(3)
     triggers.forEach((t) => {
@@ -68,8 +72,10 @@ describe('AiConfigCard — no providers configured', () => {
   })
 
   it('renders a "Configure in Settings" button', () => {
-    render(<AiConfigCard projectId="proj-1" />)
-    expect(screen.getByRole('button', { name: /configure in settings/i })).toBeTruthy()
+    render(<AiConfigCard projectId='proj-1' />)
+    expect(
+      screen.getByRole('button', { name: /configure in settings/i })
+    ).toBeTruthy()
   })
 })
 
@@ -83,15 +89,17 @@ describe('AiConfigCard — with providers configured', () => {
   })
 
   it('renders the provider name in the select list area', () => {
-    render(<AiConfigCard projectId="proj-1" />)
+    render(<AiConfigCard projectId='proj-1' />)
     // Provider select trigger is present
     const triggers = document.querySelectorAll('[data-slot="select-trigger"]')
     expect(triggers.length).toBe(3)
   })
 
   it('does not render the "Configure in Settings" button', () => {
-    render(<AiConfigCard projectId="proj-1" />)
-    expect(screen.queryByRole('button', { name: /configure in settings/i })).not.toBeInTheDocument()
+    render(<AiConfigCard projectId='proj-1' />)
+    expect(
+      screen.queryByRole('button', { name: /configure in settings/i })
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -108,10 +116,12 @@ describe('AiConfigCard — saved config is pre-selected', () => {
       },
     })
 
-    render(<AiConfigCard projectId="proj-1" />)
+    render(<AiConfigCard projectId='proj-1' />)
 
     // Verify the select triggers render (value assertions require opening the select popup,
     // which needs a real browser; here we just confirm the card renders without errors)
-    expect(document.querySelectorAll('[data-slot="select-trigger"]').length).toBe(3)
+    expect(
+      document.querySelectorAll('[data-slot="select-trigger"]').length
+    ).toBe(3)
   })
 })

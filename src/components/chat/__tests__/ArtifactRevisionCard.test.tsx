@@ -21,7 +21,7 @@ const { mockRequestRevisionLoad, storeState } = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/stores/artifactStore', () => ({
+vi.mock('@/components/editor/artifactStore', () => ({
   useArtifactStore: (selector: (s: typeof storeState) => unknown) =>
     selector(storeState),
 }))

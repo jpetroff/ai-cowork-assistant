@@ -31,11 +31,12 @@ Loaders call store actions to initiate data fetches but return `null` immediatel
 loader: ({ params }) => {
   messageStore.getState().loadForConversation(params.chatId!)
   artifactStore.getState().loadForConversation(params.chatId!)
-  return null  // ← sync return, never awaits
+  return null // ← sync return, never awaits
 }
 ```
 
 This means:
+
 - React Router's navigation completes instantly
 - `AppShell` shows its progress bar for a single frame (a brief flash — acceptable)
 - The new page renders immediately with skeleton UIs
@@ -57,7 +58,7 @@ Every store load action must set `status: 'loading'` and clear stale data **sync
 
 ```ts
 loadForConversation: async (id) => {
-  set({ status: 'loading', messages: [] })  // ← must be first, sync
+  set({ status: 'loading', messages: [] }) // ← must be first, sync
   const rows = await db.getMessages(id)
   set({ status: 'ready', messages: rows })
 }
@@ -111,22 +112,19 @@ Because loaders return synchronously, the bar is visible for less than one frame
 }
 ```
 
-## Stub stores
+## Colocated stores
 
-`src/stores/stubs.ts` exports placeholder hooks that return `{ status: 'loading' }` until real Zustand stores are implemented. Each hook follows Zustand's selector API:
-
-```ts
-const status = useMessageStore(s => s.status)
-```
-
-When a real store is implemented, replace the import — nothing else changes:
+Zustand stores live next to the feature components that consume them. Components still use the selector API:
 
 ```ts
-// Before
-import { useMessageStore } from '@/stores/stubs'
-
-// After
-import { useMessageStore } from '@/stores/message.store'
+const status = useMessageStore((s) => s.status)
 ```
 
-Router loaders currently have `// TODO` comments where real `store.getState()` calls go. Fill these in when the corresponding store is implemented.
+Import stores from their feature folders:
+
+```ts
+import { useMessageStore } from '@/components/chat/messageStore'
+import { useArtifactStore } from '@/components/editor/artifactStore'
+```
+
+Page-level coordination belongs in a colocated orchestration store, such as `chatSessionStore`, rather than hidden imports between domain stores.

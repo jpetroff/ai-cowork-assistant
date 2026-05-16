@@ -50,18 +50,16 @@ vi.mock('@/lib/db/repositories/conversations', () => ({
     mockSetConversationActiveArtifact(...args),
 }))
 
-// ── Mock message store ─────────────────────────────────────────────────────────
+// ── Mock revision message coordinator ─────────────────────────────────────────
 
-const mockAddSystemRevisionMessage = vi.fn<() => Promise<string>>()
-
-vi.mock('@/stores/messageStore', () => ({
-  useMessageStore: {
-    getState: () => ({
-      messages: [],
-      addSystemRevisionMessage: mockAddSystemRevisionMessage,
-    }),
-  },
-}))
+const mockAddSystemRevisionMessage =
+  vi.fn<
+    (
+      author: 'user' | 'ai',
+      artifactId: string,
+      revisionId: string
+    ) => Promise<string>
+  >()
 
 // ── Import after mocks ─────────────────────────────────────────────────────────
 
@@ -274,7 +272,9 @@ describe('sealForSend', () => {
     const draft = makeRevision({ content: 'new content', message_id: null })
     seedStore(artifact, [draft])
     mockAddSystemRevisionMessage.mockResolvedValue('sys-1')
-    const result = await useArtifactStore.getState().sealForSend()
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(mockAddSystemRevisionMessage)
     expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
       'user',
       'art-1',
@@ -297,7 +297,9 @@ describe('sealForSend', () => {
       content: 'base',
     })
     seedStore(artifact, [sealed, draft])
-    const result = await useArtifactStore.getState().sealForSend()
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(mockAddSystemRevisionMessage)
     expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(result?.revisionId).toBe('rev-1')
@@ -323,7 +325,9 @@ describe('sealForSend', () => {
     })
     mockCreateRevision.mockResolvedValue('rev-new-sealed')
     mockAddSystemRevisionMessage.mockResolvedValue('sys-2')
-    const result = await useArtifactStore.getState().sealForSend()
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(mockAddSystemRevisionMessage)
     expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
       'user',
       'art-1',
@@ -337,7 +341,9 @@ describe('sealForSend', () => {
     const sealed = makeRevision({ message_id: 'msg-1', content: 'same' })
     const artifact = makeArtifact({ current_revision_id: 'rev-1' })
     seedStore(artifact, [sealed])
-    const result = await useArtifactStore.getState().sealForSend()
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(mockAddSystemRevisionMessage)
     expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(result?.revisionId).toBe('rev-1')
@@ -361,7 +367,9 @@ describe('sealForSend', () => {
       editableRevisionId: null,
     })
 
-    const result = await useArtifactStore.getState().sealForSend()
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(mockAddSystemRevisionMessage)
 
     expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockCreateRevision).not.toHaveBeenCalled()
@@ -449,7 +457,9 @@ describe('applyAiRevision', () => {
     mockCreateRevision.mockResolvedValue('rev-ai')
     mockAddSystemRevisionMessage.mockResolvedValue('sys-ai')
 
-    await useArtifactStore.getState().applyAiRevision('ai content')
+    await useArtifactStore
+      .getState()
+      .applyAiRevision('ai content', mockAddSystemRevisionMessage)
 
     expect(mockCreateRevision).toHaveBeenCalledWith(
       expect.objectContaining({ author: 'ai' })
@@ -564,7 +574,9 @@ describe('system message integration — send flow', () => {
     seedStore(artifact, [draft])
     mockAddSystemRevisionMessage.mockResolvedValue('sys-msg-new')
 
-    const result = await useArtifactStore.getState().sealForSend()
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(mockAddSystemRevisionMessage)
 
     expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
       'user',
@@ -592,7 +604,7 @@ describe('system message integration — send flow', () => {
     })
     seedStore(artifact, [sealed, draft])
 
-    await useArtifactStore.getState().sealForSend()
+    await useArtifactStore.getState().sealForSend(mockAddSystemRevisionMessage)
 
     expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
@@ -608,7 +620,9 @@ describe('system message integration — send flow', () => {
     mockCreateRevision.mockResolvedValue('rev-ai-new')
     mockAddSystemRevisionMessage.mockResolvedValue('sys-ai')
 
-    await useArtifactStore.getState().applyAiRevision('AI wrote this')
+    await useArtifactStore
+      .getState()
+      .applyAiRevision('AI wrote this', mockAddSystemRevisionMessage)
 
     expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
       'ai',

@@ -1,9 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DotsThreeIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react'
-import { useProjectStore } from '@/stores/projectStore'
+import {
+  DotsThreeIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+} from '@phosphor-icons/react'
+import { useProjectStore } from '@/components/projects/projectStore'
 import type { Project } from '@/lib/db/types'
-import { Card, CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardAction,
+} from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import {
@@ -31,7 +41,9 @@ interface ProjectCardProps {
 }
 
 function formatDate(unixMs: number): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(unixMs))
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
+    new Date(unixMs)
+  )
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
@@ -61,7 +73,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   return (
     <>
       <Card
-        role="button"
+        role='button'
         tabIndex={isBusy ? -1 : 0}
         aria-busy={isBusy}
         aria-label={`Open project ${project.name}`}
@@ -73,9 +85,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
         )}
       >
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className='flex items-center gap-2'>
             {project.name}
-            {(isDeleting || isRenaming) && <Spinner className="size-3" />}
+            {(isDeleting || isRenaming) && <Spinner className='size-3' />}
           </CardTitle>
           <CardDescription>{formatDate(project.updated_at)}</CardDescription>
           <CardAction>
@@ -85,24 +97,32 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 onClick={(e) => e.stopPropagation()}
                 render={
                   <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Project options"
+                    variant='ghost'
+                    size='icon-sm'
+                    aria-label='Project options'
                     onClick={(e) => e.stopPropagation()}
                   />
                 }
               >
-                <DotsThreeIcon weight="bold" />
+                <DotsThreeIcon weight='bold' />
               </DropdownMenuTrigger>
               <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setRenameOpen(true) }}>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setRenameOpen(true)
+                  }}
+                >
                   <PencilSimpleIcon />
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); setDeleteOpen(true) }}
+                  className='text-destructive focus:text-destructive'
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteOpen(true)
+                  }}
                 >
                   <TrashIcon />
                   Delete
@@ -124,7 +144,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete project?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{project.name}" will be removed from the app. Files on disk are not affected.
+              "{project.name}" will be removed from the app. Files on disk are
+              not affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

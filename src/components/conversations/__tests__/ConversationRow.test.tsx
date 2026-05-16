@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Conversation } from '@/lib/db/types'
-import { useConversationStore } from '@/stores/conversationStore'
-import { useNotificationStore } from '@/stores/notificationStore'
+import { useConversationStore } from '@/components/conversations/conversationStore'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -67,20 +67,34 @@ beforeEach(() => {
 
 describe('ConversationRow — display', () => {
   it('renders the conversation title', () => {
-    render(<ConversationRow conversation={makeConversation({ title: 'Research Chat' })} projectId="proj-1" />)
+    render(
+      <ConversationRow
+        conversation={makeConversation({ title: 'Research Chat' })}
+        projectId='proj-1'
+      />
+    )
     expect(screen.getByText('Research Chat')).toBeTruthy()
   })
 
   it('renders "Untitled" when title is null', () => {
-    render(<ConversationRow conversation={makeConversation({ title: null })} projectId="proj-1" />)
+    render(
+      <ConversationRow
+        conversation={makeConversation({ title: null })}
+        projectId='proj-1'
+      />
+    )
     expect(screen.getByText('Untitled')).toBeTruthy()
   })
 
   it('renders a relative timestamp', () => {
-    render(<ConversationRow conversation={makeConversation()} projectId="proj-1" />)
+    render(
+      <ConversationRow conversation={makeConversation()} projectId='proj-1' />
+    )
     // Just check a timestamp element is rendered
     const texts = document.querySelectorAll('p')
-    const hasTime = Array.from(texts).some((p) => p.textContent?.match(/ago|now|yesterday/i))
+    const hasTime = Array.from(texts).some((p) =>
+      p.textContent?.match(/ago|now|yesterday/i)
+    )
     expect(hasTime).toBe(true)
   })
 })
@@ -88,7 +102,7 @@ describe('ConversationRow — display', () => {
 describe('ConversationRow — navigation', () => {
   it('navigates to the chat page when the row is clicked', async () => {
     const conv = makeConversation({ id: 'chat-42', title: 'My Chat' })
-    render(<ConversationRow conversation={conv} projectId="proj-1" />)
+    render(<ConversationRow conversation={conv} projectId='proj-1' />)
 
     // Click the title text — avoids ambiguity with the dropdown trigger button
     await userEvent.click(screen.getByText('My Chat'))
@@ -103,9 +117,16 @@ describe('ConversationRow — delete', () => {
     const conv = makeConversation({ id: 'del-id' })
     useConversationStore.setState({ conversations: [conv] })
 
-    const { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-            AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
-          } = await import('@/components/ui/alert-dialog')
+    const {
+      AlertDialog,
+      AlertDialogContent,
+      AlertDialogHeader,
+      AlertDialogTitle,
+      AlertDialogDescription,
+      AlertDialogFooter,
+      AlertDialogCancel,
+      AlertDialogAction,
+    } = await import('@/components/ui/alert-dialog')
 
     const deleteConv = useConversationStore.getState().delete
     const onConfirm = vi.fn(() => deleteConv('del-id'))
@@ -115,7 +136,9 @@ describe('ConversationRow — delete', () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete chat?</AlertDialogTitle>
-            <AlertDialogDescription>This will be removed.</AlertDialogDescription>
+            <AlertDialogDescription>
+              This will be removed.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -139,11 +162,13 @@ describe('ConversationRow — busy state', () => {
       conversations: [conv],
       operationStates: { 'conv-1': 'deleting' },
     })
-    render(<ConversationRow conversation={conv} projectId="proj-1" />)
+    render(<ConversationRow conversation={conv} projectId='proj-1' />)
 
     // The outer row div has role="button"; use getAllByRole and target the first one
     const rows = screen.getAllByRole('button')
-    const rowDiv = rows.find((el) => el.getAttribute('aria-label') === null && el.tagName !== 'BUTTON')
+    const rowDiv = rows.find(
+      (el) => el.getAttribute('aria-label') === null && el.tagName !== 'BUTTON'
+    )
     expect(rowDiv?.className).toContain('pointer-events-none')
   })
 })

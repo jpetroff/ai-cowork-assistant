@@ -24,7 +24,7 @@ vi.mock('@tauri-apps/plugin-sql', () => ({
 // ── Imports after mocks ───────────────────────────────────────────────────────
 
 import { useProjectStore } from '../projectStore'
-import { useNotificationStore } from '../notificationStore'
+import { useNotificationStore } from '../../ui/notificationStore'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

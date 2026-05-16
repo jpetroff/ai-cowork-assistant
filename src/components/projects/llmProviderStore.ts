@@ -27,7 +27,9 @@ interface LlmProviderActions {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
-export const useLlmProviderStore = create<LlmProviderState & LlmProviderActions>((set, get) => ({
+export const useLlmProviderStore = create<
+  LlmProviderState & LlmProviderActions
+>((set, get) => ({
   providers: [],
   modelsByProvider: {},
   status: 'idle',
@@ -58,14 +60,20 @@ export const useLlmProviderStore = create<LlmProviderState & LlmProviderActions>
           : {},
       })
       if (res.ok) {
-        const json = await res.json() as { data?: Array<{ id: string }> }
+        const json = (await res.json()) as { data?: Array<{ id: string }> }
         const models = (json.data ?? []).map((m) => m.id)
-        set((s) => ({ modelsByProvider: { ...s.modelsByProvider, [providerId]: models } }))
+        set((s) => ({
+          modelsByProvider: { ...s.modelsByProvider, [providerId]: models },
+        }))
       } else {
-        set((s) => ({ modelsByProvider: { ...s.modelsByProvider, [providerId]: [] } }))
+        set((s) => ({
+          modelsByProvider: { ...s.modelsByProvider, [providerId]: [] },
+        }))
       }
     } catch {
-      set((s) => ({ modelsByProvider: { ...s.modelsByProvider, [providerId]: [] } }))
+      set((s) => ({
+        modelsByProvider: { ...s.modelsByProvider, [providerId]: [] },
+      }))
     }
   },
 }))

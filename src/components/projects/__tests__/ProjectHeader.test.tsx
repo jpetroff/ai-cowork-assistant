@@ -3,16 +3,26 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Project } from '@/lib/db/types'
-import { useProjectStore } from '@/stores/projectStore'
-import { useNotificationStore } from '@/stores/notificationStore'
+import { useProjectStore } from '@/components/projects/projectStore'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
 
 vi.mock('react-router-dom', () => ({
-  Link: ({ to, children, className }: { to: string; children: React.ReactNode; className?: string }) => (
-    <a href={to} className={className}>{children}</a>
+  Link: ({
+    to,
+    children,
+    className,
+  }: {
+    to: string
+    children: React.ReactNode
+    className?: string
+  }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
   ),
   useNavigate: () => mockNavigate,
 }))
@@ -87,7 +97,9 @@ describe('ProjectHeader — inline rename', () => {
   it('pre-fills the input with the current name', async () => {
     render(<ProjectHeader project={makeProject({ name: 'Old Name' })} />)
     await userEvent.click(screen.getByRole('button', { name: /old name/i }))
-    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('Old Name')
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
+      'Old Name'
+    )
   })
 
   it('calls rename and exits edit mode when Enter is pressed', async () => {
@@ -103,7 +115,9 @@ describe('ProjectHeader — inline rename', () => {
     await userEvent.type(input, 'New Name')
     await userEvent.keyboard('{Enter}')
 
-    expect(mockUpdateProject).toHaveBeenCalledWith('proj-1', { name: 'New Name' })
+    expect(mockUpdateProject).toHaveBeenCalledWith('proj-1', {
+      name: 'New Name',
+    })
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 

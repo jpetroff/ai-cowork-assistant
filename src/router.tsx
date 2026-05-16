@@ -5,23 +5,22 @@ import { SetupPage } from '@/pages/SetupPage'
 import { HomePage } from '@/pages/HomePage'
 import { ProjectPage } from '@/pages/ProjectPage'
 import { ChatPage } from '@/pages/ChatPage'
-import { useProjectStore } from '@/stores/projectStore'
-import { useConversationStore } from '@/stores/conversationStore'
-import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
-import { useLlmProviderStore } from '@/stores/llmProviderStore'
-import { useMessageStore } from '@/stores/messageStore'
-import { useArtifactStore } from '@/stores/artifactStore'
+import { useProjectStore } from '@/components/projects/projectStore'
+import { useConversationStore } from '@/components/conversations/conversationStore'
+import { useProjectSettingsStore } from '@/components/projects/projectSettingsStore'
+import { useLlmProviderStore } from '@/components/projects/llmProviderStore'
+import { useChatSessionStore } from '@/components/chat/chatSessionStore'
 
 export const router = createMemoryRouter([
-  { 
+  {
     path: '/',
     element: (
       <AppShell>
-        <Outlet />  
+        <Outlet />
       </AppShell>
     ),
     children: [
-      { path: 'loading', element: <LoadingPage / > },
+      { path: 'loading', element: <LoadingPage /> },
       { path: 'setup', element: <SetupPage /> },
       {
         index: true,
@@ -59,9 +58,10 @@ export const router = createMemoryRouter([
 
           useConversationStore.getState().setActive(chatId)
 
-          // Fire independently — each section loads and renders with its own state
-          void useMessageStore.getState().loadForConversation(chatId)
-          void useArtifactStore.getState().loadForConversation(chatId)
+          await useChatSessionStore.getState().loadChat({
+            projectId,
+            conversationId: chatId,
+          })
 
           return null
         },

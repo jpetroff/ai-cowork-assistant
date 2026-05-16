@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { useConversationStore } from '@/stores/conversationStore'
+import { useConversationStore } from '@/components/conversations/conversationStore'
 import { cn } from '@/lib/utils'
 
 interface ChatColumnHeaderProps {
@@ -28,8 +28,14 @@ interface ChatColumnHeaderProps {
 
 export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
   const navigate = useNavigate()
-  const { activeConversationId, conversations, rename, delete: deleteConversation } = useConversationStore()
-  const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null
+  const {
+    activeConversationId,
+    conversations,
+    rename,
+    delete: deleteConversation,
+  } = useConversationStore()
+  const activeConversation =
+    conversations.find((c) => c.id === activeConversationId) ?? null
 
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
@@ -56,16 +62,16 @@ export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
   }
 
   return (
-    <div className="flex items-center gap-1 px-3 py-2 border-b shrink-0">
+    <div className='flex items-center gap-1 px-3 py-2 border-b shrink-0'>
       <Link
         to={`/projects/${projectId}`}
-        aria-label="Back to project"
+        aria-label='Back to project'
         className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))}
       >
-        <ChevronLeft className="size-4" />
+        <ChevronLeft className='size-4' />
       </Link>
 
-      <div className="flex-1 min-w-0">
+      <div className='flex-1 min-w-0'>
         {isRenaming ? (
           <Input
             autoFocus
@@ -73,13 +79,16 @@ export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
             onChange={(e) => setRenameValue(e.target.value)}
             onBlur={handleRenameSubmit}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); handleRenameSubmit() }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleRenameSubmit()
+              }
               if (e.key === 'Escape') setIsRenaming(false)
             }}
-            className="h-7 text-sm"
+            className='h-7 text-sm'
           />
         ) : (
-          <p className="text-sm font-medium truncate">
+          <p className='text-sm font-medium truncate'>
             {activeConversation?.title ?? 'Untitled conversation'}
           </p>
         )}
@@ -88,20 +97,20 @@ export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
       <DropdownMenu>
         <DropdownMenuTrigger
           className={cn(buttonVariants({ variant: 'ghost', size: 'icon-sm' }))}
-          aria-label="Conversation options"
+          aria-label='Conversation options'
         >
-          <MoreVertical className="size-4" />
+          <MoreVertical className='size-4' />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align='end'>
           <DropdownMenuItem onClick={handleRenameOpen}>
-            <Pencil className="size-4 mr-2" />
+            <Pencil className='size-4 mr-2' />
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setShowDeleteDialog(true)}
-            className="text-destructive focus:text-destructive"
+            className='text-destructive focus:text-destructive'
           >
-            <Trash2 className="size-4 mr-2" />
+            <Trash2 className='size-4 mr-2' />
             Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -112,14 +121,15 @@ export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the conversation and all its messages. This action cannot be undone.
+              This will permanently delete the conversation and all its
+              messages. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className='bg-destructive text-destructive-foreground hover:bg-destructive/90'
             >
               Delete
             </AlertDialogAction>

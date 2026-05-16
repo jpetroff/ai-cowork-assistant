@@ -1,7 +1,5 @@
-import { useEffect, useRef } from 'react'
-import { useArtifactStore } from '@/stores/artifactStore'
-import { useMessageStore } from '@/stores/messageStore'
-import { console_if } from '@/lib/logger'
+import { useArtifactStore } from '@/components/editor/artifactStore'
+import { useChatSessionStore } from '@/components/chat/chatSessionStore'
 import { EditorSkeleton } from './EditorSkeleton'
 import { Editor } from './Editor'
 
@@ -11,17 +9,7 @@ export function EditorPanel() {
   const editorKey = useArtifactStore((s) => s.editorKey)
   const loadedContent = useArtifactStore((s) => s.loadedContent)
   const save = useArtifactStore((s) => s.save)
-  const isStreaming = useMessageStore((s) => s.isStreaming)
-
-  console_if('EDITOR').log(
-    '[EDITOR]',
-    'EditorPanel: what changed',
-    artifact,
-    editorKey,
-    loadedContent,
-    save,
-    isStreaming
-  )
+  const isStreaming = useChatSessionStore((s) => s.isAssistantStreaming)
 
   // Editor is only mounted when status is 'ready' — loading/idle show skeleton
   if (editorKey == null) return <EditorSkeleton />

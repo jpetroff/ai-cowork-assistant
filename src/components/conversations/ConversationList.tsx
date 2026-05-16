@@ -1,4 +1,4 @@
-import { useConversationStore } from '@/stores/conversationStore'
+import { useConversationStore } from '@/components/conversations/conversationStore'
 import { ConversationRow } from './ConversationRow'
 import { ConversationListEmpty } from './ConversationListEmpty'
 
@@ -17,8 +17,8 @@ export function ConversationList({ projectId }: ConversationListProps) {
   }
 
   return (
-    <div className="flex flex-col">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 mb-1">
+    <div className='flex flex-col'>
+      <p className='text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 mb-1'>
         Recent chats
       </p>
       {conversations.map((conversation) => (

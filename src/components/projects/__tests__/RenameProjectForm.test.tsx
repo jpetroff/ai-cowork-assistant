@@ -4,7 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RenameProjectForm } from '../RenameProjectForm'
 import type { Project } from '@/lib/db/types'
-import { useProjectStore } from '@/stores/projectStore'
+import { useProjectStore } from '@/components/projects/projectStore'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -36,7 +36,13 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 
 function renderForm(project: Project, open = true) {
   const onOpenChange = vi.fn()
-  render(<RenameProjectForm project={project} open={open} onOpenChange={onOpenChange} />)
+  render(
+    <RenameProjectForm
+      project={project}
+      open={open}
+      onOpenChange={onOpenChange}
+    />
+  )
   return { onOpenChange }
 }
 
@@ -81,7 +87,9 @@ describe('RenameProjectForm', () => {
     await userEvent.type(input, '  New Name  ')
     await userEvent.click(screen.getByRole('button', { name: /^rename$/i }))
 
-    expect(mockUpdateProject).toHaveBeenCalledWith('rename-id', { name: 'New Name' })
+    expect(mockUpdateProject).toHaveBeenCalledWith('rename-id', {
+      name: 'New Name',
+    })
   })
 
   it('form elements are disabled while operationState is renaming', () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useProjectStore } from '@/stores/projectStore'
+import { useProjectStore } from '@/components/projects/projectStore'
 import type { Project } from '@/lib/db/types'
 import {
   Dialog,
@@ -18,7 +18,11 @@ interface RenameProjectFormProps {
   onOpenChange: (open: boolean) => void
 }
 
-export function RenameProjectForm({ project, open, onOpenChange }: RenameProjectFormProps) {
+export function RenameProjectForm({
+  project,
+  open,
+  onOpenChange,
+}: RenameProjectFormProps) {
   const rename = useProjectStore((s) => s.rename)
   const operationState = useProjectStore((s) => s.operationStates[project.id])
   const isRenaming = operationState === 'renaming'
@@ -61,28 +65,28 @@ export function RenameProjectForm({ project, open, onOpenChange }: RenameProject
         <DialogHeader>
           <DialogTitle>Rename project</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="project-name">Name</Label>
+        <form onSubmit={handleSubmit} className='flex flex-col gap-3'>
+          <div className='flex flex-col gap-1.5'>
+            <Label htmlFor='project-name'>Name</Label>
             <Input
-              id="project-name"
+              id='project-name'
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isRenaming}
               autoFocus
-              autoComplete="off"
+              autoComplete='off'
             />
           </div>
           <DialogFooter>
             <Button
-              type="button"
-              variant="outline"
+              type='button'
+              variant='outline'
               onClick={() => onOpenChange(false)}
               disabled={isRenaming}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isRenaming || !name.trim()}>
+            <Button type='submit' disabled={isRenaming || !name.trim()}>
               {isRenaming ? 'Renaming…' : 'Rename'}
             </Button>
           </DialogFooter>

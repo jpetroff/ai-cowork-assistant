@@ -2,16 +2,12 @@ import { useRef, useState } from 'react'
 import { Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { useMessageStore } from '@/stores/messageStore'
-import { useArtifactStore } from '@/stores/artifactStore'
-import { useSidecarStore } from '@/stores/sidecarStore'
+import { useChatSessionStore } from '@/components/chat/chatSessionStore'
 
 export function ChatInput() {
   const [value, setValue] = useState('')
-  const isStreaming = useMessageStore((s) => s.isStreaming)
-  const addUserMessage = useMessageStore((s) => s.addUserMessage)
-  const sealForSend = useArtifactStore((s) => s.sealForSend)
-  const sendChatRequest = useSidecarStore((s) => s.sendChatRequest)
+  const isStreaming = useChatSessionStore((s) => s.isAssistantStreaming)
+  const submitMessage = useChatSessionStore((s) => s.submitMessage)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const canSubmit = value.trim().length > 0 && !isStreaming
@@ -21,14 +17,7 @@ export function ChatInput() {
     if (!content || isStreaming) return
     setValue('')
 
-    // 2. Persist user message to DB
-    await addUserMessage(content)
-
-    // 3. Seal the active artifact revision; system message created automatically if a revision is sealed
-    const sealResult = await sealForSend()
-
-    // 4. Send to sidecar
-    await sendChatRequest(content, sealResult)
+    await submitMessage(content)
 
     textareaRef.current?.focus()
   }
@@ -41,26 +30,28 @@ export function ChatInput() {
   }
 
   return (
-    <div className="border-t p-3 shrink-0">
+    <div className='border-t p-3 shrink-0'>
       {/* STUB: selection-context — show editor selection badge here (FR-CHT-005) */}
-      <div className="flex gap-2 items-end">
+      <div className='flex gap-2 items-end'>
         <Textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isStreaming ? 'Assistant is writing…' : 'Message… (⌘↵ to send)'}
+          placeholder={
+            isStreaming ? 'Assistant is writing…' : 'Message… (⌘↵ to send)'
+          }
           disabled={isStreaming}
           rows={3}
-          className="resize-none flex-1 text-sm"
+          className='resize-none flex-1 text-sm'
         />
         <Button
-          size="icon"
+          size='icon'
           onClick={handleSubmit}
           disabled={!canSubmit}
-          aria-label="Send message"
+          aria-label='Send message'
         >
-          <Send className="size-4" />
+          <Send className='size-4' />
         </Button>
       </div>
     </div>

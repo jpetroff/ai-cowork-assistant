@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { FilePlus } from 'lucide-react'
-import { useArtifactStore } from '@/stores/artifactStore'
+import { useArtifactStore } from '@/components/editor/artifactStore'
 import { Button } from '@/components/ui/button'
 import { RevisionPicker } from './RevisionPicker'
 import { cn } from '@/lib/utils'
 
-function SaveStatus({ isSaving, saveError }: { isSaving: boolean; saveError: string | null }) {
+function SaveStatus({
+  isSaving,
+  saveError,
+}: {
+  isSaving: boolean
+  saveError: string | null
+}) {
   const [showSaved, setShowSaved] = useState(false)
   const prevIsSaving = useRef(isSaving)
 
@@ -21,11 +27,18 @@ function SaveStatus({ isSaving, saveError }: { isSaving: boolean; saveError: str
   }, [isSaving, saveError])
 
   if (saveError) {
-    return <span className="text-xs text-destructive truncate max-w-32" title={saveError}>Save error</span>
+    return (
+      <span
+        className='text-xs text-destructive truncate max-w-32'
+        title={saveError}
+      >
+        Save error
+      </span>
+    )
   }
 
   if (isSaving) {
-    return <span className="text-xs text-muted-foreground">Saving…</span>
+    return <span className='text-xs text-muted-foreground'>Saving…</span>
   }
 
   return (
@@ -62,8 +75,8 @@ export function ArtifactTitleBar() {
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0">
-      <div className="flex-1 min-w-0">
+    <div className='flex items-center gap-3 px-4 py-2 border-b shrink-0'>
+      <div className='flex-1 min-w-0'>
         {isEditing ? (
           <input
             autoFocus
@@ -71,34 +84,41 @@ export function ArtifactTitleBar() {
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={handleTitleSubmit}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); handleTitleSubmit() }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleTitleSubmit()
+              }
               if (e.key === 'Escape') setIsEditing(false)
             }}
-            placeholder="Untitled"
-            className="w-full text-xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/50"
+            placeholder='Untitled'
+            className='w-full text-xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/50'
           />
         ) : (
           <button
             onClick={handleTitleClick}
-            className="text-xl font-semibold text-left w-full truncate hover:opacity-70 transition-opacity"
+            className='text-xl font-semibold text-left w-full truncate hover:opacity-70 transition-opacity'
           >
-            {artifact?.title ?? <span className="text-muted-foreground/50">Untitled</span>}
+            {artifact?.title ?? (
+              <span className='text-muted-foreground/50'>Untitled</span>
+            )}
           </button>
         )}
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className='flex items-center gap-2 shrink-0'>
         <RevisionPicker />
         {/* STUB: link-to-file — file sync button here (FR-EDT-010) */}
         <SaveStatus isSaving={isSaving} saveError={saveError} />
         <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => artifact && createNewArtifact(artifact.conversation_id)}
-          aria-label="New artifact"
-          title="New artifact"
+          variant='ghost'
+          size='icon-sm'
+          onClick={() =>
+            artifact && createNewArtifact(artifact.conversation_id)
+          }
+          aria-label='New artifact'
+          title='New artifact'
         >
-          <FilePlus className="size-4" />
+          <FilePlus className='size-4' />
         </Button>
       </div>
     </div>

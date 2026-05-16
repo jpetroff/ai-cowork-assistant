@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { router } from './router'
-import { useAppStore } from './stores/appStore'
+import { useAppStore } from './app/appStore'
 import { startWindowSizePersistence, currentWindowLabel } from './lib/windows'
 
 export default function App() {

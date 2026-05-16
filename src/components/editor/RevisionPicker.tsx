@@ -1,4 +1,4 @@
-import { useArtifactStore } from '@/stores/artifactStore'
+import { useArtifactStore } from '@/components/editor/artifactStore'
 import {
   DropdownMenu,
   DropdownMenuContent,

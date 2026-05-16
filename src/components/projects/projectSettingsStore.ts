@@ -23,12 +23,14 @@ function parseAiConfig(raw: string | null): ProjectAiConfig {
   if (!raw) return { ...DEFAULT_AI_CONFIG }
   try {
     const parsed = JSON.parse(raw) as unknown
-    if (typeof parsed !== 'object' || parsed === null) return { ...DEFAULT_AI_CONFIG }
+    if (typeof parsed !== 'object' || parsed === null)
+      return { ...DEFAULT_AI_CONFIG }
     const p = parsed as Record<string, unknown>
     return {
       provider_id: typeof p.provider_id === 'string' ? p.provider_id : null,
       model: typeof p.model === 'string' ? p.model : null,
-      embedding_model: typeof p.embedding_model === 'string' ? p.embedding_model : null,
+      embedding_model:
+        typeof p.embedding_model === 'string' ? p.embedding_model : null,
     }
   } catch {
     return { ...DEFAULT_AI_CONFIG }
@@ -54,7 +56,9 @@ interface ProjectSettingsActions {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
-export const useProjectSettingsStore = create<ProjectSettingsState & ProjectSettingsActions>((set) => ({
+export const useProjectSettingsStore = create<
+  ProjectSettingsState & ProjectSettingsActions
+>((set) => ({
   aiConfigs: {},
 
   async loadAiConfig(projectId) {

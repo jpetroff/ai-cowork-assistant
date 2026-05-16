@@ -32,7 +32,9 @@ interface NotificationActions {
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
-export const useNotificationStore = create<NotificationState & NotificationActions>((set) => ({
+export const useNotificationStore = create<
+  NotificationState & NotificationActions
+>((set) => ({
   notifications: [],
 
   push(n) {
@@ -41,7 +43,9 @@ export const useNotificationStore = create<NotificationState & NotificationActio
 
     if (n.autoDismissMs != null) {
       setTimeout(() => {
-        set((s) => ({ notifications: s.notifications.filter((x) => x.id !== id) }))
+        set((s) => ({
+          notifications: s.notifications.filter((x) => x.id !== id),
+        }))
       }, n.autoDismissMs)
     }
 

@@ -24,13 +24,17 @@ import {
   canEditInPlace,
   findLastSealedRevision,
   hasContentChangedSinceLastSeal,
-  parseRevisionMetadata,
 } from '@/lib/revision-utils'
-import { useMessageStore } from '@/stores/messageStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
+type RevisionMessageAuthor = 'user' | 'ai'
+type EnsureRevisionMessage = (
+  author: RevisionMessageAuthor,
+  artifactId: string,
+  revisionId: string
+) => Promise<string>
 
 /** @property revisionId - specific revision to look up; defaults to head revision */
 /** @property includeContent - whether to include revision content (default: false) */
@@ -87,12 +91,17 @@ interface ArtifactActions {
    * the outgoing message, or null if there is no artifact / no revisions.
    * A system message is created automatically when a revision is actually sealed/created.
    */
-  sealForSend: () => Promise<SealResult | null>
+  sealForSend: (
+    ensureRevisionMessage: EnsureRevisionMessage
+  ) => Promise<SealResult | null>
   /**
    * Apply an AI-generated revision. Inserts a new author='ai' sealed revision as HEAD
    * and remounts the editor with the new content.
    */
-  applyAiRevision: (content: string) => Promise<void>
+  applyAiRevision: (
+    content: string,
+    ensureRevisionMessage: EnsureRevisionMessage
+  ) => Promise<void>
   /**
    * Load a revision into the editor.
    * - Flushes any pending save and waits for it to complete.
@@ -130,9 +139,13 @@ interface ArtifactActions {
   _persistToHead: (content: string) => Promise<void>
   _createDraftThenPersist: (content: string) => Promise<void>
   _syncToDiskIfLinked: (content: string) => Promise<void>
-  _sealDraftInPlace: () => Promise<SealResult>
+  _sealDraftInPlace: (
+    ensureRevisionMessage: EnsureRevisionMessage
+  ) => Promise<SealResult>
   _reuseLastSealed: () => SealResult | null
-  _createSealedRevision: () => Promise<SealResult>
+  _createSealedRevision: (
+    ensureRevisionMessage: EnsureRevisionMessage
+  ) => Promise<SealResult>
   _reuseCurrentHead: () => SealResult | null
   /**
    * Set editor-relevant state and transition to 'ready'.
@@ -170,7 +183,14 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set(INITIAL_STATE)
     },
 
+    /**
+     * Loads or creates the active artifact for a conversation. This store owns artifact
+     * and revision state only; callers coordinate message/thread state separately.
+     */
     async loadForConversation(conversationId) {
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] load:start', {
+        conversationId,
+      })
       set({ ...INITIAL_STATE, status: 'loading' })
 
       try {
@@ -208,6 +228,12 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
         set({ artifact, headRevision, revisions: revisionsAsc })
         get()._mountRevision(headRevision, true)
+        console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] load:ready', {
+          conversationId,
+          artifactId: artifact.id,
+          headRevisionId: headRevision?.id ?? null,
+          revisionCount: revisionsAsc.length,
+        })
 
         if (artifact.file_path) {
           get().checkExternalChange()
@@ -222,6 +248,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     // ── Internal helpers ────────────────────────────────────────────────────────
 
+    /**
+     * Mounts a revision into editor-facing state. A non-head revision intentionally
+     * clears editability so the next save forks into a user draft.
+     */
     _mountRevision(revision, isHead) {
       // editorKey serves as new revision ID for an unsaved draft
       // when saving with revisionId == null → new revision gets editorKey as ID
@@ -239,8 +269,16 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
           : newRevisionId,
         status: 'ready',
       })
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] revision:mounted', {
+        revisionId: revision?.id ?? null,
+        isHead,
+      })
     },
 
+    /**
+     * Creates a user-owned draft revision and marks it as the artifact head. This
+     * method does not create chat/system messages.
+     */
     async _createUserDraft(content: string): Promise<ArtifactRevision> {
       const { artifact, revisions, editorKey } = get()
       if (!artifact) throw new Error('No active artifact')
@@ -286,6 +324,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     // ── Save chain ──────────────────────────────────────────────────────────────
 
+    /**
+     * Persists editor content into the active artifact. Guards transition saves and
+     * concurrent saves, then routes through the draft/head copy-on-write rules.
+     */
     async save(content) {
       const {
         status,
@@ -296,13 +338,13 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         revisions,
       } = get()
 
-      console_if('EDITOR').log(
-        '[EDITOR]',
-        'artifactStore save trigger:',
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] save:requested', {
         status,
         isSaving,
-        artifact
-      )
+        artifactId: artifact?.id ?? null,
+        editableRevisionId,
+        headRevisionId: headRevision?.id ?? null,
+      })
       // Guard: drop saves during loading transitions (e.g. from editor unmount cleanup)
       if (status !== 'ready') return
 
@@ -315,10 +357,12 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({ isSaving: true, saveError: null })
       try {
         // begin actual save
-        console_if('EDITOR').log(
-          '[EDITOR]',
-          `editableRevisionId=${editableRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`
-        )
+        console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] save:branch', {
+          editableRevisionId,
+          revisionCount: revisions.length,
+          headRevisionId: headRevision?.id ?? null,
+          canEditHead: headRevision ? canEditInPlace(headRevision) : false,
+        })
 
         if (editableRevisionId === null) {
           await get()._createUserDraft(content)
@@ -345,12 +389,15 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       }
     },
 
+    /**
+     * Updates the editable user draft in place and mirrors linked-file content when
+     * the artifact is disk-backed.
+     */
     async _persistToHead(content: string) {
       const { headRevision } = get()
-      console_if('EDITOR').log(
-        '[EDITOR]',
-        `_persistToHead: headRevision=${headRevision} ← should be always not NULL!`
-      )
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] save:persist-head', {
+        headRevisionId: headRevision?.id ?? null,
+      })
       if (!headRevision) return
 
       await updateRevisionContent(headRevision.id, content)
@@ -368,12 +415,20 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       await get()._syncToDiskIfLinked(content)
     },
 
+    /**
+     * Creates a fresh user draft for edits that cannot safely mutate the loaded
+     * revision, then syncs disk content if linked.
+     */
     async _createDraftThenPersist(content: string) {
       // _createUserDraft sets loadedRevisionId/editableRevisionId to the new draft's id
       await get()._createUserDraft(content)
       await get()._syncToDiskIfLinked(content)
     },
 
+    /**
+     * Writes the latest content to a linked file and stores the new hash. Disk sync
+     * errors are surfaced as saveError without rolling back the in-memory revision.
+     */
     async _syncToDiskIfLinked(content: string) {
       const { artifact } = get()
       if (!artifact?.file_path) return
@@ -401,7 +456,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
      * - !isDraft && changed  → _createSealedRevision
      * - !isDraft && !changed → _reuseCurrentHead
      */
-    async sealForSend() {
+    async sealForSend(ensureRevisionMessage) {
       const {
         editableRevisionId,
         headRevision,
@@ -428,34 +483,39 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
       const isDraft = canEditInPlace(headRevision)
       const changed = hasContentChangedSinceLastSeal(headRevision, revisions)
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] seal:branch', {
+        artifactId: artifact.id,
+        headRevisionId: headRevision.id,
+        loadedRevisionId,
+        editableRevisionId,
+        isDraft,
+        changed,
+      })
 
       if (isDraft && changed) {
-        return get()._sealDraftInPlace()
+        return get()._sealDraftInPlace(ensureRevisionMessage)
       } else if (isDraft && !changed) {
         return get()._reuseLastSealed()
       } else if (!isDraft && changed) {
-        return get()._createSealedRevision()
+        return get()._createSealedRevision(ensureRevisionMessage)
       } else {
         return get()._reuseCurrentHead()
       }
     },
 
-    async _sealDraftInPlace(): Promise<SealResult> {
+    /**
+     * Seals the current user draft and asks the caller to ensure the chat/system
+     * revision anchor exists. This keeps message ownership outside artifact state.
+     */
+    async _sealDraftInPlace(ensureRevisionMessage): Promise<SealResult> {
       const { headRevision, artifact } = get()
       if (!headRevision || !artifact) throw new Error('No active revision')
 
-      // If an anchor message already exists for this revision (created at first-draft time),
-      // reuse it as the seal message to avoid a duplicate card in the chat thread.
-      const existingAnchor = useMessageStore
-        .getState()
-        .messages.find(
-          (m) => parseRevisionMetadata(m)?.revisionId === headRevision.id
-        )
-      const sysMsgId = existingAnchor
-        ? existingAnchor.id
-        : await useMessageStore
-            .getState()
-            .addSystemRevisionMessage('user', artifact.id, headRevision.id)
+      const sysMsgId = await ensureRevisionMessage(
+        'user',
+        artifact.id,
+        headRevision.id
+      )
 
       await sealRevision(headRevision.id, sysMsgId)
       const sealed = { ...headRevision, message_id: sysMsgId }
@@ -473,6 +533,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       }
     },
 
+    /**
+     * Reuses the latest sealed revision when the active draft has no new content.
+     * This avoids producing duplicate chat anchors for unchanged content.
+     */
     _reuseLastSealed(): SealResult | null {
       const { revisions, headRevision, artifact } = get()
       if (!artifact) return null
@@ -490,7 +554,11 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       }
     },
 
-    async _createSealedRevision(): Promise<SealResult> {
+    /**
+     * Creates and seals a new user revision when the current head is sealed but its
+     * content has changed in memory.
+     */
+    async _createSealedRevision(ensureRevisionMessage): Promise<SealResult> {
       const { headRevision, artifact, revisions } = get()
       if (!headRevision || !artifact) throw new Error('No active revision')
 
@@ -499,9 +567,11 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         author: 'user',
         content: headRevision.content,
       })
-      const sysMsgId = await useMessageStore
-        .getState()
-        .addSystemRevisionMessage('user', artifact.id, revisionId)
+      const sysMsgId = await ensureRevisionMessage(
+        'user',
+        artifact.id,
+        revisionId
+      )
       await sealRevision(revisionId, sysMsgId)
       await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
@@ -535,6 +605,9 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       }
     },
 
+    /**
+     * Returns the current head revision when no sealing work is needed.
+     */
     _reuseCurrentHead(): SealResult | null {
       const { headRevision, artifact } = get()
       if (!headRevision || !artifact) return null
@@ -547,7 +620,11 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     // ── External triggers ────────────────────────────────────────────────────────
 
-    async applyAiRevision(content: string) {
+    /**
+     * Applies sidecar-generated artifact content as a sealed AI revision. The caller
+     * supplies the message coordinator so chat anchoring remains outside this store.
+     */
+    async applyAiRevision(content: string, ensureRevisionMessage) {
       const { artifact, revisions } = get()
       if (!artifact) return
 
@@ -556,9 +633,11 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         author: 'ai',
         content,
       })
-      const sysMsgId = await useMessageStore
-        .getState()
-        .addSystemRevisionMessage('ai', artifact.id, revisionId)
+      const sysMsgId = await ensureRevisionMessage(
+        'ai',
+        artifact.id,
+        revisionId
+      )
       await sealRevision(revisionId, sysMsgId)
       await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
@@ -586,9 +665,20 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         editorKey: revisionId,
         revisions: [...revisions, newRevision],
       })
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] ai-revision:applied', {
+        artifactId: artifact.id,
+        revisionId,
+      })
     },
 
+    /**
+     * Loads a revision into editor state. If the revision belongs to a different
+     * artifact, that artifact and its revision list become active first.
+     */
     async requestRevisionLoad(revisionId) {
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] revision-load:start', {
+        revisionId,
+      })
       // Set loading — any saves fired by editor unmount cleanup will be dropped
       set({ status: 'loading' })
 
@@ -639,6 +729,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       get()._mountRevision(revision, isHead)
     },
 
+    /**
+     * Creates a new empty artifact for the conversation and makes it the active
+     * editor target without creating an initial revision.
+     */
     async createNewArtifact(conversationId) {
       const artifactId = await createArtifact({
         conversation_id: conversationId,
@@ -658,6 +752,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       })
     },
 
+    /**
+     * Renames the active artifact title. Empty strings are stored as null so the UI
+     * can consistently render the Untitled fallback.
+     */
     async rename(title) {
       const { artifact } = get()
       if (!artifact) return
@@ -670,6 +768,9 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     // ── File sync ────────────────────────────────────────────────────────────────
 
+    /**
+     * Checks whether the linked disk file diverged from the last stored artifact hash.
+     */
     async checkExternalChange() {
       const { artifact } = get()
       if (!artifact?.file_path || !artifact.file_hash) return
@@ -686,6 +787,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       }
     },
 
+    /**
+     * Imports linked disk content into a new user draft and remounts the editor with
+     * that draft.
+     */
     async reloadFromDisk() {
       const { artifact } = get()
       if (!artifact?.file_path) return
@@ -705,6 +810,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       })
     },
 
+    /**
+     * Looks up metadata for the currently loaded artifact. Revision content is omitted
+     * by default so chat cards can inspect metadata without subscribing to large text.
+     */
     getArtifactRevisionMeta(artifactId, options = {}) {
       const { artifact, headRevision, revisions } = get()
       if (!artifact || artifact.id !== artifactId) return null
@@ -726,6 +835,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       return { artifact, revision: revisionOut }
     },
 
+    /**
+     * Links the current artifact revision to a workspace file and records its hash for
+     * later external-change detection.
+     */
     async linkToDisk(relativePath) {
       const { artifact, headRevision } = get()
       if (!artifact || !headRevision) return

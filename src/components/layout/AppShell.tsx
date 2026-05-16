@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useNavigation } from 'react-router-dom'
 import { currentWindowLabel } from '@/lib/windows'
-import { useAppStore } from '@/stores/appStore'
+import { useAppStore } from '@/app/appStore'
 import { LoadingPage } from '@/pages/LoadingPage'
 import { NotificationToast } from '@/components/ui/NotificationToast'
 
@@ -31,7 +31,7 @@ export function AppShell({ children }: AppShellProps) {
   // pt-8 accounts for macOS overlay titlebar (traffic light buttons)
   if (windowLabel === 'splash') {
     return (
-      <div className="h-full pt-8">
+      <div className='h-full pt-8'>
         <LoadingPage />
       </div>
     )
@@ -43,9 +43,9 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className='flex flex-col h-screen'>
       {isRouting && (
-        <div className="h-0.5 bg-primary animate-pulse fixed top-0 left-0 right-0 z-50" />
+        <div className='h-0.5 bg-primary animate-pulse fixed top-0 left-0 right-0 z-50' />
       )}
       {children}
       <NotificationToast />

@@ -1,6 +1,16 @@
 import { useState } from 'react'
-import { XIcon, WarningIcon, InfoIcon, CheckCircleIcon, CopyIcon } from '@phosphor-icons/react'
-import { useNotificationStore, type Notification, type NotificationKind } from '@/stores/notificationStore'
+import {
+  XIcon,
+  WarningIcon,
+  InfoIcon,
+  CheckCircleIcon,
+  CopyIcon,
+} from '@phosphor-icons/react'
+import {
+  useNotificationStore,
+  type Notification,
+  type NotificationKind,
+} from '@/components/ui/notificationStore'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -59,31 +69,36 @@ function ToastItem({ notification }: { notification: Notification }) {
   return (
     <>
       <div
-        role="alert"
+        role='alert'
         className={cn(
           'flex items-start gap-2.5 border p-3 text-xs shadow-sm w-72',
           config.containerClass
         )}
       >
-        <Icon className={cn('mt-px size-3.5 shrink-0', config.iconClass)} weight="bold" />
+        <Icon
+          className={cn('mt-px size-3.5 shrink-0', config.iconClass)}
+          weight='bold'
+        />
 
-        <span className="flex-1 leading-relaxed text-foreground">{notification.message}</span>
+        <span className='flex-1 leading-relaxed text-foreground'>
+          {notification.message}
+        </span>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className='flex items-center gap-1 shrink-0'>
           {notification.detail && (
             <Button
-              variant="link"
-              size="xs"
-              className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
+              variant='link'
+              size='xs'
+              className='h-auto p-0 text-xs text-muted-foreground hover:text-foreground'
               onClick={() => setDetailsOpen(true)}
             >
               details
             </Button>
           )}
           <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Dismiss"
+            variant='ghost'
+            size='icon-xs'
+            aria-label='Dismiss'
             onClick={() => dismiss(notification.id)}
           >
             <XIcon />
@@ -98,11 +113,11 @@ function ToastItem({ notification }: { notification: Notification }) {
               <DialogTitle>Error details</DialogTitle>
               <DialogDescription>{notification.message}</DialogDescription>
             </DialogHeader>
-            <pre className="bg-muted rounded-none p-3 text-xs overflow-auto max-h-48 whitespace-pre-wrap break-all">
+            <pre className='bg-muted rounded-none p-3 text-xs overflow-auto max-h-48 whitespace-pre-wrap break-all'>
               {notification.detail}
             </pre>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={handleCopy}>
+              <Button variant='outline' size='sm' onClick={handleCopy}>
                 <CopyIcon />
                 {copied ? 'Copied!' : 'Copy'}
               </Button>
@@ -126,9 +141,9 @@ export function NotificationToast() {
 
   return (
     <div
-      aria-live="polite"
-      aria-label="Notifications"
-      className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end"
+      aria-live='polite'
+      aria-label='Notifications'
+      className='fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end'
     >
       {visible.map((n) => (
         <ToastItem key={n.id} notification={n} />

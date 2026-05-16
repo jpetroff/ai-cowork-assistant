@@ -1,4 +1,4 @@
-import { useArtifactStore } from '@/stores/artifactStore'
+import { useArtifactStore } from '@/components/editor/artifactStore'
 import { parseRevisionMetadata } from '@/lib/revision-utils'
 import { Button } from '@/components/ui/button'
 import type { Message } from '@/lib/db/types'

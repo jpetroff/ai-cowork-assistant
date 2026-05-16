@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useMessageStore } from '@/stores/messageStore'
-import { useArtifactStore } from '@/stores/artifactStore'
+import { useMessageStore } from '@/components/chat/messageStore'
+import { useArtifactStore } from '@/components/editor/artifactStore'
 import { buildThread, parseRevisionMetadata } from '@/lib/revision-utils'
 import { MessageListSkeleton } from './MessageListSkeleton'
 import { MessageBubble } from './MessageBubble'

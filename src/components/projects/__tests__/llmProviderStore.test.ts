@@ -37,7 +37,11 @@ function makeProvider(overrides: Partial<LlmProvider> = {}): LlmProvider {
 }
 
 beforeEach(() => {
-  useLlmProviderStore.setState({ providers: [], modelsByProvider: {}, status: 'idle' })
+  useLlmProviderStore.setState({
+    providers: [],
+    modelsByProvider: {},
+    status: 'idle',
+  })
   vi.clearAllMocks()
 })
 
@@ -68,7 +72,10 @@ describe('loadAll()', () => {
 
 describe('fetchModels()', () => {
   it('fetches models and caches by provider id', async () => {
-    const provider = makeProvider({ id: 'p1', base_url: 'http://localhost:11434' })
+    const provider = makeProvider({
+      id: 'p1',
+      base_url: 'http://localhost:11434',
+    })
     useLlmProviderStore.setState({ providers: [provider], status: 'ready' })
 
     mockFetch.mockResolvedValue({
@@ -78,7 +85,10 @@ describe('fetchModels()', () => {
 
     await useLlmProviderStore.getState().fetchModels('p1')
 
-    expect(useLlmProviderStore.getState().modelsByProvider['p1']).toEqual(['llama3', 'mistral'])
+    expect(useLlmProviderStore.getState().modelsByProvider['p1']).toEqual([
+      'llama3',
+      'mistral',
+    ])
   })
 
   it('does not make a second network request if already cached', async () => {
@@ -109,12 +119,18 @@ describe('fetchModels()', () => {
     useLlmProviderStore.setState({ providers: [provider], status: 'ready' })
     mockFetch.mockRejectedValue(new Error('ECONNREFUSED'))
 
-    await expect(useLlmProviderStore.getState().fetchModels('p1')).resolves.not.toThrow()
+    await expect(
+      useLlmProviderStore.getState().fetchModels('p1')
+    ).resolves.not.toThrow()
     expect(useLlmProviderStore.getState().modelsByProvider['p1']).toEqual([])
   })
 
   it('appends Authorization header when api_key is set', async () => {
-    const provider = makeProvider({ id: 'p1', api_key: 'sk-secret', base_url: 'https://api.openai.com/v1' })
+    const provider = makeProvider({
+      id: 'p1',
+      api_key: 'sk-secret',
+      base_url: 'https://api.openai.com/v1',
+    })
     useLlmProviderStore.setState({ providers: [provider], status: 'ready' })
     mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) })
 

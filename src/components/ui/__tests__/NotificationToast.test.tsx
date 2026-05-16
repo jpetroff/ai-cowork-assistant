@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useNotificationStore } from '@/stores/notificationStore'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 import { NotificationToast } from '../NotificationToast'
 
 afterEach(cleanup)
@@ -18,14 +18,18 @@ describe('NotificationToast', () => {
   })
 
   it('renders a notification message', () => {
-    useNotificationStore.getState().push({ kind: 'info', message: 'Background sync started' })
+    useNotificationStore
+      .getState()
+      .push({ kind: 'info', message: 'Background sync started' })
     render(<NotificationToast />)
     expect(screen.getByText('Background sync started')).toBeTruthy()
   })
 
   it('renders up to 5 notifications (shows last 5)', () => {
     for (let i = 1; i <= 7; i++) {
-      useNotificationStore.getState().push({ kind: 'info', message: `Message ${i}` })
+      useNotificationStore
+        .getState()
+        .push({ kind: 'info', message: `Message ${i}` })
     }
     render(<NotificationToast />)
     expect(screen.queryByText('Message 1')).toBeNull()
@@ -45,7 +49,9 @@ describe('NotificationToast', () => {
   })
 
   it('shows [details] link only for notifications with detail', () => {
-    useNotificationStore.getState().push({ kind: 'error', message: 'Error occurred' })
+    useNotificationStore
+      .getState()
+      .push({ kind: 'error', message: 'Error occurred' })
     useNotificationStore.getState().push({
       kind: 'error',
       message: 'Error with detail',

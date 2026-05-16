@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Card } from '@/components/ui/card'
-import { useAppStore } from '@/stores/appStore'
+import { useAppStore } from '@/app/appStore'
 import { WizardStepper } from './WizardStepper'
 import { ProfileStep } from './ProfileStep'
 import { ProviderStep } from './ProviderStep'
@@ -21,11 +21,11 @@ export function SetupWizard() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8 gap-4">
-      <Card className="w-full max-w-md p-6 space-y-6">
+    <div className='flex flex-col items-center justify-center h-full p-8 gap-4'>
+      <Card className='w-full max-w-md p-6 space-y-6'>
         <WizardStepper currentStep={currentStep} />
 
-        <div className="pt-2">
+        <div className='pt-2'>
           {currentStep === 1 && (
             <ProfileStep
               defaultName={setupDefaults?.name ?? ''}
@@ -33,11 +33,12 @@ export function SetupWizard() {
               onComplete={handleProfileDone}
             />
           )}
-          {currentStep === 2 && <ProviderStep onComplete={handleProviderDone} />}
+          {currentStep === 2 && (
+            <ProviderStep onComplete={handleProviderDone} />
+          )}
           {currentStep === 3 && <DoneStep />}
         </div>
       </Card>
-
     </div>
   )
 }

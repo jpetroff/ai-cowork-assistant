@@ -3,7 +3,13 @@ import { invoke } from '@tauri-apps/api/core'
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http'
 import { initSidecar } from '@/lib/sidecar'
 import { listLlmProviders } from '@/lib/db/repositories'
-import { openMainWindow, getSplashWindow, currentWindowLabel } from '@/lib/windows'
+import {
+  openMainWindow,
+  getSplashWindow,
+  currentWindowLabel,
+} from '@/lib/windows'
+import { console_if } from '@/lib/logger'
+import { useSidecarStore } from '@/components/chat/sidecarStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,7 +61,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function makeSidecarStep(status: StartupStep['status'] = 'pending'): StartupStep {
+function makeSidecarStep(
+  status: StartupStep['status'] = 'pending'
+): StartupStep {
   return { id: SIDECAR_STEP_ID, label: 'Starting AI engine…', status }
 }
 
@@ -99,11 +107,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { appPhase, _updateStep } = get()
     _updateStep(SIDECAR_STEP_ID, { status: 'done' })
     set({ sidcarStatus: 'ready', sidcarUrl: url })
+    useSidecarStore.setState({ sidecarUrl: url, isConnected: true })
+    console_if('APP_STORE').log('[APP_STORE] sidecar:ready', { url })
     if (appPhase === 'loading') {
       set({ appPhase: 'ready' })
       if (currentWindowLabel() === 'splash') {
         // Normal boot: open main then close splash
-        openMainWindow().then(() => getSplashWindow().close().catch(() => {}))
+        openMainWindow().then(() =>
+          getSplashWindow()
+            .close()
+            .catch(() => {})
+        )
       }
       // Main window: appPhase='ready' triggers AppShell navigation, no window ops needed
     }
@@ -112,12 +126,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   _setSidcarError(error) {
     const { _updateStep } = get()
     _updateStep(SIDECAR_STEP_ID, { status: 'error', error })
-    set({ sidcarStatus: 'error', sidcarError: error, appPhase: 'error', bootError: error })
+    set({
+      sidcarStatus: 'error',
+      sidcarError: error,
+      appPhase: 'error',
+      bootError: error,
+    })
+    useSidecarStore.setState({ isConnected: false })
+    console.error('[APP_STORE] sidecar:error', error)
   },
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
   async init() {
+    console_if('APP_STORE').log('[APP_STORE] init:start')
     const splashStart = Date.now()
 
     // 1. Invoke sidecar (fire — health check runs in background)
@@ -133,6 +155,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (sidecarInfo.available && sidecarInfo.url) {
       set({ sidcarUrl: sidecarInfo.url, sidcarStatus: 'starting' })
+      useSidecarStore.setState({
+        sidecarUrl: sidecarInfo.url,
+        isConnected: false,
+      })
     } else {
       const err = sidecarInfo.error ?? 'Sidecar failed to start'
       set({ sidcarStatus: 'error', sidcarError: err })
@@ -146,6 +172,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     // 4. Determine next phase
     set({ isFirstRun })
+    console_if('APP_STORE').log('[APP_STORE] init:phase', {
+      isFirstRun,
+      sidecarAvailable: sidecarInfo.available,
+    })
 
     if (isFirstRun) {
       // Fetch OS username and avatar for setup pre-population
@@ -156,7 +186,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ appPhase: 'setup' })
       if (currentWindowLabel() === 'splash') {
         await openMainWindow()
-        getSplashWindow().close().catch(() => {})
+        getSplashWindow()
+          .close()
+          .catch(() => {})
         // Start health check in background (non-blocking)
         if (sidecarInfo.url) runHealthCheck(sidecarInfo.url)
       }
@@ -201,7 +233,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   retry() {
     const { sidcarUrl, startupSteps } = get()
     const failedSteps = startupSteps.map((s) =>
-      s.status === 'error' ? { ...s, status: 'loading' as const, error: undefined } : s
+      s.status === 'error'
+        ? { ...s, status: 'loading' as const, error: undefined }
+        : s
     )
     set({ appPhase: 'loading', bootError: null, startupSteps: failedSteps })
     if (sidcarUrl) {
@@ -219,19 +253,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 async function runHealthCheck(url: string): Promise<void> {
   const start = Date.now()
   let slowWarningShown = false
-  const { _updateStep, _setSidcarReady, _setSidcarError } = useAppStore.getState()
+  const { _updateStep, _setSidcarReady, _setSidcarError } =
+    useAppStore.getState()
 
   while (true) {
     const elapsed = Date.now() - start
 
     if (elapsed >= TIMEOUT_MS) {
-      _setSidcarError(`Sidecar did not respond after ${TIMEOUT_MS / 1000}s. Is it running?`)
+      _setSidcarError(
+        `Sidecar did not respond after ${TIMEOUT_MS / 1000}s. Is it running?`
+      )
       return
     }
 
     if (!slowWarningShown && elapsed >= SLOW_THRESHOLD_MS) {
       slowWarningShown = true
-      _updateStep(SIDECAR_STEP_ID, { label: 'Starting AI engine… (taking longer than expected)' })
+      _updateStep(SIDECAR_STEP_ID, {
+        label: 'Starting AI engine… (taking longer than expected)',
+      })
     }
 
     try {

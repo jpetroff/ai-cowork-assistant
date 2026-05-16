@@ -4,8 +4,8 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProjectCard } from '../ProjectCard'
 import type { Project } from '@/lib/db/types'
-import { useProjectStore } from '@/stores/projectStore'
-import { useNotificationStore } from '@/stores/notificationStore'
+import { useProjectStore } from '@/components/projects/projectStore'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -144,9 +144,16 @@ describe('ProjectCard — delete confirmation dialog', () => {
 
     // Render the card with the delete dialog already open via a wrapper
     const { RenameProjectForm } = await import('../RenameProjectForm')
-    const { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-            AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
-          } = await import('@/components/ui/alert-dialog')
+    const {
+      AlertDialog,
+      AlertDialogContent,
+      AlertDialogHeader,
+      AlertDialogTitle,
+      AlertDialogDescription,
+      AlertDialogFooter,
+      AlertDialogCancel,
+      AlertDialogAction,
+    } = await import('@/components/ui/alert-dialog')
 
     const deleteProject = useProjectStore.getState().delete
     const onConfirm = vi.fn(() => deleteProject('del-id'))
@@ -156,7 +163,9 @@ describe('ProjectCard — delete confirmation dialog', () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete project?</AlertDialogTitle>
-            <AlertDialogDescription>This will be removed.</AlertDialogDescription>
+            <AlertDialogDescription>
+              This will be removed.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

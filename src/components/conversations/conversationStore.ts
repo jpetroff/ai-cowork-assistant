@@ -9,7 +9,7 @@ import { createArtifact, updateArtifact } from '@/lib/db/repositories/documents'
 import { createRevision } from '@/lib/db/repositories/revisions'
 import { db } from '@/lib/db/sqlite'
 import type { Conversation } from '@/lib/db/types'
-import { useNotificationStore } from './notificationStore'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -49,12 +49,17 @@ interface ConversationActions {
   /** Set the active conversation ID (used when navigating into a chat). */
   setActive: (id: string) => void
   /** Persist the active artifact for a conversation to SQLite. */
-  setActiveArtifact: (conversationId: string, artifactId: string) => Promise<void>
+  setActiveArtifact: (
+    conversationId: string,
+    artifactId: string
+  ) => Promise<void>
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 
-export const useConversationStore = create<ConversationState & ConversationActions>((set, get) => ({
+export const useConversationStore = create<
+  ConversationState & ConversationActions
+>((set, get) => ({
   conversations: [],
   activeConversationId: null,
   activeProjectId: null,
@@ -63,12 +68,18 @@ export const useConversationStore = create<ConversationState & ConversationActio
   operationStates: {},
 
   async loadForProject(projectId) {
-    set({ status: 'loading', error: null, activeProjectId: projectId, conversations: [] })
+    set({
+      status: 'loading',
+      error: null,
+      activeProjectId: projectId,
+      conversations: [],
+    })
     try {
       const conversations = await listConversations(projectId)
       set({ conversations, status: 'ready' })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load conversations'
+      const message =
+        err instanceof Error ? err.message : 'Failed to load conversations'
       set({ status: 'error', error: message })
     }
   },
@@ -89,15 +100,22 @@ export const useConversationStore = create<ConversationState & ConversationActio
       // Create the initial empty artifact + first revision for this conversation (FR-CHT-004)
       try {
         const artifactId = await createArtifact({ conversation_id: id })
-        await createRevision({ artifact_id: artifactId, author: 'user', content: '' })
-        await updateArtifact(id, {})  // bump updated_at on conversation via artifact
+        await createRevision({
+          artifact_id: artifactId,
+          author: 'user',
+          content: '',
+        })
+        await updateArtifact(id, {}) // bump updated_at on conversation via artifact
         await db.execute(
           'UPDATE conversations SET active_artifact_id = $1, updated_at = $2 WHERE id = $3',
           [artifactId, Date.now(), id]
         )
         conversation.active_artifact_id = artifactId
       } catch (artifactErr) {
-        console.warn('[conversationStore] Could not create initial artifact:', artifactErr instanceof Error ? artifactErr.message : artifactErr)
+        console.warn(
+          '[conversationStore] Could not create initial artifact:',
+          artifactErr instanceof Error ? artifactErr.message : artifactErr
+        )
       }
 
       return conversation
@@ -115,7 +133,9 @@ export const useConversationStore = create<ConversationState & ConversationActio
     const { operationStates } = get()
     if (operationStates[id]) return
 
-    set((s) => ({ operationStates: { ...s.operationStates, [id]: 'renaming' } }))
+    set((s) => ({
+      operationStates: { ...s.operationStates, [id]: 'renaming' },
+    }))
     try {
       await updateConversation(id, { title })
       set((s) => ({
@@ -138,7 +158,9 @@ export const useConversationStore = create<ConversationState & ConversationActio
     const { operationStates } = get()
     if (operationStates[id]) return
 
-    set((s) => ({ operationStates: { ...s.operationStates, [id]: 'deleting' } }))
+    set((s) => ({
+      operationStates: { ...s.operationStates, [id]: 'deleting' },
+    }))
     try {
       await deleteConversation(id)
       set((s) => ({

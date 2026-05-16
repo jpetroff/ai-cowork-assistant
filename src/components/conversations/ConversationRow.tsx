@@ -1,7 +1,13 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DotsThreeIcon, PencilSimpleIcon, TrashIcon, CheckIcon, XIcon } from '@phosphor-icons/react'
-import { useConversationStore } from '@/stores/conversationStore'
+import {
+  DotsThreeIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+  CheckIcon,
+  XIcon,
+} from '@phosphor-icons/react'
+import { useConversationStore } from '@/components/conversations/conversationStore'
 import type { Conversation } from '@/lib/db/types'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -41,11 +47,16 @@ function formatRelativeTime(unixMs: number): string {
   return `${days}d ago`
 }
 
-export function ConversationRow({ conversation, projectId }: ConversationRowProps) {
+export function ConversationRow({
+  conversation,
+  projectId,
+}: ConversationRowProps) {
   const navigate = useNavigate()
   const rename = useConversationStore((s) => s.rename)
   const deleteConversation = useConversationStore((s) => s.delete)
-  const operationState = useConversationStore((s) => s.operationStates[conversation.id])
+  const operationState = useConversationStore(
+    (s) => s.operationStates[conversation.id]
+  )
 
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState('')
@@ -80,7 +91,10 @@ export function ConversationRow({ conversation, projectId }: ConversationRowProp
   }
 
   function handleRenameKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') { e.preventDefault(); applyRename() }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      applyRename()
+    }
     if (e.key === 'Escape') discardRename()
   }
 
@@ -92,39 +106,56 @@ export function ConversationRow({ conversation, projectId }: ConversationRowProp
   return (
     <>
       <div
-        role="button"
+        role='button'
         tabIndex={isBusy ? -1 : 0}
         onClick={handleClick}
         onKeyDown={(e) => e.key === 'Enter' && handleClick()}
         className={cn(
           'group flex items-center gap-3 px-3 py-2.5 rounded-none',
           'hover:bg-muted/50 transition-colors cursor-pointer select-none',
-          isBusy && 'opacity-50 cursor-not-allowed pointer-events-none',
+          isBusy && 'opacity-50 cursor-not-allowed pointer-events-none'
         )}
       >
         {/* Title / inline rename */}
-        <div className="flex-1 min-w-0">
+        <div className='flex-1 min-w-0'>
           {renaming ? (
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <div
+              className='flex items-center gap-1'
+              onClick={(e) => e.stopPropagation()}
+            >
               <input
                 ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={handleRenameKeyDown}
-                className="flex-1 bg-transparent border-b border-primary text-sm outline-none min-w-0"
+                className='flex-1 bg-transparent border-b border-primary text-sm outline-none min-w-0'
                 autoFocus
               />
-              <Button variant="ghost" size="icon-sm" onClick={applyRename} aria-label="Apply">
-                {isRenaming ? <Spinner className="size-3" /> : <CheckIcon className="size-3" />}
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={applyRename}
+                aria-label='Apply'
+              >
+                {isRenaming ? (
+                  <Spinner className='size-3' />
+                ) : (
+                  <CheckIcon className='size-3' />
+                )}
               </Button>
-              <Button variant="ghost" size="icon-sm" onClick={discardRename} aria-label="Discard">
-                <XIcon className="size-3" />
+              <Button
+                variant='ghost'
+                size='icon-sm'
+                onClick={discardRename}
+                aria-label='Discard'
+              >
+                <XIcon className='size-3' />
               </Button>
             </div>
           ) : (
-            <p className="text-sm truncate">{displayTitle}</p>
+            <p className='text-sm truncate'>{displayTitle}</p>
           )}
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className='text-xs text-muted-foreground mt-0.5'>
             {formatRelativeTime(conversation.updated_at)}
           </p>
         </div>
@@ -137,27 +168,33 @@ export function ConversationRow({ conversation, projectId }: ConversationRowProp
               onClick={(e) => e.stopPropagation()}
               render={
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Chat options"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  variant='ghost'
+                  size='icon-sm'
+                  aria-label='Chat options'
+                  className='opacity-0 group-hover:opacity-100 transition-opacity'
                   onClick={(e) => e.stopPropagation()}
                 />
               }
             >
-              <DotsThreeIcon weight="bold" />
+              <DotsThreeIcon weight='bold' />
             </DropdownMenuTrigger>
             <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); startRename() }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  startRename()
+                }}
               >
                 <PencilSimpleIcon />
                 Rename
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onClick={(e) => { e.stopPropagation(); setDeleteOpen(true) }}
+                className='text-destructive focus:text-destructive'
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteOpen(true)
+                }}
               >
                 <TrashIcon />
                 Delete
