@@ -1,6 +1,6 @@
 # Frontend Relations
 
-Pages are thin; feature components and Zustand stores own behavior. Route loaders eagerly load active project/conversation/message/artifact state.
+Pages are thin; feature components and Zustand stores own behavior. Route loaders load active project/conversation state and start message/artifact loading for chat independently.
 
 ```mermaid
 flowchart TD
@@ -38,9 +38,28 @@ flowchart LR
   SidecarStore --> MessageStore
   SidecarStore --> ArtifactStore
   EditorPanel --> ArtifactStore
+  RevisionPicker["RevisionPicker"] --> ArtifactStore
   MessageList --> ArtifactRevisionCard["ArtifactRevisionCard"]
   ArtifactRevisionCard --> ArtifactStore
 ```
+
+## Page Dependency Map
+
+See `.memory/page-dependencies.md` for the page-by-page component/store/dependency map. Main drivers:
+
+- `AppShell`: `appStore` plus router navigation state.
+- `HomePage`: `ProjectList` over `projectStore`.
+- `ProjectPage`: `projectStore`, `conversationStore`, project settings, provider/model stores, and artifact preview repositories.
+- `ChatPage`: `conversationStore`, `messageStore`, `artifactStore`, and `sidecarStore`.
+- `SetupPage`: setup wizard over app/provider/settings state.
+
+## Chat and Artifact Coupling
+
+- There is no separate `ChatStore`; chat state is `messageStore` plus `sidecarStore`.
+- `artifactStore.loadedRevisionId` is the revision currently open in the editor and highlighted in chat/history.
+- `artifactStore.editableRevisionId` is the revision that can be saved in place; `null` means the next save creates a user draft.
+- Both `ArtifactRevisionCard` and `RevisionPicker` select revisions through `artifactStore.requestRevisionLoad(revisionId)`.
+- `artifactStore.loadForConversation()` honors `conversations.active_artifact_id` before falling back to the most recently updated artifact.
 
 ## Component Rules
 

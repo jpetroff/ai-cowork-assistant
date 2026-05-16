@@ -21,13 +21,13 @@ function formatTimestamp(ts: number): string {
 export function RevisionPicker() {
   const revisions = useArtifactStore((s) => s.revisions)
   const artifact = useArtifactStore((s) => s.artifact)
-  const activeRevisionId = useArtifactStore((s) => s.activeRevisionId)
+  const loadedRevisionId = useArtifactStore((s) => s.loadedRevisionId)
   const requestRevisionLoad = useArtifactStore((s) => s.requestRevisionLoad)
 
   // Hide when there is only one revision or fewer
   if (revisions.length <= 1) return null
 
-  const currentIndex = revisions.findIndex((r) => r.id === activeRevisionId)
+  const currentIndex = revisions.findIndex((r) => r.id === loadedRevisionId)
   const displayN = currentIndex >= 0 ? currentIndex + 1 : revisions.length
   const total = revisions.length
 
@@ -36,14 +36,14 @@ export function RevisionPicker() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="h-7 gap-1 text-xs text-muted-foreground px-2 flex items-center rounded hover:bg-accent transition-colors">
+      <DropdownMenuTrigger className='h-7 gap-1 text-xs text-muted-foreground px-2 flex items-center rounded hover:bg-accent transition-colors'>
         v{displayN} of {total}
-        <ChevronDown className="size-3 ml-1" />
+        <ChevronDown className='size-3 ml-1' />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align='end' className='w-64'>
         {revisionItems.map((revision, idx) => {
           const versionN = revisions.length - idx
-          const isLoaded = revision.id === activeRevisionId
+          const isLoaded = revision.id === loadedRevisionId
           const isCurrent = revision.id === artifact?.current_revision_id
           const isDraft = revision.message_id === null
           const authorLabel = revision.author === 'ai' ? 'AI' : 'You'
@@ -51,20 +51,29 @@ export function RevisionPicker() {
           return (
             <DropdownMenuItem
               key={revision.id}
-              onSelect={() => requestRevisionLoad(revision.id)}
-              className={cn('flex flex-col items-start gap-0.5 cursor-pointer', isLoaded && 'bg-accent')}
+              onClick={() => void requestRevisionLoad(revision.id)}
+              className={cn(
+                'flex flex-col items-start gap-0.5 cursor-pointer',
+                isLoaded && 'bg-accent'
+              )}
             >
-              <span className="flex items-center gap-1.5 w-full">
-                <span className="font-medium text-xs">v{versionN}</span>
-                <span className="text-xs text-muted-foreground">· {authorLabel}</span>
+              <span className='flex items-center gap-1.5 w-full'>
+                <span className='font-medium text-xs'>v{versionN}</span>
+                <span className='text-xs text-muted-foreground'>
+                  · {authorLabel}
+                </span>
                 {isDraft && (
-                  <span className="ml-auto text-[10px] text-muted-foreground border rounded px-1">draft</span>
+                  <span className='ml-auto text-[10px] text-muted-foreground border rounded px-1'>
+                    draft
+                  </span>
                 )}
                 {isCurrent && !isDraft && (
-                  <span className="ml-auto text-[10px] text-primary border border-primary/30 rounded px-1">current</span>
+                  <span className='ml-auto text-[10px] text-primary border border-primary/30 rounded px-1'>
+                    current
+                  </span>
                 )}
               </span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className='text-[10px] text-muted-foreground'>
                 {formatTimestamp(revision.created_at)}
               </span>
             </DropdownMenuItem>

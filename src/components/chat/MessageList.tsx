@@ -8,7 +8,7 @@ import { ArtifactRevisionCard } from './ArtifactRevisionCard'
 
 function MessageListEmpty() {
   return (
-    <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+    <div className='flex-1 flex items-center justify-center text-muted-foreground text-sm'>
       Start a conversation below.
     </div>
   )
@@ -16,15 +16,15 @@ function MessageListEmpty() {
 
 function StreamingBubble({ content }: { content: string }) {
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[80%] rounded-lg px-3 py-2 text-sm bg-muted text-foreground">
+    <div className='flex justify-start'>
+      <div className='max-w-[80%] rounded-lg px-3 py-2 text-sm bg-muted text-foreground'>
         {content ? (
-          <p className="whitespace-pre-wrap wrap-break-word m-0">{content}</p>
+          <p className='whitespace-pre-wrap wrap-break-word m-0'>{content}</p>
         ) : (
-          <span className="flex gap-1 items-center h-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]" />
+          <span className='flex gap-1 items-center h-5'>
+            <span className='w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]' />
+            <span className='w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]' />
+            <span className='w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]' />
           </span>
         )}
       </div>
@@ -37,7 +37,7 @@ export function MessageList() {
   const messages = useMessageStore((s) => s.messages)
   const isStreaming = useMessageStore((s) => s.isStreaming)
   const streamingContent = useMessageStore((s) => s.streamingContent)
-  const activeRevisionId = useArtifactStore((s) => s.activeRevisionId)
+  const loadedRevisionId = useArtifactStore((s) => s.loadedRevisionId)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const thread = buildThread(messages)
@@ -50,7 +50,7 @@ export function MessageList() {
   if (status === 'loading') return <MessageListSkeleton />
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-3 min-h-0">
+    <div className='flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-3 min-h-0'>
       {thread.length === 0 && status === 'ready' && <MessageListEmpty />}
 
       {thread.map((item) => {
@@ -60,7 +60,7 @@ export function MessageList() {
             <ArtifactRevisionCard
               key={revisionId ?? item.data.id}
               message={item.data}
-              isActive={!!revisionId && revisionId === activeRevisionId}
+              isActive={!!revisionId && revisionId === loadedRevisionId}
             />
           )
         }

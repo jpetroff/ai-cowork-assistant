@@ -6,25 +6,20 @@ import type { Message } from '@/lib/db/types'
 
 // ── Mock artifact store ────────────────────────────────────────────────────────
 
-const { mockGetArtifactRevisionMeta, mockRequestRevisionLoad, storeState } =
-  vi.hoisted(() => {
-    const mockGetArtifactRevisionMeta = vi.fn()
-    const mockRequestRevisionLoad = vi.fn()
+const { mockRequestRevisionLoad, storeState } = vi.hoisted(() => {
+  const mockRequestRevisionLoad = vi.fn()
 
-    return {
-      mockGetArtifactRevisionMeta,
-      mockRequestRevisionLoad,
-      storeState: {
-        requestRevisionLoad: mockRequestRevisionLoad,
-        getArtifactRevisionMeta: mockGetArtifactRevisionMeta,
-      },
-    }
-  })
-
-const revisionMeta = {
-  artifact: { id: 'art-1', title: 'My Document' },
-  revision: { id: 'rev-1' },
-}
+  return {
+    mockRequestRevisionLoad,
+    storeState: {
+      requestRevisionLoad: mockRequestRevisionLoad,
+      artifact: { id: 'art-1', title: 'My Document' } as {
+        id: string
+        title: string | null
+      } | null,
+    },
+  }
+})
 
 vi.mock('@/stores/artifactStore', () => ({
   useArtifactStore: (selector: (s: typeof storeState) => unknown) =>
@@ -60,7 +55,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
-  mockGetArtifactRevisionMeta.mockReturnValue(revisionMeta)
+  storeState.artifact = { id: 'art-1', title: 'My Document' }
 })
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -74,9 +69,6 @@ describe('ArtifactRevisionCard', () => {
       />
     )
     expect(screen.getByText('My Document')).toBeDefined()
-    expect(mockGetArtifactRevisionMeta).toHaveBeenCalledWith('art-1', {
-      revisionId: 'rev-1',
-    })
   })
 
   it('renders "You" author label for user revision', () => {
@@ -152,14 +144,15 @@ describe('ArtifactRevisionCard', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('returns null when artifact revision metadata is not loaded', () => {
-    mockGetArtifactRevisionMeta.mockReturnValue(null)
-    const { container } = render(
+  it('renders fallback title when artifact revision metadata is not loaded', () => {
+    storeState.artifact = null
+    render(
       <ArtifactRevisionCard
         message={makeSystemMessage('rev-1', 'user')}
         isActive={false}
       />
     )
-    expect(container.firstChild).toBeNull()
+    expect(screen.getByText('Untitled')).toBeDefined()
+    expect(screen.getByRole('button', { name: /load/i })).toBeDefined()
   })
 })

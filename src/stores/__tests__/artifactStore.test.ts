@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import type { Artifact, ArtifactRevision } from '@/lib/db/types'
+import type { Artifact, ArtifactRevision, Conversation } from '@/lib/db/types'
 
 // ── Mock Tauri invoke ──────────────────────────────────────────────────────────
 
@@ -23,22 +23,29 @@ vi.mock('@/lib/db/repositories/documents', () => ({
 }))
 
 const mockCreateRevision = vi.fn<(...args: unknown[]) => Promise<string>>()
-const mockListRevisions = vi.fn<() => Promise<ArtifactRevision[]>>()
+const mockGetRevision =
+  vi.fn<(...args: unknown[]) => Promise<ArtifactRevision | null>>()
+const mockListRevisions =
+  vi.fn<(...args: unknown[]) => Promise<ArtifactRevision[]>>()
 const mockUpdateRevisionContent = vi.fn<(...args: unknown[]) => Promise<void>>()
 const mockSealRevision = vi.fn<(...args: unknown[]) => Promise<void>>()
 
 vi.mock('@/lib/db/repositories/revisions', () => ({
   createRevision: (...args: unknown[]) => mockCreateRevision(...args),
-  listRevisions: () => mockListRevisions(),
+  getRevision: (...args: unknown[]) => mockGetRevision(...args),
+  listRevisions: (...args: unknown[]) => mockListRevisions(...args),
   updateRevisionContent: (...args: unknown[]) =>
     mockUpdateRevisionContent(...args),
   sealRevision: (...args: unknown[]) => mockSealRevision(...args),
 }))
 
+const mockGetConversation =
+  vi.fn<(...args: unknown[]) => Promise<Conversation | null>>()
 const mockSetConversationActiveArtifact =
   vi.fn<(...args: unknown[]) => Promise<void>>()
 
 vi.mock('@/lib/db/repositories/conversations', () => ({
+  getConversation: (...args: unknown[]) => mockGetConversation(...args),
   setConversationActiveArtifact: (...args: unknown[]) =>
     mockSetConversationActiveArtifact(...args),
 }))
@@ -76,6 +83,18 @@ function makeArtifact(overrides: Partial<Artifact> = {}): Artifact {
   }
 }
 
+function makeConversation(overrides: Partial<Conversation> = {}): Conversation {
+  return {
+    id: 'conv-1',
+    project_id: 'proj-1',
+    title: null,
+    active_artifact_id: 'art-1',
+    created_at: 1000,
+    updated_at: 1000,
+    ...overrides,
+  }
+}
+
 function makeRevision(
   overrides: Partial<ArtifactRevision> = {}
 ): ArtifactRevision {
@@ -98,7 +117,8 @@ function seedStore(artifact: Artifact, revisions: ArtifactRevision[]) {
     status: 'ready',
     artifact,
     headRevision: head ?? null,
-    activeRevisionId: head?.id ?? null,
+    loadedRevisionId: head?.id ?? null,
+    editableRevisionId: head?.id ?? null,
     loadedContent: head?.content ?? '',
     editorKey: head?.id ?? 'seed',
     revisions,
@@ -116,6 +136,8 @@ beforeEach(() => {
   mockUpdateArtifact.mockResolvedValue(undefined)
   mockUpdateRevisionContent.mockResolvedValue(undefined)
   mockSealRevision.mockResolvedValue(undefined)
+  mockGetRevision.mockResolvedValue(null)
+  mockGetConversation.mockResolvedValue(makeConversation())
   mockSetConversationActiveArtifact.mockResolvedValue(undefined)
   mockAddSystemRevisionMessage.mockResolvedValue('sys-msg-1')
 })
@@ -162,15 +184,20 @@ describe('save chain', () => {
     })
   })
 
-  it('5: null activeRevisionId creates a new user-draft revision', async () => {
+  it('5: null editableRevisionId creates a new user-draft revision', async () => {
     const artifact = makeArtifact({ current_revision_id: null })
     seedStore(artifact, [])
-    useArtifactStore.setState({ activeRevisionId: null, headRevision: null })
+    useArtifactStore.setState({
+      loadedRevisionId: null,
+      editableRevisionId: null,
+      headRevision: null,
+    })
     mockCreateRevision.mockResolvedValue('rev-first')
     await useArtifactStore.getState().save('first content')
     expect(mockCreateRevision).toHaveBeenCalled()
     expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
-    expect(useArtifactStore.getState().activeRevisionId).toBe('rev-first')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-first')
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-first')
   })
 
   it('creates a new user draft instead of editing an unsealed AI revision in place', async () => {
@@ -185,16 +212,57 @@ describe('save chain', () => {
     expect(mockCreateRevision).toHaveBeenCalledWith(
       expect.objectContaining({ author: 'user', content: 'user edit' })
     )
-    expect(useArtifactStore.getState().activeRevisionId).toBe('rev-user-draft')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-user-draft')
+    expect(useArtifactStore.getState().editableRevisionId).toBe(
+      'rev-user-draft'
+    )
   })
 
-  it('6: after draft creation activeRevisionId is updated to new draft id', async () => {
+  it('6: after draft creation loaded/editable ids are updated to new draft id', async () => {
     const artifact = makeArtifact()
     const sealedRev = makeRevision({ message_id: 'msg-1' })
     seedStore(artifact, [sealedRev])
     mockCreateRevision.mockResolvedValue('rev-new')
     await useArtifactStore.getState().save('forked')
-    expect(useArtifactStore.getState().activeRevisionId).toBe('rev-new')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-new')
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-new')
+  })
+
+  it('creates a new draft when saving from a loaded historical revision', async () => {
+    const artifact = makeArtifact({ current_revision_id: 'rev-2' })
+    const rev1 = makeRevision({
+      id: 'rev-1',
+      content: 'historical',
+      message_id: 'msg-1',
+    })
+    const rev2 = makeRevision({
+      id: 'rev-2',
+      content: 'head',
+      message_id: null,
+    })
+    seedStore(artifact, [rev1, rev2])
+    useArtifactStore.setState({
+      loadedRevisionId: 'rev-1',
+      editableRevisionId: null,
+      loadedContent: 'historical',
+      editorKey: 'fresh-draft-id',
+    })
+    mockCreateRevision.mockResolvedValue('rev-from-history')
+
+    await useArtifactStore.getState().save('historical edit')
+
+    expect(mockCreateRevision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        author: 'user',
+        content: 'historical edit',
+      })
+    )
+    expect(useArtifactStore.getState().loadedRevisionId).toBe(
+      'rev-from-history'
+    )
+    expect(useArtifactStore.getState().editableRevisionId).toBe(
+      'rev-from-history'
+    )
   })
 })
 
@@ -274,6 +342,35 @@ describe('sealForSend', () => {
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(result?.revisionId).toBe('rev-1')
   })
+
+  it('returns the loaded historical revision when the editor is detached from head', async () => {
+    const artifact = makeArtifact({ current_revision_id: 'rev-2' })
+    const historical = makeRevision({
+      id: 'rev-1',
+      message_id: 'msg-1',
+      content: 'historical content',
+    })
+    const head = makeRevision({
+      id: 'rev-2',
+      message_id: 'msg-2',
+      content: 'head content',
+    })
+    seedStore(artifact, [historical, head])
+    useArtifactStore.setState({
+      loadedRevisionId: 'rev-1',
+      editableRevisionId: null,
+    })
+
+    const result = await useArtifactStore.getState().sealForSend()
+
+    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      artifactId: 'art-1',
+      revisionId: 'rev-1',
+      content: 'historical content',
+    })
+  })
 })
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -296,11 +393,12 @@ describe('loadForConversation', () => {
       'art-new'
     )
     expect(useArtifactStore.getState().artifact?.id).toBe('art-new')
-    expect(useArtifactStore.getState().activeRevisionId).toBeNull()
+    expect(useArtifactStore.getState().loadedRevisionId).toBeNull()
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
     expect(useArtifactStore.getState().headRevision).toBeNull()
   })
 
-  it('loads existing artifact and sets activeRevisionId', async () => {
+  it('loads existing artifact and sets loaded/editable revision ids', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     mockListArtifacts.mockResolvedValue([artifact])
@@ -309,12 +407,42 @@ describe('loadForConversation', () => {
     await useArtifactStore.getState().loadForConversation('conv-1')
 
     expect(useArtifactStore.getState().artifact?.id).toBe('art-1')
-    expect(useArtifactStore.getState().activeRevisionId).toBe('rev-1')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-1')
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-1')
+  })
+
+  it('honors conversations.active_artifact_id before updated_at fallback', async () => {
+    const activeArtifact = makeArtifact({
+      id: 'art-active',
+      current_revision_id: 'rev-active',
+      updated_at: 1000,
+    })
+    const newerArtifact = makeArtifact({
+      id: 'art-newer',
+      current_revision_id: 'rev-newer',
+      updated_at: 2000,
+    })
+    const activeRevision = makeRevision({
+      id: 'rev-active',
+      artifact_id: 'art-active',
+      content: 'active doc',
+    })
+    mockGetConversation.mockResolvedValue(
+      makeConversation({ active_artifact_id: 'art-active' })
+    )
+    mockListArtifacts.mockResolvedValue([newerArtifact, activeArtifact])
+    mockListRevisions.mockResolvedValue([activeRevision])
+
+    await useArtifactStore.getState().loadForConversation('conv-1')
+
+    expect(mockListRevisions).toHaveBeenCalledWith('art-active')
+    expect(useArtifactStore.getState().artifact?.id).toBe('art-active')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-active')
   })
 })
 
 describe('applyAiRevision', () => {
-  it('inserts ai revision, creates system message with "ai", seals revision, sets activeRevisionId', async () => {
+  it('inserts ai revision, creates system message with "ai", seals revision, sets loaded/editable ids', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     seedStore(artifact, [rev])
@@ -333,12 +461,13 @@ describe('applyAiRevision', () => {
     )
     expect(mockSealRevision).toHaveBeenCalledWith('rev-ai', 'sys-ai')
     expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-ai')
-    expect(useArtifactStore.getState().activeRevisionId).toBe('rev-ai')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-ai')
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-ai')
   })
 })
 
 describe('requestRevisionLoad', () => {
-  it('loading head revision keeps activeRevisionId pointing to head', async () => {
+  it('loading head revision keeps loaded/editable ids pointing to head', async () => {
     const artifact = makeArtifact({ current_revision_id: 'rev-2' })
     const rev1 = makeRevision({
       id: 'rev-1',
@@ -350,12 +479,13 @@ describe('requestRevisionLoad', () => {
 
     await useArtifactStore.getState().requestRevisionLoad('rev-2')
 
-    expect(useArtifactStore.getState().activeRevisionId).toBe('rev-2')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-2')
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-2')
     expect(useArtifactStore.getState().loadedContent).toBe('v2')
     expect(useArtifactStore.getState().status).toBe('ready')
   })
 
-  it('loading non-head revision sets activeRevisionId to null (detaches for new draft on edit)', async () => {
+  it('loading non-head revision keeps it loaded but detaches editing for a new draft', async () => {
     const artifact = makeArtifact({ current_revision_id: 'rev-2' })
     const rev1 = makeRevision({
       id: 'rev-1',
@@ -367,14 +497,46 @@ describe('requestRevisionLoad', () => {
 
     await useArtifactStore.getState().requestRevisionLoad('rev-1')
 
-    expect(useArtifactStore.getState().activeRevisionId).toBeNull()
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-1')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
     expect(useArtifactStore.getState().loadedContent).toBe('v1')
     expect(useArtifactStore.getState().status).toBe('ready')
+  })
+
+  it('loading a revision from another artifact persists that artifact as active', async () => {
+    const currentArtifact = makeArtifact({ id: 'art-current' })
+    const currentRevision = makeRevision({
+      id: 'rev-current',
+      artifact_id: 'art-current',
+    })
+    const targetArtifact = makeArtifact({
+      id: 'art-target',
+      current_revision_id: 'rev-target',
+    })
+    const targetRevision = makeRevision({
+      id: 'rev-target',
+      artifact_id: 'art-target',
+      content: 'target content',
+    })
+    seedStore(currentArtifact, [currentRevision])
+    mockGetRevision.mockResolvedValue(targetRevision)
+    mockGetArtifact.mockResolvedValue(targetArtifact)
+    mockListRevisions.mockResolvedValue([targetRevision])
+
+    await useArtifactStore.getState().requestRevisionLoad('rev-target')
+
+    expect(mockSetConversationActiveArtifact).toHaveBeenCalledWith(
+      'conv-1',
+      'art-target'
+    )
+    expect(useArtifactStore.getState().artifact?.id).toBe('art-target')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-target')
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-target')
   })
 })
 
 describe('createNewArtifact', () => {
-  it('creates artifact with no revision, sets activeRevisionId to null', async () => {
+  it('creates artifact with no revision, clears loaded/editable ids', async () => {
     mockCreateArtifact.mockResolvedValue('art-new')
     mockGetArtifact.mockResolvedValue(
       makeArtifact({ id: 'art-new', current_revision_id: null })
@@ -387,7 +549,8 @@ describe('createNewArtifact', () => {
       'art-new'
     )
     expect(mockCreateRevision).not.toHaveBeenCalled()
-    expect(useArtifactStore.getState().activeRevisionId).toBeNull()
+    expect(useArtifactStore.getState().loadedRevisionId).toBeNull()
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
     expect(useArtifactStore.getState().headRevision).toBeNull()
   })
 })
@@ -434,6 +597,8 @@ describe('system message integration — send flow', () => {
     expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-1')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
   })
 
   it('9.11: AI responds with artifact content — system message created with "ai", revision sealed', async () => {

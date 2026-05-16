@@ -29,17 +29,16 @@ export function ArtifactRevisionCard({
 }: ArtifactRevisionCardProps) {
   const meta = parseRevisionMetadata(message)
   const requestRevisionLoad = useArtifactStore((s) => s.requestRevisionLoad)
-  const revisionMeta = useArtifactStore((s) =>
-    meta?.artifactId
-      ? s.getArtifactRevisionMeta(meta.artifactId, {
-          revisionId: meta.revisionId,
-        })
+  const loadedArtifactTitle = useArtifactStore((s) =>
+    meta?.artifactId && s.artifact?.id === meta.artifactId
+      ? s.artifact.title
       : null
   )
 
-  if (!meta || !revisionMeta) return null
+  if (!meta) return null
 
   const authorLabel = meta.author === 'ai' ? 'AI' : 'You'
+  const artifactTitle = loadedArtifactTitle ?? 'Untitled'
 
   return (
     <div className='flex justify-center' data-revision-id={meta.revisionId}>
@@ -56,9 +55,7 @@ export function ArtifactRevisionCard({
       >
         <FileText className='size-4 text-muted-foreground shrink-0' />
         <div className='flex-1 min-w-0'>
-          <p className='text-xs font-medium truncate'>
-            {revisionMeta.artifact.title ?? 'Untitled'}
-          </p>
+          <p className='text-xs font-medium truncate'>{artifactTitle}</p>
           <p className='text-[10px] text-muted-foreground'>
             from {formatTime(message.created_at)}{' '}
             {formatDate(message.created_at)} · {authorLabel}

@@ -13,7 +13,10 @@ import {
   updateRevisionContent,
   sealRevision,
 } from '@/lib/db/repositories/revisions'
-import { setConversationActiveArtifact } from '@/lib/db/repositories/conversations'
+import {
+  getConversation,
+  setConversationActiveArtifact,
+} from '@/lib/db/repositories/conversations'
 import type { Artifact, ArtifactRevision } from '@/lib/db/types'
 import type { SealResult } from '@/lib/types'
 import { console_if } from '@/lib/logger'
@@ -47,12 +50,10 @@ interface ArtifactState {
   status: StoreStatus
   artifact: Artifact | null
   headRevision: ArtifactRevision | null
-  /**
-   * The revision ID the editor is currently persisting to.
-   * null = no revision exists yet (new document) or viewing a historical revision
-   * (next save will create a new user-draft revision).
-   */
-  activeRevisionId: string | null
+  /** @property loadedRevisionId - revision currently shown in the editor and highlighted in chat/history */
+  loadedRevisionId: string | null
+  /** @property editableRevisionId - revision safe to persist in place; null means next save creates a user draft */
+  editableRevisionId: string | null
   /** The content to initialize the editor with on mount. Owned by the store; editor owns its own live state. */
   loadedContent: string
   /** Changes when the editor should remount with fresh content (e.g. AI revision, history load). */
@@ -73,12 +74,12 @@ interface ArtifactActions {
    */
   loadForConversation: (conversationId: string) => Promise<void>
   /**
-   * Persist content from the editor. Routes through the save chain based on activeRevisionId:
+   * Persist content from the editor. Routes through the save chain based on editableRevisionId:
    * - status !== 'ready' → silently discarded (guards transition saves from unmount cleanup)
    * - isSaving → silently discarded
-   * - activeRevisionId === null → creates a new user-draft revision (first save or historical fork)
-   * - activeRevisionId === headRevision.id && isDraft → _persistToHead
-   * - activeRevisionId === headRevision.id && sealed → _createDraftThenPersist
+   * - editableRevisionId === null → creates a new user-draft revision (first save or historical fork)
+   * - editableRevisionId === headRevision.id && isDraft → _persistToHead
+   * - editableRevisionId === headRevision.id && sealed → _createDraftThenPersist
    */
   save: (content: string) => Promise<void>
   /**
@@ -96,8 +97,9 @@ interface ArtifactActions {
    * Load a revision into the editor.
    * - Flushes any pending save and waits for it to complete.
    * - Sets status to 'loading' (drops saves from unmount cleanup).
-   * - If the revision is HEAD: sets activeRevisionId = revisionId.
-   * - If historical: sets activeRevisionId = null (next edit forks a new draft).
+   * - Always sets loadedRevisionId = revisionId.
+   * - If the revision is HEAD: sets editableRevisionId = revisionId.
+   * - If historical: sets editableRevisionId = null (next edit forks a new draft).
    */
   requestRevisionLoad: (revisionId: string) => Promise<void>
   /**
@@ -135,8 +137,9 @@ interface ArtifactActions {
   /**
    * Set editor-relevant state and transition to 'ready'.
    * Shared between loadForConversation and requestRevisionLoad.
-   * - isHead=true  → activeRevisionId = revision.id (editor persists to this revision)
-   * - isHead=false → activeRevisionId = null (next save forks a new draft)
+   * - loadedRevisionId always tracks the mounted revision.
+   * - isHead=true  → editableRevisionId = revision.id (editor persists to this revision)
+   * - isHead=false → editableRevisionId = null (next save forks a new draft)
    */
   _mountRevision: (revision: ArtifactRevision | null, isHead: boolean) => void
 }
@@ -145,7 +148,8 @@ const INITIAL_STATE: ArtifactState = {
   status: 'loading',
   artifact: null,
   headRevision: null,
-  activeRevisionId: null,
+  loadedRevisionId: null,
+  editableRevisionId: null,
   loadedContent: '',
   editorKey: null,
   revisions: [],
@@ -170,7 +174,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({ ...INITIAL_STATE, status: 'loading' })
 
       try {
-        let artifacts = await listArtifacts(conversationId)
+        const [artifacts, conversation] = await Promise.all([
+          listArtifacts(conversationId),
+          getConversation(conversationId),
+        ])
         let artifact: Artifact
 
         if (artifacts.length === 0) {
@@ -182,9 +189,11 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
           await setConversationActiveArtifact(conversationId, artifactId)
           artifact = (await getArtifact(artifactId))!
         } else {
-          artifact = artifacts.reduce((prev, cur) =>
-            cur.updated_at > prev.updated_at ? cur : prev
-          )
+          artifact =
+            artifacts.find((a) => a.id === conversation?.active_artifact_id) ??
+            artifacts.reduce((prev, cur) =>
+              cur.updated_at > prev.updated_at ? cur : prev
+            )
         }
 
         const revisions = await listRevisions(artifact.id)
@@ -220,7 +229,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       let newRevisionId = crypto.randomUUID()
 
       set({
-        activeRevisionId: isHead ? (revision?.id ?? null) : null,
+        loadedRevisionId: revision?.id ?? null,
+        editableRevisionId: isHead ? (revision?.id ?? null) : null,
         loadedContent: revision?.content ?? '',
         editorKey: revision
           ? isHead
@@ -266,7 +276,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({
         artifact: updatedArtifact,
         headRevision: newRevision,
-        activeRevisionId: revisionId,
+        loadedRevisionId: revisionId,
+        editableRevisionId: revisionId,
         revisions: [...revisions, newRevision],
       })
 
@@ -278,7 +289,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
     async save(content) {
       const {
         status,
-        activeRevisionId,
+        editableRevisionId,
         headRevision,
         isSaving,
         artifact,
@@ -306,22 +317,22 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         // begin actual save
         console_if('EDITOR').log(
           '[EDITOR]',
-          `activeRevisionId=${activeRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`
+          `editableRevisionId=${editableRevisionId} revisions.length=${revisions.length} headRevision=${headRevision}`
         )
 
-        if (activeRevisionId === null) {
+        if (editableRevisionId === null) {
           await get()._createUserDraft(content)
         } else if (
-          activeRevisionId === headRevision?.id &&
+          editableRevisionId === headRevision?.id &&
           canEditInPlace(headRevision)
         ) {
           // HEAD is a user draft — persist in place
           await get()._persistToHead(content)
-        } else if (activeRevisionId === headRevision?.id) {
+        } else if (editableRevisionId === headRevision?.id) {
           // HEAD is sealed — copy-on-write: create new draft
           await get()._createDraftThenPersist(content)
         } else {
-          // activeRevisionId doesn't match head — shouldn't happen in normal flow,
+          // editableRevisionId doesn't match head — shouldn't happen in normal flow,
           // treat as a new draft to avoid data loss
           await get()._createDraftThenPersist(content)
         }
@@ -358,7 +369,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
     },
 
     async _createDraftThenPersist(content: string) {
-      // _createUserDraft sets activeRevisionId to the new draft's id
+      // _createUserDraft sets loadedRevisionId/editableRevisionId to the new draft's id
       await get()._createUserDraft(content)
       await get()._syncToDiskIfLinked(content)
     },
@@ -391,8 +402,29 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
      * - !isDraft && !changed → _reuseCurrentHead
      */
     async sealForSend() {
-      const { headRevision, revisions, artifact } = get()
+      const {
+        editableRevisionId,
+        headRevision,
+        loadedRevisionId,
+        revisions,
+        artifact,
+      } = get()
       if (!headRevision || !artifact) return null
+
+      const loadedRevision = loadedRevisionId
+        ? revisions.find((r) => r.id === loadedRevisionId)
+        : null
+      if (
+        editableRevisionId === null &&
+        loadedRevision &&
+        loadedRevision.id !== headRevision.id
+      ) {
+        return {
+          artifactId: artifact.id,
+          revisionId: loadedRevision.id,
+          content: loadedRevision.content,
+        }
+      }
 
       const isDraft = canEditInPlace(headRevision)
       const changed = hasContentChangedSinceLastSeal(headRevision, revisions)
@@ -447,6 +479,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       const lastSealed = findLastSealedRevision(revisions)
       const target = lastSealed ?? headRevision
       if (!target) return null
+      set({
+        loadedRevisionId: target.id,
+        editableRevisionId: target.id === headRevision?.id ? target.id : null,
+      })
       return {
         artifactId: artifact.id,
         revisionId: target.id,
@@ -487,7 +523,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({
         artifact: updatedArtifact,
         headRevision: newRevision,
-        activeRevisionId: revisionId,
+        loadedRevisionId: revisionId,
+        editableRevisionId: revisionId,
         revisions: [...revisions, newRevision],
       })
 
@@ -543,7 +580,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({
         artifact: updatedArtifact,
         headRevision: newRevision,
-        activeRevisionId: revisionId,
+        loadedRevisionId: revisionId,
+        editableRevisionId: revisionId,
         loadedContent: content,
         editorKey: revisionId,
         revisions: [...revisions, newRevision],
@@ -590,6 +628,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
           headRevision: targetHead,
           revisions: revisionsAsc,
         })
+        await setConversationActiveArtifact(
+          targetArtifact.conversation_id,
+          targetArtifact.id
+        )
       }
 
       const { headRevision } = get()
@@ -607,7 +649,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       set({
         artifact,
         headRevision: null,
-        activeRevisionId: null,
+        loadedRevisionId: null,
+        editableRevisionId: null,
         loadedContent: '',
         editorKey: crypto.randomUUID(),
         revisions: [],
