@@ -51,6 +51,15 @@ const INITIAL_STATE: ChatSessionState = {
   error: null,
 }
 
+function getThreadRevisionReferences() {
+  return useMessageStore.getState().messages.flatMap((message) => {
+    const meta = parseRevisionMetadata(message)
+    return meta?.artifactId
+      ? [{ artifactId: meta.artifactId, revisionId: meta.revisionId }]
+      : []
+  })
+}
+
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 export const useChatSessionStore = create<
@@ -80,6 +89,9 @@ export const useChatSessionStore = create<
       await useArtifactStore
         .getState()
         .ensureDocumentThreadMessage(get().ensureRevisionMessage)
+      await useArtifactStore
+        .getState()
+        .loadArtifactRevisionMetas(getThreadRevisionReferences())
       set({ status: 'ready' })
       console_if('CHAT_SESSION').log('[CHAT_SESSION] load:ready', {
         projectId,
@@ -102,6 +114,9 @@ export const useChatSessionStore = create<
     await useArtifactStore
       .getState()
       .ensureDocumentThreadMessage(get().ensureRevisionMessage)
+    await useArtifactStore
+      .getState()
+      .loadArtifactRevisionMetas(getThreadRevisionReferences())
   },
 
   /**

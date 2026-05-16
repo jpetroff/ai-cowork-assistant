@@ -545,6 +545,66 @@ describe('requestRevisionLoad', () => {
   })
 })
 
+describe('artifact revision metadata cache', () => {
+  it('loads thread metadata for revisions outside the active artifact', async () => {
+    const currentArtifact = makeArtifact({
+      id: 'art-current',
+      title: 'Current Document',
+    })
+    const currentRevision = makeRevision({
+      id: 'rev-current',
+      artifact_id: 'art-current',
+    })
+    const targetArtifact = makeArtifact({
+      id: 'art-target',
+      title: 'Target Document',
+      current_revision_id: 'rev-target',
+    })
+    const targetRevision = makeRevision({
+      id: 'rev-target',
+      artifact_id: 'art-target',
+      content: 'target content',
+    })
+    seedStore(currentArtifact, [currentRevision])
+    mockGetRevision.mockResolvedValue(targetRevision)
+    mockGetArtifact.mockResolvedValue(targetArtifact)
+
+    await useArtifactStore
+      .getState()
+      .loadArtifactRevisionMetas([
+        { artifactId: 'art-target', revisionId: 'rev-target' },
+      ])
+
+    const meta = useArtifactStore
+      .getState()
+      .getArtifactRevisionMeta('art-target', { revisionId: 'rev-target' })
+    expect(mockGetRevision).toHaveBeenCalledWith('rev-target')
+    expect(mockGetArtifact).toHaveBeenCalledWith('art-target')
+    expect(meta?.artifact.title).toBe('Target Document')
+    expect(meta?.revision.id).toBe('rev-target')
+    expect('content' in (meta?.revision ?? {})).toBe(false)
+  })
+
+  it('skips database reads for cached thread metadata', async () => {
+    const artifact = makeArtifact({ title: 'Cached Document' })
+    const revision = makeRevision()
+    seedStore(artifact, [revision])
+
+    await useArtifactStore
+      .getState()
+      .loadArtifactRevisionMetas([{ artifactId: 'art-1', revisionId: 'rev-1' }])
+
+    expect(mockGetRevision).not.toHaveBeenCalled()
+    expect(mockGetArtifact).not.toHaveBeenCalled()
+    expect(
+      useArtifactStore
+        .getState()
+        .getArtifactRevisionMeta('art-1', { revisionId: 'rev-1' })?.artifact
+        .title
+    ).toBe('Cached Document')
+  })
+})
+
 describe('createNewArtifact', () => {
   it('creates artifact with no revision, clears loaded/editable ids', async () => {
     mockCreateArtifact.mockResolvedValue('art-new')

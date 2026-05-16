@@ -20,6 +20,7 @@ const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
       loadForConversation: vi.fn(),
       createNewArtifact: vi.fn(),
       ensureDocumentThreadMessage: vi.fn(),
+      loadArtifactRevisionMetas: vi.fn(),
       sealForSend: vi.fn(),
       applyAiRevision: vi.fn(),
     },
@@ -83,6 +84,7 @@ beforeEach(() => {
   artifactApi.loadForConversation.mockResolvedValue(undefined)
   artifactApi.createNewArtifact.mockResolvedValue(undefined)
   artifactApi.ensureDocumentThreadMessage.mockResolvedValue(undefined)
+  artifactApi.loadArtifactRevisionMetas.mockResolvedValue(undefined)
   artifactApi.sealForSend.mockResolvedValue(null)
   artifactApi.applyAiRevision.mockResolvedValue(undefined)
   sidecarApi.sendChatRequest.mockResolvedValue({
@@ -103,6 +105,7 @@ describe('useChatSessionStore', () => {
     expect(artifactApi.ensureDocumentThreadMessage).toHaveBeenCalledWith(
       useChatSessionStore.getState().ensureRevisionMessage
     )
+    expect(artifactApi.loadArtifactRevisionMetas).toHaveBeenCalledWith([])
     expect(useChatSessionStore.getState().status).toBe('ready')
     expect(useChatSessionStore.getState().activeProjectId).toBe('proj-1')
   })
@@ -114,6 +117,7 @@ describe('useChatSessionStore', () => {
     expect(artifactApi.ensureDocumentThreadMessage).toHaveBeenCalledWith(
       useChatSessionStore.getState().ensureRevisionMessage
     )
+    expect(artifactApi.loadArtifactRevisionMetas).toHaveBeenCalledWith([])
   })
 
   it('reuses an existing revision anchor message before creating a new one', async () => {

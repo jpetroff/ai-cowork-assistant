@@ -29,16 +29,18 @@ export function ArtifactRevisionCard({
 }: ArtifactRevisionCardProps) {
   const meta = parseRevisionMetadata(message)
   const requestRevisionLoad = useArtifactStore((s) => s.requestRevisionLoad)
-  const loadedArtifactTitle = useArtifactStore((s) =>
-    meta?.artifactId && s.artifact?.id === meta.artifactId
-      ? s.artifact.title
-      : null
-  )
+  const artifactTitle = useArtifactStore((s) => {
+    if (!meta?.artifactId) return 'Untitled'
+    return (
+      s.getArtifactRevisionMeta(meta.artifactId, {
+        revisionId: meta.revisionId,
+      })?.artifact.title ?? 'Untitled'
+    )
+  })
 
   if (!meta) return null
 
   const authorLabel = meta.author === 'ai' ? 'AI' : 'You'
-  const artifactTitle = loadedArtifactTitle ?? 'Untitled'
 
   return (
     <div className='flex justify-center' data-revision-id={meta.revisionId}>

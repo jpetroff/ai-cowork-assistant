@@ -35,6 +35,14 @@ type EnsureRevisionMessage = (
   artifactId: string,
   revisionId: string
 ) => Promise<string>
+type ArtifactRevisionSummary = Omit<ArtifactRevision, 'content'>
+
+/** @property artifactId - artifact referenced by a thread revision message */
+/** @property revisionId - revision referenced by a thread revision message */
+interface ArtifactRevisionMetaReference {
+  artifactId: string
+  revisionId: string
+}
 
 /** @property revisionId - specific revision to look up; defaults to head revision */
 /** @property includeContent - whether to include revision content (default: false) */
@@ -47,7 +55,7 @@ interface ArtifactRevisionMetaOptions {
 /** @property revision - revision metadata, content omitted unless includeContent is true */
 interface ArtifactRevisionMeta {
   artifact: Artifact
-  revision: Omit<ArtifactRevision, 'content'> | ArtifactRevision
+  revision: ArtifactRevisionSummary | ArtifactRevision
 }
 
 interface ArtifactState {
@@ -63,6 +71,7 @@ interface ArtifactState {
   /** Changes when the editor should remount with fresh content (e.g. AI revision, history load). */
   editorKey: string | null
   revisions: ArtifactRevision[]
+  artifactRevisionMetaByRevisionId: Record<string, ArtifactRevisionMeta>
   isSaving: boolean
   saveError: string | null
   externalChangeDetected: boolean
@@ -131,8 +140,16 @@ interface ArtifactActions {
   /** Link the artifact to a relative file path on disk. */
   linkToDisk: (relativePath: string) => Promise<void>
   /**
+   * Load lightweight artifact/revision metadata for every revision anchor visible
+   * in the thread. Cached revisions are skipped so chat can call this after each
+   * message update without causing repeated database work.
+   */
+  loadArtifactRevisionMetas: (
+    references: ArtifactRevisionMetaReference[]
+  ) => Promise<void>
+  /**
    * Look up artifact and revision metadata by artifact ID.
-   * Returns null if the artifact ID doesn't match the loaded artifact, or if no artifact is loaded.
+   * Returns null if the artifact/revision is not loaded into the editor or thread metadata cache.
    * @param artifactId - must match the currently loaded artifact
    * @param options.revisionId - specific revision to return; defaults to head revision
    * @param options.includeContent - include revision content in result (default: false)
@@ -173,9 +190,27 @@ const INITIAL_STATE: ArtifactState = {
   loadedContent: '',
   editorKey: null,
   revisions: [],
+  artifactRevisionMetaByRevisionId: {},
   isSaving: false,
   saveError: null,
   externalChangeDetected: false,
+}
+
+function toRevisionSummary(
+  revision: ArtifactRevision
+): ArtifactRevisionSummary {
+  const { content: _content, ...summary } = revision
+  return summary
+}
+
+function buildRevisionMeta(
+  artifact: Artifact,
+  revision: ArtifactRevision
+): ArtifactRevisionMeta {
+  return {
+    artifact,
+    revision: toRevisionSummary(revision),
+  }
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -233,7 +268,17 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
             null)
           : (revisionsAsc[revisionsAsc.length - 1] ?? null)
 
-        set({ artifact, headRevision, revisions: revisionsAsc })
+        set({
+          artifact,
+          headRevision,
+          revisions: revisionsAsc,
+          artifactRevisionMetaByRevisionId: Object.fromEntries(
+            revisionsAsc.map((revision) => [
+              revision.id,
+              buildRevisionMeta(artifact, revision),
+            ])
+          ),
+        })
         get()._mountRevision(headRevision, true)
         console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] load:ready', {
           conversationId,
@@ -324,6 +369,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         loadedRevisionId: revisionId,
         editableRevisionId: revisionId,
         revisions: [...revisions, newRevision],
+        artifactRevisionMetaByRevisionId: {
+          ...get().artifactRevisionMetaByRevisionId,
+          [revisionId]: buildRevisionMeta(updatedArtifact, newRevision),
+        },
       })
 
       return newRevision
@@ -417,6 +466,17 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
             ? { ...r, content, updated_at: Date.now() }
             : r
         ),
+        artifactRevisionMetaByRevisionId:
+          s.artifact && s.artifactRevisionMetaByRevisionId[headRevision.id]
+            ? {
+                ...s.artifactRevisionMetaByRevisionId,
+                [headRevision.id]: buildRevisionMeta(s.artifact, {
+                  ...headRevision,
+                  content,
+                  updated_at: Date.now(),
+                }),
+              }
+            : s.artifactRevisionMetaByRevisionId,
       }))
 
       await get()._syncToDiskIfLinked(content)
@@ -531,6 +591,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         revisions: s.revisions.map((r) =>
           r.id === headRevision.id ? sealed : r
         ),
+        artifactRevisionMetaByRevisionId: {
+          ...s.artifactRevisionMetaByRevisionId,
+          [sealed.id]: buildRevisionMeta(artifact, sealed),
+        },
       }))
 
       return {
@@ -603,6 +667,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         loadedRevisionId: revisionId,
         editableRevisionId: revisionId,
         revisions: [...revisions, newRevision],
+        artifactRevisionMetaByRevisionId: {
+          ...get().artifactRevisionMetaByRevisionId,
+          [revisionId]: buildRevisionMeta(updatedArtifact, newRevision),
+        },
       })
 
       return {
@@ -671,6 +739,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         loadedContent: content,
         editorKey: revisionId,
         revisions: [...revisions, newRevision],
+        artifactRevisionMetaByRevisionId: {
+          ...get().artifactRevisionMetaByRevisionId,
+          [revisionId]: buildRevisionMeta(updatedArtifact, newRevision),
+        },
       })
       console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] ai-revision:applied', {
         artifactId: artifact.id,
@@ -724,6 +796,15 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
           artifact: targetArtifact,
           headRevision: targetHead,
           revisions: revisionsAsc,
+          artifactRevisionMetaByRevisionId: {
+            ...get().artifactRevisionMetaByRevisionId,
+            ...Object.fromEntries(
+              revisionsAsc.map((targetRevision) => [
+                targetRevision.id,
+                buildRevisionMeta(targetArtifact, targetRevision),
+              ])
+            ),
+          },
         })
         await setConversationActiveArtifact(
           targetArtifact.conversation_id,
@@ -755,6 +836,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         loadedContent: '',
         editorKey: crypto.randomUUID(),
         revisions: [],
+        artifactRevisionMetaByRevisionId: {},
         status: 'ready',
       })
     },
@@ -797,6 +879,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
           revisions: s.revisions.map((r) =>
             r.id === headRevision.id ? sealed : r
           ),
+          artifactRevisionMetaByRevisionId: {
+            ...s.artifactRevisionMetaByRevisionId,
+            [sealed.id]: buildRevisionMeta(artifact, sealed),
+          },
         }))
       }
     },
@@ -810,8 +896,19 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       if (!artifact) return
       const effectiveTitle = title && title.trim() !== '' ? title.trim() : null
       await updateArtifact(artifact.id, { title: effectiveTitle })
+      const updatedArtifact = { ...artifact, title: effectiveTitle }
       set((s) => ({
-        artifact: s.artifact ? { ...s.artifact, title: effectiveTitle } : null,
+        artifact: s.artifact ? updatedArtifact : null,
+        artifactRevisionMetaByRevisionId: Object.fromEntries(
+          Object.entries(s.artifactRevisionMetaByRevisionId).map(
+            ([revisionId, meta]) => [
+              revisionId,
+              meta.artifact.id === artifact.id
+                ? { ...meta, artifact: updatedArtifact }
+                : meta,
+            ]
+          )
+        ),
       }))
     },
 
@@ -860,28 +957,109 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
     },
 
     /**
-     * Looks up metadata for the currently loaded artifact. Revision content is omitted
-     * by default so chat cards can inspect metadata without subscribing to large text.
+     * Loads missing thread revision metadata in a small deduped batch. The cache is
+     * keyed by revision ID because system messages already have exact revision
+     * anchors, and loaded/current revisions are added to the same cache by save,
+     * rename, load, and AI-apply paths.
+     */
+    async loadArtifactRevisionMetas(references) {
+      const uniqueReferences = new Map<string, ArtifactRevisionMetaReference>()
+      for (const reference of references) {
+        uniqueReferences.set(reference.revisionId, reference)
+      }
+
+      const missingReferences = [...uniqueReferences.values()].filter(
+        (reference) => {
+          const cached =
+            get().artifactRevisionMetaByRevisionId[reference.revisionId]
+          return !cached || cached.artifact.id !== reference.artifactId
+        }
+      )
+      if (missingReferences.length === 0) return
+
+      const artifactLoads = new Map<string, Promise<Artifact | null>>()
+      const loadArtifactForRevision = (artifactId: string) => {
+        const loadedArtifact = get().artifact
+        if (loadedArtifact?.id === artifactId) {
+          return Promise.resolve(loadedArtifact)
+        }
+        const existingLoad = artifactLoads.get(artifactId)
+        if (existingLoad) return existingLoad
+        const nextLoad = getArtifact(artifactId)
+        artifactLoads.set(artifactId, nextLoad)
+        return nextLoad
+      }
+
+      const loadedMetas = await Promise.all(
+        missingReferences.map(async (reference) => {
+          const revision =
+            get().revisions.find((r) => r.id === reference.revisionId) ??
+            (await getRevision(reference.revisionId))
+          if (!revision) return null
+
+          const revisionArtifact = await loadArtifactForRevision(
+            revision.artifact_id
+          )
+          if (!revisionArtifact) return null
+
+          return [
+            revision.id,
+            buildRevisionMeta(revisionArtifact, revision),
+          ] as const
+        })
+      )
+
+      const nextMetas = Object.fromEntries(
+        loadedMetas.filter((meta): meta is NonNullable<typeof meta> =>
+          Boolean(meta)
+        )
+      )
+      if (Object.keys(nextMetas).length === 0) return
+
+      set((s) => ({
+        artifactRevisionMetaByRevisionId: {
+          ...s.artifactRevisionMetaByRevisionId,
+          ...nextMetas,
+        },
+      }))
+    },
+
+    /**
+     * Looks up metadata from the active editor state first, then from the thread
+     * metadata cache. Revision content is omitted by default so chat cards can
+     * inspect metadata without subscribing to large text.
      */
     getArtifactRevisionMeta(artifactId, options = {}) {
-      const { artifact, headRevision, revisions } = get()
-      if (!artifact || artifact.id !== artifactId) return null
+      const {
+        artifact,
+        headRevision,
+        revisions,
+        artifactRevisionMetaByRevisionId,
+      } = get()
 
       const { revisionId, includeContent = false } = options
       let revision: ArtifactRevision | undefined
 
-      if (revisionId) {
-        revision = revisions.find((r) => r.id === revisionId)
-      } else {
-        revision = headRevision ?? undefined
+      if (artifact?.id === artifactId) {
+        if (revisionId) {
+          revision = revisions.find((r) => r.id === revisionId)
+        } else {
+          revision = headRevision ?? undefined
+        }
+
+        if (revision) {
+          const revisionOut = includeContent
+            ? revision
+            : toRevisionSummary(revision)
+          return { artifact, revision: revisionOut }
+        }
       }
 
-      if (!revision) return null
+      if (!revisionId) return null
 
-      const revisionOut = includeContent
-        ? revision
-        : (({ content: _c, ...rest }) => rest)(revision)
-      return { artifact, revision: revisionOut }
+      const cached = artifactRevisionMetaByRevisionId[revisionId]
+      if (!cached || cached.artifact.id !== artifactId) return null
+      return cached
     },
 
     /**
@@ -903,6 +1081,25 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         artifact: s.artifact
           ? { ...s.artifact, file_path: relativePath, file_hash: hash }
           : null,
+        artifactRevisionMetaByRevisionId: s.artifact
+          ? Object.fromEntries(
+              Object.entries(s.artifactRevisionMetaByRevisionId).map(
+                ([revisionId, meta]) => [
+                  revisionId,
+                  meta.artifact.id === s.artifact?.id
+                    ? {
+                        ...meta,
+                        artifact: {
+                          ...meta.artifact,
+                          file_path: relativePath,
+                          file_hash: hash,
+                        },
+                      }
+                    : meta,
+                ]
+              )
+            )
+          : s.artifactRevisionMetaByRevisionId,
       }))
     },
   })

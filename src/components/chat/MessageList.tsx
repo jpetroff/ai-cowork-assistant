@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useMessageStore } from '@/components/chat/messageStore'
 import { useArtifactStore } from '@/components/editor/artifactStore'
 import { buildThread, parseRevisionMetadata } from '@/lib/revision-utils'
@@ -38,14 +38,32 @@ export function MessageList() {
   const isStreaming = useMessageStore((s) => s.isStreaming)
   const streamingContent = useMessageStore((s) => s.streamingContent)
   const loadedRevisionId = useArtifactStore((s) => s.loadedRevisionId)
+  const loadArtifactRevisionMetas = useArtifactStore(
+    (s) => s.loadArtifactRevisionMetas
+  )
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  const thread = buildThread(messages)
+  const thread = useMemo(() => buildThread(messages), [messages])
+  const revisionReferences = useMemo(
+    () =>
+      thread.flatMap((item) => {
+        const meta = parseRevisionMetadata(item.data)
+        return meta?.artifactId
+          ? [{ artifactId: meta.artifactId, revisionId: meta.revisionId }]
+          : []
+      }),
+    [thread]
+  )
 
   // Auto-scroll to bottom when messages change or streaming updates
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [thread.length, streamingContent])
+
+  useEffect(() => {
+    if (revisionReferences.length === 0) return
+    void loadArtifactRevisionMetas(revisionReferences)
+  }, [loadArtifactRevisionMetas, revisionReferences])
 
   if (status === 'loading') return <MessageListSkeleton />
 

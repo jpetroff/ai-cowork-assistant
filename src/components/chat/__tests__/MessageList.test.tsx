@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import type { Message } from '@/lib/db/types'
 
 const { messageState, artifactState } = vi.hoisted(() => ({
@@ -13,6 +13,7 @@ const { messageState, artifactState } = vi.hoisted(() => ({
   artifactState: {
     loadedRevisionId: 'rev-loaded',
     requestRevisionLoad: vi.fn(),
+    loadArtifactRevisionMetas: vi.fn(async () => undefined),
     getArtifactRevisionMeta: vi.fn(() => ({
       artifact: { id: 'art-1', title: 'Loaded Document' },
       revision: { id: 'rev-loaded' },
@@ -55,6 +56,7 @@ afterEach(() => {
   vi.clearAllMocks()
   messageState.messages = []
   artifactState.loadedRevisionId = 'rev-loaded'
+  artifactState.loadArtifactRevisionMetas.mockClear()
 })
 
 describe('MessageList', () => {
@@ -67,5 +69,21 @@ describe('MessageList', () => {
       name: /loaded artifact revision/i,
     })
     expect(button).toBeDisabled()
+  })
+
+  it('loads metadata for all artifact revisions in the visible thread', async () => {
+    messageState.messages = [
+      makeSystemMessage('rev-1'),
+      makeSystemMessage('rev-2'),
+    ]
+
+    render(<MessageList />)
+
+    await waitFor(() => {
+      expect(artifactState.loadArtifactRevisionMetas).toHaveBeenCalledWith([
+        { artifactId: 'art-1', revisionId: 'rev-1' },
+        { artifactId: 'art-1', revisionId: 'rev-2' },
+      ])
+    })
   })
 })

@@ -17,6 +17,13 @@ const { mockRequestRevisionLoad, storeState } = vi.hoisted(() => {
         id: string
         title: string | null
       } | null,
+      getArtifactRevisionMeta: vi.fn(
+        (_artifactId: string) =>
+          null as {
+            artifact: { id: string; title: string | null }
+            revision: { id: string }
+          } | null
+      ),
     },
   }
 })
@@ -56,6 +63,14 @@ afterEach(() => {
 
 beforeEach(() => {
   storeState.artifact = { id: 'art-1', title: 'My Document' }
+  storeState.getArtifactRevisionMeta = vi.fn((artifactId: string) =>
+    storeState.artifact?.id === artifactId
+      ? {
+          artifact: storeState.artifact,
+          revision: { id: 'rev-1' },
+        }
+      : null
+  )
 })
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
