@@ -24,13 +24,25 @@ export type Type =
  */
 export type Content = string | number | null;
 /**
+ * Current artifact identifier
+ */
+export type ArtifactId = string;
+/**
+ * Current artifact revision identifier
+ */
+export type RevisionId = string;
+/**
+ * Current artifact revision content
+ */
+export type Content1 = string;
+/**
  * Message role
  */
 export type MessageRole = "user" | "assistant" | "system";
 /**
  * Message content
  */
-export type Content1 = string;
+export type Content2 = string;
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "MessageRole".
@@ -99,7 +111,7 @@ export type Error = string | null;
 /**
  * The highlighted content
  */
-export type Content2 = string;
+export type Content3 = string;
 /**
  * Content format type
  */
@@ -111,7 +123,7 @@ export type Id = string;
 /**
  * Artifact content
  */
-export type Content3 = string;
+export type Content4 = string;
 /**
  * Storage type discriminator
  */
@@ -139,11 +151,21 @@ export interface DefaultResponse {
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
+ * via the `definition` "ChatCompletionArtifactContext".
+ */
+export interface ChatCompletionArtifactContext {
+  artifact_id: ArtifactId;
+  revision_id: RevisionId;
+  content: Content1;
+  [k: string]: unknown;
+}
+/**
+ * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "ChatMessageBase".
  */
 export interface ChatMessageBase {
   role: MessageRole;
-  content: Content1;
+  content: Content2;
   [k: string]: unknown;
 }
 /**
@@ -153,6 +175,10 @@ export interface ChatMessageBase {
 export interface ChatCompletionRequest {
   message: Message;
   chat_history?: ChatHistory;
+  /**
+   * Current artifact revision context
+   */
+  artifact?: ChatCompletionArtifactContext | null;
   observability?: Observability;
   file_uploads?: FileUploads;
   working_folder?: WorkingFolder;
@@ -194,7 +220,7 @@ export interface EmbeddingProgress {
  * via the `definition` "TextHighlight".
  */
 export interface TextHighlight {
-  content: Content2;
+  content: Content3;
   type?: Type1;
   [k: string]: unknown;
 }
@@ -204,7 +230,7 @@ export interface TextHighlight {
  */
 export interface Artifact {
   id?: Id;
-  content: Content3;
+  content: Content4;
   [k: string]: unknown;
 }
 /**

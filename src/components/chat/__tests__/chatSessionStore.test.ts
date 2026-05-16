@@ -167,7 +167,8 @@ describe('useChatSessionStore', () => {
     )
     expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        conversation_id: 'conv-1',
+        message: 'hello',
+        chat_history: [],
         artifact: {
           artifact_id: 'art-1',
           revision_id: 'rev-1',

@@ -24,7 +24,8 @@ async def completion_websocket(websocket: WebSocket):
 
         handler = create_workflow(
             user_query=request.message,
-            chat_history=request.chat_history
+            chat_history=request.chat_history,
+            artifact=request.artifact,
         )
 
         async for response in handler:

@@ -55,6 +55,14 @@ class Artifact(BaseModel):
     content: str = Field(description="Artifact content")
 
 
+class ChatCompletionArtifactContext(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    artifact_id: str = Field(description="Current artifact identifier")
+    revision_id: str = Field(description="Current artifact revision identifier")
+    content: str = Field(description="Current artifact revision content")
+
+
 class KnowledgeGraphOrStorage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -79,9 +87,13 @@ class ChatCompletionRequest(BaseModel):
 
     message: str = Field(description="User message to process")
     chat_history: Sequence[ChatMessageBase] = Field(
-        default_factory=Sequence,
+        default_factory=list,
         validation_alias="chatHistory",
         description="Chat history for context",
+    )
+    artifact: Optional[ChatCompletionArtifactContext] = Field(
+        default=None,
+        description="Current artifact revision context",
     )
 
     observability: Optional[bool] = Field(

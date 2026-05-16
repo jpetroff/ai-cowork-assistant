@@ -12,6 +12,12 @@ Follow these rules and guidelines:
 User Request:
 {user_query}
 
+Chat History:
+{chat_history}
+
+Current Artifact:
+{artifact_context}
+
 Ensure you START reply ONLY with the generated artifact and NO other content. Mark the beginning of the artifact document as `|artifact|>` and the end as `<|artifact|` so it can be extracted and used separately from the answer as a standalone document.
 
 After artifact is complete, write a very short summary about your generation: 

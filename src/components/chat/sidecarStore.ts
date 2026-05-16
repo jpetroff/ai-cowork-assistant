@@ -1,15 +1,18 @@
 import { create } from 'zustand'
 import { invoke } from '@tauri-apps/api/core'
+import WebSocket, {
+  type Message as WebSocketMessage,
+} from '@tauri-apps/plugin-websocket'
 import { console_if } from '@/lib/logger'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-/** @property conversation_id - conversation receiving the assistant response */
-/** @property messages - non-system chat history sent to the sidecar */
+/** @property message - latest user message to process */
+/** @property chat_history - previous non-system chat history sent for context */
 /** @property artifact - optional artifact revision context attached to the request */
 export interface ChatCompletionRequest {
-  conversation_id: string
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  message: string
+  chat_history: Array<{ role: 'user' | 'assistant'; content: string }>
   artifact?: {
     artifact_id: string
     revision_id: string
@@ -17,15 +20,19 @@ export interface ChatCompletionRequest {
   }
 }
 
-type SidecarEvent =
-  | { type: 'chunk'; content: string }
-  | {
-      type: 'done'
-      message_id: string
-      content: string
-      artifact_content?: string
-    }
-  | { type: 'error'; message: string }
+type SidecarEvent = {
+  type:
+    | 'completion.chunk'
+    | 'completion.chunk.thinking'
+    | 'completion.response'
+    | 'error'
+    | 'event'
+    | string
+  content?: string | number | null
+  payload?: unknown
+}
+
+type SidecarContent = string | number | null | undefined
 
 /** @property messageId - assistant message ID returned by the sidecar, if any */
 /** @property content - final assistant response text */
@@ -57,6 +64,9 @@ interface SidecarActions {
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
+
+const ARTIFACT_START = '|artifact|>'
+const ARTIFACT_END = '<|artifact|'
 
 export const useSidecarStore = create<SidecarState & SidecarActions>(
   (set, get) => ({
@@ -96,75 +106,25 @@ export const useSidecarStore = create<SidecarState & SidecarActions>(
       }
 
       console_if('SIDECAR_STORE').log('[SIDECAR_STORE] stream:start', {
-        conversationId: requestBody.conversation_id,
-        messageCount: requestBody.messages.length,
+        messageLength: requestBody.message.length,
+        historyCount: requestBody.chat_history.length,
         artifactRevisionId: requestBody.artifact?.revision_id ?? null,
       })
 
       try {
-        const response = await fetch(`${sidecarUrl}/chat/completions/stream`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-
-        if (!response.body) {
-          throw new Error('No response body')
-        }
-
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-        let finalContent = ''
-        let finalMessageId: string | null = null
-        let finalArtifactContent: string | null = null
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() ?? ''
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue
-            const data = line.slice(6).trim()
-            if (data === '[DONE]') continue
-
-            try {
-              const event: SidecarEvent = JSON.parse(data)
-              if (event.type === 'chunk') {
-                finalContent += event.content
-                handlers.onChunk?.(event.content)
-              } else if (event.type === 'done') {
-                finalContent = event.content
-                finalMessageId = event.message_id
-                finalArtifactContent = event.artifact_content ?? null
-              } else if (event.type === 'error') {
-                throw new Error(event.message)
-              }
-            } catch (err) {
-              if (err instanceof Error && eventIsErrorData(data)) throw err
-              // Ignore malformed SSE lines from partial transport frames.
-            }
-          }
-        }
+        const websocketUrl = toWebSocketUrl(sidecarUrl, '/completion')
+        const result = await streamCompletion(
+          websocketUrl,
+          requestBody,
+          handlers
+        )
 
         console_if('SIDECAR_STORE').log('[SIDECAR_STORE] stream:done', {
-          messageId: finalMessageId,
-          hasArtifactContent: finalArtifactContent != null,
+          messageId: result.messageId,
+          hasArtifactContent: result.artifactContent != null,
         })
 
-        return {
-          messageId: finalMessageId,
-          content: finalContent,
-          artifactContent: finalArtifactContent,
-        }
+        return result
       } catch (err) {
         console.error('[SIDECAR_STORE] stream:error', err)
         return null
@@ -173,10 +133,161 @@ export const useSidecarStore = create<SidecarState & SidecarActions>(
   })
 )
 
-function eventIsErrorData(data: string) {
+function toWebSocketUrl(sidecarUrl: string, path: string) {
+  const url = new URL(sidecarUrl)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.pathname = path
+  url.search = ''
+  url.hash = ''
+  return url.toString()
+}
+
+async function streamCompletion(
+  websocketUrl: string,
+  requestBody: ChatCompletionRequest,
+  handlers: SidecarStreamHandlers
+): Promise<SidecarStreamResult> {
+  let socket: WebSocket | null = null
+  let removeListener: () => void = () => undefined
+  let rawContent = ''
+  let streamedContent = ''
+
   try {
-    return (JSON.parse(data) as SidecarEvent).type === 'error'
-  } catch {
-    return false
+    socket = await WebSocket.connect(websocketUrl)
+    const activeSocket = socket
+
+    return await new Promise<SidecarStreamResult>((resolve, reject) => {
+      let settled = false
+
+      const settle = (
+        callback: (
+          value: SidecarStreamResult | PromiseLike<SidecarStreamResult>
+        ) => void,
+        value: SidecarStreamResult
+      ) => {
+        if (settled) return
+        settled = true
+        removeListener()
+        void activeSocket.disconnect()
+        callback(value)
+      }
+
+      const fail = (err: unknown) => {
+        if (settled) return
+        settled = true
+        removeListener()
+        void activeSocket.disconnect()
+        reject(err)
+      }
+
+      removeListener = activeSocket.addListener((message) => {
+        if (message.type === 'Close') {
+          if (!settled) {
+            fail(new Error('Sidecar websocket closed before completion'))
+          }
+          return
+        }
+
+        if (message.type !== 'Text') return
+
+        try {
+          const event = parseSidecarEvent(message)
+          if (event.type === 'completion.chunk') {
+            rawContent += stringifyContent(event.content)
+            const visibleContent = getStreamingMessageContent(rawContent)
+            const chunk = visibleContent.slice(streamedContent.length)
+            streamedContent = visibleContent
+            if (chunk) handlers.onChunk?.(chunk)
+            return
+          }
+
+          if (event.type === 'completion.response') {
+            rawContent += stringifyContent(event.content)
+            const { artifactContent, messageContent } =
+              extractArtifactResponse(rawContent)
+            const chunk = messageContent.slice(streamedContent.length)
+            if (chunk) handlers.onChunk?.(chunk)
+            settle(resolve, {
+              messageId: null,
+              content: messageContent,
+              artifactContent,
+            })
+            return
+          }
+
+          if (event.type === 'error') {
+            fail(new Error(getSidecarErrorMessage(event)))
+          }
+        } catch (err) {
+          fail(err)
+        }
+      })
+
+      activeSocket.send(JSON.stringify(requestBody)).catch(fail)
+    })
+  } finally {
+    removeListener()
+    await socket?.disconnect().catch(() => undefined)
   }
+}
+
+function parseSidecarEvent(message: WebSocketMessage): SidecarEvent {
+  if (message.type !== 'Text') {
+    throw new Error(`Unsupported websocket message type: ${message.type}`)
+  }
+
+  return JSON.parse(message.data) as SidecarEvent
+}
+
+function stringifyContent(content: SidecarContent) {
+  return content == null ? '' : String(content)
+}
+
+function getStreamingMessageContent(content: string) {
+  const artifactStart = content.indexOf(ARTIFACT_START)
+  if (artifactStart === -1) {
+    return ARTIFACT_START.startsWith(content) ? '' : content
+  }
+
+  const artifactEnd = content.indexOf(
+    ARTIFACT_END,
+    artifactStart + ARTIFACT_START.length
+  )
+  if (artifactEnd === -1) return ''
+
+  return content.slice(artifactEnd + ARTIFACT_END.length).trimStart()
+}
+
+function extractArtifactResponse(content: string) {
+  const artifactStart = content.indexOf(ARTIFACT_START)
+  if (artifactStart === -1) {
+    return { artifactContent: null, messageContent: content.trim() }
+  }
+
+  const artifactEnd = content.indexOf(
+    ARTIFACT_END,
+    artifactStart + ARTIFACT_START.length
+  )
+  if (artifactEnd === -1) {
+    return { artifactContent: null, messageContent: content.trim() }
+  }
+
+  return {
+    artifactContent: content
+      .slice(artifactStart + ARTIFACT_START.length, artifactEnd)
+      .trim(),
+    messageContent: content.slice(artifactEnd + ARTIFACT_END.length).trim(),
+  }
+}
+
+function getSidecarErrorMessage(event: SidecarEvent) {
+  const payload = event.payload
+  let payloadMessage: string | null = null
+
+  if (payload && typeof payload === 'object' && 'message' in payload) {
+    const message = (payload as { message?: unknown }).message
+    if (typeof message === 'string') payloadMessage = message
+  }
+
+  return payloadMessage ?? (stringifyContent(event.content) || 'Sidecar error')
 }

@@ -10,7 +10,7 @@ from llama_index.llms.openai_like.base import CompletionResponseGen
 from workflows.events import StopEvent
 
 from llamaflows.default.main import SimpleQueryWorkflow, WorkflowResult
-from schemas import ChatMessageBase, DefaultResponse
+from schemas import ChatCompletionArtifactContext, ChatMessageBase, DefaultResponse
 from config import settings
 import tiktoken
 
@@ -18,6 +18,7 @@ import tiktoken
 async def create_workflow(
     user_query: str,
     chat_history: Sequence[ChatMessageBase] | None = None,
+    artifact: ChatCompletionArtifactContext | None = None,
 ):
     # llm = OpenAILike(
     #     model="gpt-oss-20b",
@@ -49,7 +50,8 @@ async def create_workflow(
     w = SimpleQueryWorkflow(llm=llm)
     handler = w.run(
         user_query=user_query,
-        chat_history=[],
+        chat_history=list(chat_history or []),
+        artifact=artifact,
     )
 
     # now we handle events coming back from the workflow

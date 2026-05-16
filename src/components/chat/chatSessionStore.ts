@@ -147,14 +147,16 @@ export const useChatSessionStore = create<
         throw new Error('No active conversation')
       }
 
+      const chatHistory = refreshedMessages
+        .filter((message) => message.role !== 'system')
+        .map((message) => ({
+          role: message.role as 'user' | 'assistant',
+          content: message.content,
+        }))
+
       const requestBody: ChatCompletionRequest = {
-        conversation_id: conversationId,
-        messages: refreshedMessages
-          .filter((message) => message.role !== 'system')
-          .map((message) => ({
-            role: message.role as 'user' | 'assistant',
-            content: message.content,
-          })),
+        message: text,
+        chat_history: chatHistory.slice(0, -1),
         ...(sealResult
           ? {
               artifact: {
