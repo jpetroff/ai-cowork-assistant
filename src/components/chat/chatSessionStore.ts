@@ -33,6 +33,7 @@ interface ChatSessionState {
 
 interface ChatSessionActions {
   loadChat: (params: LoadChatParams) => Promise<void>
+  createNewDocument: (conversationId: string) => Promise<void>
   submitMessage: (content: string) => Promise<void>
   ensureRevisionMessage: (
     author: RevisionMessageAuthor,
@@ -74,10 +75,11 @@ export const useChatSessionStore = create<
     })
 
     try {
-      await Promise.all([
-        useMessageStore.getState().loadForConversation(conversationId),
-        useArtifactStore.getState().loadForConversation(conversationId),
-      ])
+      await useMessageStore.getState().loadForConversation(conversationId)
+      await useArtifactStore.getState().loadForConversation(conversationId)
+      await useArtifactStore
+        .getState()
+        .ensureDocumentThreadMessage(get().ensureRevisionMessage)
       set({ status: 'ready' })
       console_if('CHAT_SESSION').log('[CHAT_SESSION] load:ready', {
         projectId,
@@ -89,6 +91,17 @@ export const useChatSessionStore = create<
       set({ status: 'error', error: message })
       console.error('[CHAT_SESSION] load:error', message)
     }
+  },
+
+  /**
+   * Creates a new document and immediately anchors it into the chat thread so it
+   * remains discoverable even before the user writes or sends a message.
+   */
+  async createNewDocument(conversationId) {
+    await useArtifactStore.getState().createNewArtifact(conversationId)
+    await useArtifactStore
+      .getState()
+      .ensureDocumentThreadMessage(get().ensureRevisionMessage)
   },
 
   /**

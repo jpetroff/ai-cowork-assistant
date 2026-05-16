@@ -18,6 +18,8 @@ const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
     },
     artifactApi: {
       loadForConversation: vi.fn(),
+      createNewArtifact: vi.fn(),
+      ensureDocumentThreadMessage: vi.fn(),
       sealForSend: vi.fn(),
       applyAiRevision: vi.fn(),
     },
@@ -79,6 +81,8 @@ beforeEach(() => {
   messageApi.finalizeStreaming.mockResolvedValue('assistant-1')
   messageApi.addSystemRevisionMessage.mockResolvedValue('sys-1')
   artifactApi.loadForConversation.mockResolvedValue(undefined)
+  artifactApi.createNewArtifact.mockResolvedValue(undefined)
+  artifactApi.ensureDocumentThreadMessage.mockResolvedValue(undefined)
   artifactApi.sealForSend.mockResolvedValue(null)
   artifactApi.applyAiRevision.mockResolvedValue(undefined)
   sidecarApi.sendChatRequest.mockResolvedValue({
@@ -96,8 +100,20 @@ describe('useChatSessionStore', () => {
 
     expect(messageApi.loadForConversation).toHaveBeenCalledWith('conv-1')
     expect(artifactApi.loadForConversation).toHaveBeenCalledWith('conv-1')
+    expect(artifactApi.ensureDocumentThreadMessage).toHaveBeenCalledWith(
+      useChatSessionStore.getState().ensureRevisionMessage
+    )
     expect(useChatSessionStore.getState().status).toBe('ready')
     expect(useChatSessionStore.getState().activeProjectId).toBe('proj-1')
+  })
+
+  it('creates a new document and anchors it in the thread', async () => {
+    await useChatSessionStore.getState().createNewDocument('conv-1')
+
+    expect(artifactApi.createNewArtifact).toHaveBeenCalledWith('conv-1')
+    expect(artifactApi.ensureDocumentThreadMessage).toHaveBeenCalledWith(
+      useChatSessionStore.getState().ensureRevisionMessage
+    )
   })
 
   it('reuses an existing revision anchor message before creating a new one', async () => {

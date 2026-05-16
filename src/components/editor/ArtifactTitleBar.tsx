@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { FilePlus } from 'lucide-react'
+import { useChatSessionStore } from '@/components/chat/chatSessionStore'
 import { useArtifactStore } from '@/components/editor/artifactStore'
 import { Button } from '@/components/ui/button'
 import { RevisionPicker } from './RevisionPicker'
@@ -58,7 +59,7 @@ export function ArtifactTitleBar() {
   const isSaving = useArtifactStore((s) => s.isSaving)
   const saveError = useArtifactStore((s) => s.saveError)
   const rename = useArtifactStore((s) => s.rename)
-  const createNewArtifact = useArtifactStore((s) => s.createNewArtifact)
+  const createNewDocument = useChatSessionStore((s) => s.createNewDocument)
 
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
@@ -113,7 +114,7 @@ export function ArtifactTitleBar() {
           variant='ghost'
           size='icon-sm'
           onClick={() =>
-            artifact && createNewArtifact(artifact.conversation_id)
+            artifact && createNewDocument(artifact.conversation_id)
           }
           aria-label='New artifact'
           title='New artifact'

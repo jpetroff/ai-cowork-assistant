@@ -565,6 +565,64 @@ describe('createNewArtifact', () => {
   })
 })
 
+describe('ensureDocumentThreadMessage', () => {
+  it('creates an editable empty draft and thread message for a brand-new artifact', async () => {
+    const artifact = makeArtifact({ current_revision_id: null })
+    useArtifactStore.setState({
+      status: 'ready',
+      artifact,
+      headRevision: null,
+      loadedRevisionId: null,
+      editableRevisionId: null,
+      loadedContent: '',
+      editorKey: 'rev-empty',
+      revisions: [],
+    })
+    mockCreateRevision.mockResolvedValue('rev-empty')
+    mockAddSystemRevisionMessage.mockResolvedValue('sys-doc')
+
+    await useArtifactStore
+      .getState()
+      .ensureDocumentThreadMessage(mockAddSystemRevisionMessage)
+
+    expect(mockCreateRevision).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifact_id: 'art-1',
+        author: 'user',
+        content: '',
+        id: 'rev-empty',
+      })
+    )
+    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
+      'user',
+      'art-1',
+      'rev-empty'
+    )
+    expect(mockSealRevision).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().headRevision?.message_id).toBeNull()
+    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-empty')
+  })
+
+  it('anchors an existing editable draft without sealing it', async () => {
+    const artifact = makeArtifact()
+    const draft = makeRevision({ message_id: null })
+    seedStore(artifact, [draft])
+
+    await useArtifactStore
+      .getState()
+      .ensureDocumentThreadMessage(mockAddSystemRevisionMessage)
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
+      'user',
+      'art-1',
+      'rev-1'
+    )
+    expect(mockSealRevision).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().headRevision?.message_id).toBeNull()
+  })
+})
+
 // ── Revision system message integration ───────────────────────────────────────
 
 describe('system message integration — send flow', () => {
@@ -634,7 +692,7 @@ describe('system message integration — send flow', () => {
     expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-ai')
   })
 
-  it('9.12: new empty document has no revision and no system message', async () => {
+  it('9.12: loading a new empty document defers thread anchoring to chat session', async () => {
     mockListArtifacts.mockResolvedValue([])
     mockCreateArtifact.mockResolvedValue('art-new')
     mockGetArtifact.mockResolvedValue(
@@ -646,6 +704,7 @@ describe('system message integration — send flow', () => {
 
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(useArtifactStore.getState().headRevision).toBeNull()
   })
 })

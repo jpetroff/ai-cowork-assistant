@@ -115,6 +115,13 @@ interface ArtifactActions {
    * Create a brand-new artifact for the conversation with no initial revision.
    */
   createNewArtifact: (conversationId: string) => Promise<void>
+  /**
+   * Ensure the active artifact has a chat-visible anchor message. Creates an
+   * empty user draft for brand-new artifacts, but leaves draft revisions editable.
+   */
+  ensureDocumentThreadMessage: (
+    ensureRevisionMessage: EnsureRevisionMessage
+  ) => Promise<void>
   /** Rename the active artifact title. */
   rename: (title: string | null) => Promise<void>
   /** Check whether the linked disk file has changed since last sync. */
@@ -750,6 +757,48 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         revisions: [],
         status: 'ready',
       })
+    },
+
+    /**
+     * Makes the loaded artifact discoverable from the chat thread. New artifacts
+     * need a revision ID before they can be represented by the existing revision
+     * card, so this creates an empty user draft when no head revision exists.
+     *
+     * The draft is intentionally not sealed here. Anchoring the message lets users
+     * find the document immediately, while message_id stays null so first edits can
+     * persist in place and the send flow can seal the same revision later.
+     */
+    async ensureDocumentThreadMessage(ensureRevisionMessage) {
+      let { artifact, headRevision } = get()
+      if (!artifact) return
+
+      if (!headRevision) {
+        headRevision = await get()._createUserDraft('')
+        artifact = get().artifact
+      }
+
+      if (!artifact || !headRevision) return
+
+      const sysMsgId = await ensureRevisionMessage(
+        headRevision.author === 'ai' ? 'ai' : 'user',
+        artifact.id,
+        headRevision.id
+      )
+
+      if (
+        headRevision.message_id !== null &&
+        headRevision.message_id !== sysMsgId
+      ) {
+        await sealRevision(headRevision.id, sysMsgId)
+        const sealed = { ...headRevision, message_id: sysMsgId }
+        set((s) => ({
+          headRevision:
+            s.headRevision?.id === headRevision.id ? sealed : s.headRevision,
+          revisions: s.revisions.map((r) =>
+            r.id === headRevision.id ? sealed : r
+          ),
+        }))
+      }
     },
 
     /**
