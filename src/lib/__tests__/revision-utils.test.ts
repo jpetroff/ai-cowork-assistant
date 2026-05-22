@@ -5,8 +5,6 @@ import {
   findLastSealedRevision,
   hasContentChangedSinceLastSeal,
   buildThread,
-  hasRevisionMetadata,
-  parseRevisionMetadata,
 } from '../revision-utils'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -132,13 +130,12 @@ describe('buildThread', () => {
     expect(thread[1]).toEqual({ type: 'message', data: msg2 })
   })
 
-  it('includes system messages with valid revisionId metadata', () => {
+  it('excludes artifact system messages with revision metadata', () => {
     const sysMsg = makeSystemRevisionMessage('rev-1', 'user', {
       created_at: 150,
     })
     const thread = buildThread([sysMsg])
-    expect(thread).toHaveLength(1)
-    expect(thread[0]).toEqual({ type: 'message', data: sysMsg })
+    expect(thread).toHaveLength(0)
   })
 
   it('excludes system messages without metadata', () => {
@@ -170,63 +167,8 @@ describe('buildThread', () => {
     })
 
     const thread = buildThread([msg1, sysMsg, msg2, aiSysMsg])
-    expect(thread).toHaveLength(4)
+    expect(thread).toHaveLength(2)
     expect(thread[0].data).toBe(msg1)
-    expect(thread[1].data).toBe(sysMsg)
-    expect(thread[2].data).toBe(msg2)
-    expect(thread[3].data).toBe(aiSysMsg)
-  })
-})
-
-// ── hasRevisionMetadata / parseRevisionMetadata ────────────────────────────────
-
-describe('hasRevisionMetadata', () => {
-  it('returns true for system message with valid metadata', () => {
-    const msg = makeSystemRevisionMessage('rev-1', 'user')
-    expect(hasRevisionMetadata(msg)).toBe(true)
-  })
-
-  it('returns false for non-system message', () => {
-    expect(hasRevisionMetadata(makeMessage({ role: 'user' }))).toBe(false)
-    expect(hasRevisionMetadata(makeMessage({ role: 'assistant' }))).toBe(false)
-  })
-
-  it('returns false for system message with null metadata', () => {
-    expect(
-      hasRevisionMetadata(makeMessage({ role: 'system', metadata: null }))
-    ).toBe(false)
-  })
-
-  it('returns false for system message with no revisionId in metadata', () => {
-    const msg = makeMessage({
-      role: 'system',
-      metadata: JSON.stringify({ artifactId: 'art-1', author: 'user' }),
-    })
-    expect(hasRevisionMetadata(msg)).toBe(false)
-  })
-
-  it('returns false for system message with no artifactId in metadata', () => {
-    const msg = makeMessage({
-      role: 'system',
-      metadata: JSON.stringify({ revisionId: 'rev-1', author: 'user' }),
-    })
-    expect(hasRevisionMetadata(msg)).toBe(false)
-  })
-})
-
-describe('parseRevisionMetadata', () => {
-  it('returns parsed metadata for valid system message', () => {
-    const msg = makeSystemRevisionMessage('rev-abc', 'ai')
-    const meta = parseRevisionMetadata(msg)
-    expect(meta).toEqual({
-      artifactId: 'art-1',
-      revisionId: 'rev-abc',
-      author: 'ai',
-    })
-  })
-
-  it('returns null for invalid system message', () => {
-    const msg = makeMessage({ role: 'system', metadata: null })
-    expect(parseRevisionMetadata(msg)).toBeNull()
+    expect(thread[1].data).toBe(msg2)
   })
 })

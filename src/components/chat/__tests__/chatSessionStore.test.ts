@@ -14,13 +14,10 @@ const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
       beginStreaming: vi.fn(),
       appendChunk: vi.fn(),
       finalizeStreaming: vi.fn(),
-      addSystemRevisionMessage: vi.fn(),
     },
     artifactApi: {
       loadForConversation: vi.fn(),
       createNewArtifact: vi.fn(),
-      ensureDocumentThreadMessage: vi.fn(),
-      loadArtifactRevisionMetas: vi.fn(),
       sealForSend: vi.fn(),
       applyAiRevision: vi.fn(),
     },
@@ -70,21 +67,20 @@ beforeEach(() => {
   messageApi.messages.splice(0, messageApi.messages.length)
   messageApi.loadForConversation.mockResolvedValue(undefined)
   messageApi.addUserMessage.mockImplementation(async (content: string) => {
+    const id = 'user-1'
     messageApi.messages.push(
       makeMessage({
-        id: 'user-1',
+        id,
         role: 'user',
         content,
         sequence_order: messageApi.messages.length,
       })
     )
+    return id
   })
   messageApi.finalizeStreaming.mockResolvedValue('assistant-1')
-  messageApi.addSystemRevisionMessage.mockResolvedValue('sys-1')
   artifactApi.loadForConversation.mockResolvedValue(undefined)
   artifactApi.createNewArtifact.mockResolvedValue(undefined)
-  artifactApi.ensureDocumentThreadMessage.mockResolvedValue(undefined)
-  artifactApi.loadArtifactRevisionMetas.mockResolvedValue(undefined)
   artifactApi.sealForSend.mockResolvedValue(null)
   artifactApi.applyAiRevision.mockResolvedValue(undefined)
   sidecarApi.sendChatRequest.mockResolvedValue({
@@ -102,43 +98,14 @@ describe('useChatSessionStore', () => {
 
     expect(messageApi.loadForConversation).toHaveBeenCalledWith('conv-1')
     expect(artifactApi.loadForConversation).toHaveBeenCalledWith('conv-1')
-    expect(artifactApi.ensureDocumentThreadMessage).toHaveBeenCalledWith(
-      useChatSessionStore.getState().ensureRevisionMessage
-    )
-    expect(artifactApi.loadArtifactRevisionMetas).toHaveBeenCalledWith([])
     expect(useChatSessionStore.getState().status).toBe('ready')
     expect(useChatSessionStore.getState().activeProjectId).toBe('proj-1')
   })
 
-  it('creates a new document and anchors it in the thread', async () => {
+  it('creates a new document', async () => {
     await useChatSessionStore.getState().createNewDocument('conv-1')
 
     expect(artifactApi.createNewArtifact).toHaveBeenCalledWith('conv-1')
-    expect(artifactApi.ensureDocumentThreadMessage).toHaveBeenCalledWith(
-      useChatSessionStore.getState().ensureRevisionMessage
-    )
-    expect(artifactApi.loadArtifactRevisionMetas).toHaveBeenCalledWith([])
-  })
-
-  it('reuses an existing revision anchor message before creating a new one', async () => {
-    messageApi.messages.push(
-      makeMessage({
-        id: 'sys-existing',
-        role: 'system',
-        metadata: JSON.stringify({
-          artifactId: 'art-1',
-          revisionId: 'rev-1',
-          author: 'user',
-        }),
-      })
-    )
-
-    const id = await useChatSessionStore
-      .getState()
-      .ensureRevisionMessage('user', 'art-1', 'rev-1')
-
-    expect(id).toBe('sys-existing')
-    expect(messageApi.addSystemRevisionMessage).not.toHaveBeenCalled()
   })
 
   it('submits through message, artifact, sidecar, and AI revision stages', async () => {
@@ -162,9 +129,7 @@ describe('useChatSessionStore', () => {
     await useChatSessionStore.getState().submitMessage(' hello ')
 
     expect(messageApi.addUserMessage).toHaveBeenCalledWith('hello')
-    expect(artifactApi.sealForSend).toHaveBeenCalledWith(
-      useChatSessionStore.getState().ensureRevisionMessage
-    )
+    expect(artifactApi.sealForSend).toHaveBeenCalledWith('user-1')
     expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         message: 'hello',
@@ -185,7 +150,7 @@ describe('useChatSessionStore', () => {
     )
     expect(artifactApi.applyAiRevision).toHaveBeenCalledWith(
       'updated artifact',
-      useChatSessionStore.getState().ensureRevisionMessage
+      'assistant-1'
     )
     expect(useChatSessionStore.getState().isAssistantStreaming).toBe(false)
   })

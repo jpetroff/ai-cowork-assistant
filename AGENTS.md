@@ -22,10 +22,6 @@
 - Use `uv` as python package manager and run commands with `uvx`
 - DO NOT use `pip`
 
-## Project structure
-
-Refer to ./openspec/specs/project/spec.md for detailed project specifications
-
 ## MCPs
 
 - **Always use Serena MCP first** for any code exploration, search, or refactoring — do not default to grep/glob/read when Serena tools can answer the question more precisely.

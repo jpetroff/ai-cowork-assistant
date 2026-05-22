@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mockDb, mockDatabaseInstance } from '../setup'
-import { createMessage, createSystemRevisionMessage, listMessages } from '../../repositories/messages'
+import { createMessage, listMessages } from '../../repositories/messages'
 
 describe('createMessage()', () => {
   it('INSERT does not include updated_at column', async () => {
@@ -41,53 +41,5 @@ describe('listMessages()', () => {
     const [sql, params] = mockDatabaseInstance.select.mock.calls[0]
     expect(sql).toContain('ORDER BY sequence_order ASC')
     expect(params).toEqual(['c1'])
-  })
-})
-
-describe('createSystemRevisionMessage()', () => {
-  it('inserts with role=system, correct content, and serialized metadata including artifactId', async () => {
-    await createSystemRevisionMessage({
-      conversation_id: 'c1',
-      author: 'user',
-      artifactId: 'art-1',
-      revisionId: 'rev-abc',
-      sequence_order: 3,
-    })
-    const { sql, params } = mockDb.rows[0]
-    expect(sql).toContain("'system'")
-    expect(params).toContain('c1')
-    expect(params).toContain('user created artifact revision')
-    expect(params).toContain(3)
-    const metadataArg = params.find((p) => typeof p === 'string' && p.includes('rev-abc'))
-    expect(metadataArg).toBeDefined()
-    const parsed = JSON.parse(metadataArg as string)
-    expect(parsed).toEqual({ artifactId: 'art-1', revisionId: 'rev-abc', author: 'user' })
-  })
-
-  it('inserts AI system message with author=ai and artifactId in metadata', async () => {
-    await createSystemRevisionMessage({
-      conversation_id: 'c2',
-      author: 'ai',
-      artifactId: 'art-2',
-      revisionId: 'rev-xyz',
-      sequence_order: 5,
-    })
-    const { params } = mockDb.rows[0]
-    expect(params).toContain('ai created artifact revision')
-    const metadataArg = params.find((p) => typeof p === 'string' && p.includes('rev-xyz'))
-    const parsed = JSON.parse(metadataArg as string)
-    expect(parsed.author).toBe('ai')
-    expect(parsed.artifactId).toBe('art-2')
-  })
-
-  it('does not include updated_at column', async () => {
-    await createSystemRevisionMessage({
-      conversation_id: 'c1',
-      author: 'user',
-      artifactId: 'art-1',
-      revisionId: 'rev-1',
-      sequence_order: 0,
-    })
-    expect(mockDb.rows[0].sql).not.toContain('updated_at')
   })
 })

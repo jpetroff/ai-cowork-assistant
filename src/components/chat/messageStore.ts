@@ -1,11 +1,6 @@
 import { create } from 'zustand'
-import {
-  listMessages,
-  createMessage,
-  createSystemRevisionMessage,
-} from '@/lib/db/repositories/messages'
+import { listMessages, createMessage } from '@/lib/db/repositories/messages'
 import type { Message } from '@/lib/db/types'
-import type { RevisionMessageMetadata } from '@/lib/types'
 import { console_if } from '@/lib/logger'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,7 +24,7 @@ export interface MessageState {
 
 export interface MessageActions {
   loadForConversation: (id: string) => Promise<void>
-  addUserMessage: (content: string) => Promise<void>
+  addUserMessage: (content: string) => Promise<string | null>
   clear: () => void
   beginStreaming: () => void
   appendChunk: (chunk: string) => void
@@ -37,11 +32,6 @@ export interface MessageActions {
     id: string | null,
     content: string
   ) => Promise<string | null>
-  addSystemRevisionMessage: (
-    author: 'user' | 'ai',
-    artifactId: string,
-    revisionId: string
-  ) => Promise<string>
 }
 
 const INITIAL_STATE: MessageState = {
@@ -89,7 +79,7 @@ export const useMessageStore = create<MessageState & MessageActions>(
      */
     async addUserMessage(content) {
       const { conversationId, messages } = get()
-      if (!conversationId) return
+      if (!conversationId) return null
       const sequence_order =
         messages.length > 0
           ? messages[messages.length - 1].sequence_order + 1
@@ -114,6 +104,7 @@ export const useMessageStore = create<MessageState & MessageActions>(
         conversationId,
         messageId: id,
       })
+      return id
     },
 
     /**
@@ -190,52 +181,6 @@ export const useMessageStore = create<MessageState & MessageActions>(
         })
         return null
       }
-    },
-
-    /**
-     * Creates a system message anchoring an artifact revision in the thread. This is
-     * called by chatSessionStore so artifactStore does not own message side effects.
-     */
-    async addSystemRevisionMessage(author, artifactId, revisionId) {
-      const { conversationId, messages } = get()
-      if (!conversationId) throw new Error('No active conversation')
-      const sequence_order =
-        messages.length > 0
-          ? messages[messages.length - 1].sequence_order + 1
-          : 0
-      const id = await createSystemRevisionMessage({
-        conversation_id: conversationId,
-        author,
-        artifactId,
-        revisionId,
-        sequence_order,
-      })
-      const metadata: RevisionMessageMetadata = {
-        artifactId,
-        revisionId,
-        author,
-      }
-      const newMessage: Message = {
-        id,
-        conversation_id: conversationId,
-        role: 'system',
-        content: `${author} created artifact revision`,
-        metadata: JSON.stringify(metadata),
-        sequence_order,
-        created_at: Date.now(),
-      }
-      set((s) => ({ messages: [...s.messages, newMessage] }))
-      console_if('MESSAGE_STORE').log(
-        '[MESSAGE_STORE] revision-message:created',
-        {
-          conversationId,
-          messageId: id,
-          artifactId,
-          revisionId,
-          author,
-        }
-      )
-      return id
     },
   })
 )

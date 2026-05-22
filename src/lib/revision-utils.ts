@@ -4,7 +4,7 @@
  */
 
 import type { ArtifactRevision, Message } from '@/lib/db/types'
-import type { ThreadItem, RevisionMessageMetadata } from '@/lib/types'
+import type { ThreadItem } from '@/lib/types'
 
 /**
  * Returns true if the HEAD revision can be edited in-place (copy-on-write is NOT needed).
@@ -41,7 +41,7 @@ export function hasContentChangedSinceLastSeal(
 
 /**
  * Builds the ordered chat thread from messages alone.
- * System messages are only shown when they carry valid revision metadata.
+ * System messages are internal records and are not shown in the chat thread.
  *
  * @param messages - All messages for the conversation, ordered by sequence_order ASC
  * @returns ThreadItem[] sorted by created_at ASC
@@ -49,38 +49,6 @@ export function hasContentChangedSinceLastSeal(
 export function buildThread(messages: Message[]): ThreadItem[] {
   return [...messages]
     .sort((a, b) => a.created_at - b.created_at)
-    .filter((m) => m.role !== 'system' || hasRevisionMetadata(m))
+    .filter((m) => m.role !== 'system')
     .map((m) => ({ type: 'message', data: m }))
-}
-
-/**
- * Returns true if a message is a system message with valid revision metadata.
- */
-export function hasRevisionMetadata(message: Message): boolean {
-  if (message.role !== 'system' || !message.metadata) return false
-  try {
-    const parsed = JSON.parse(message.metadata) as RevisionMessageMetadata
-    return (
-      typeof parsed.artifactId === 'string' &&
-      parsed.artifactId.length > 0 &&
-      typeof parsed.revisionId === 'string' &&
-      parsed.revisionId.length > 0
-    )
-  } catch {
-    return false
-  }
-}
-
-/**
- * Parses the revision metadata from a system message. Returns null if invalid.
- */
-export function parseRevisionMetadata(
-  message: Message
-): RevisionMessageMetadata | null {
-  if (!hasRevisionMetadata(message)) return null
-  try {
-    return JSON.parse(message.metadata!) as RevisionMessageMetadata
-  } catch {
-    return null
-  }
 }

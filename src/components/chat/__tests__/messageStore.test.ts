@@ -1,42 +1,28 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-
-// ── Mock repositories ──────────────────────────────────────────────────────────
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateMessage = vi.fn<(...args: unknown[]) => Promise<string>>()
-const mockCreateSystemRevisionMessage =
-  vi.fn<(...args: unknown[]) => Promise<string>>()
 const mockListMessages = vi.fn<() => Promise<[]>>()
 
 vi.mock('@/lib/db/repositories/messages', () => ({
   createMessage: (...args: unknown[]) => mockCreateMessage(...args),
-  createSystemRevisionMessage: (...args: unknown[]) =>
-    mockCreateSystemRevisionMessage(...args),
   listMessages: () => mockListMessages(),
 }))
 
-// ── Import after mocks ─────────────────────────────────────────────────────────
-
 import { useMessageStore } from '../messageStore'
-
-// ── Reset store between tests ──────────────────────────────────────────────────
 
 beforeEach(() => {
   useMessageStore.getState().clear()
   vi.clearAllMocks()
   mockListMessages.mockResolvedValue([])
   mockCreateMessage.mockResolvedValue('msg-1')
-  mockCreateSystemRevisionMessage.mockResolvedValue('sys-1')
 })
 
-// ── addSystemRevisionMessage ───────────────────────────────────────────────────
-
-describe('addSystemRevisionMessage', () => {
-  it('throws when no active conversation', async () => {
-    await expect(
-      useMessageStore
-        .getState()
-        .addSystemRevisionMessage('user', 'art-1', 'rev-1')
-    ).rejects.toThrow('No active conversation')
+describe('addUserMessage', () => {
+  it('returns null when no conversation is active', async () => {
+    await expect(useMessageStore.getState().addUserMessage('hi')).resolves.toBe(
+      null
+    )
+    expect(mockCreateMessage).not.toHaveBeenCalled()
   })
 
   it('computes sequence_order as last message sequence_order + 1', async () => {
@@ -54,59 +40,36 @@ describe('addSystemRevisionMessage', () => {
         },
       ],
     })
-    mockCreateSystemRevisionMessage.mockResolvedValue('sys-new')
+    mockCreateMessage.mockResolvedValue('msg-new')
 
-    await useMessageStore
-      .getState()
-      .addSystemRevisionMessage('user', 'art-1', 'rev-abc')
+    const id = await useMessageStore.getState().addUserMessage('hello')
 
-    expect(mockCreateSystemRevisionMessage).toHaveBeenCalledWith(
+    expect(id).toBe('msg-new')
+    expect(mockCreateMessage).toHaveBeenCalledWith(
       expect.objectContaining({
+        conversation_id: 'conv-1',
+        role: 'user',
+        content: 'hello',
         sequence_order: 5,
-        author: 'user',
-        artifactId: 'art-1',
-        revisionId: 'rev-abc',
       })
     )
   })
 
-  it('uses sequence_order 0 when messages list is empty', async () => {
+  it('appends the created user message to state', async () => {
     useMessageStore.setState({ conversationId: 'conv-1', messages: [] })
-    await useMessageStore
-      .getState()
-      .addSystemRevisionMessage('ai', 'art-1', 'rev-1')
-    expect(mockCreateSystemRevisionMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ sequence_order: 0 })
-    )
-  })
+    mockCreateMessage.mockResolvedValue('msg-new')
 
-  it('appends system message to messages state with correct shape including artifactId', async () => {
-    useMessageStore.setState({ conversationId: 'conv-1', messages: [] })
-    mockCreateSystemRevisionMessage.mockResolvedValue('sys-new')
+    await useMessageStore.getState().addUserMessage('hello')
 
-    const id = await useMessageStore
-      .getState()
-      .addSystemRevisionMessage('ai', 'art-xyz', 'rev-xyz')
-
-    expect(id).toBe('sys-new')
-    const { messages } = useMessageStore.getState()
-    expect(messages).toHaveLength(1)
-    expect(messages[0].role).toBe('system')
-    expect(messages[0].id).toBe('sys-new')
-    const meta = JSON.parse(messages[0].metadata!)
-    expect(meta).toEqual({
-      artifactId: 'art-xyz',
-      revisionId: 'rev-xyz',
-      author: 'ai',
-    })
-  })
-
-  it('returns the new message id', async () => {
-    useMessageStore.setState({ conversationId: 'conv-1', messages: [] })
-    mockCreateSystemRevisionMessage.mockResolvedValue('sys-returned')
-    const result = await useMessageStore
-      .getState()
-      .addSystemRevisionMessage('user', 'art-1', 'rev-1')
-    expect(result).toBe('sys-returned')
+    expect(useMessageStore.getState().messages).toEqual([
+      expect.objectContaining({
+        id: 'msg-new',
+        conversation_id: 'conv-1',
+        role: 'user',
+        content: 'hello',
+        metadata: null,
+        sequence_order: 0,
+      }),
+    ])
   })
 })

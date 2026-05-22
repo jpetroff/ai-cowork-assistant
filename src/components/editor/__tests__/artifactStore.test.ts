@@ -50,16 +50,7 @@ vi.mock('@/lib/db/repositories/conversations', () => ({
     mockSetConversationActiveArtifact(...args),
 }))
 
-// ── Mock revision message coordinator ─────────────────────────────────────────
-
-const mockAddSystemRevisionMessage =
-  vi.fn<
-    (
-      author: 'user' | 'ai',
-      artifactId: string,
-      revisionId: string
-    ) => Promise<string>
-  >()
+const anchorMessageId = 'msg-anchor-1'
 
 // ── Import after mocks ─────────────────────────────────────────────────────────
 
@@ -137,7 +128,6 @@ beforeEach(() => {
   mockGetRevision.mockResolvedValue(null)
   mockGetConversation.mockResolvedValue(makeConversation())
   mockSetConversationActiveArtifact.mockResolvedValue(undefined)
-  mockAddSystemRevisionMessage.mockResolvedValue('sys-msg-1')
 })
 
 // ── Save chain ─────────────────────────────────────────────────────────────────
@@ -162,12 +152,41 @@ describe('save chain', () => {
     expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
   })
 
+  it('does not create a revision for empty editor content', async () => {
+    const artifact = makeArtifact({ current_revision_id: null })
+    seedStore(artifact, [])
+    useArtifactStore.setState({
+      loadedRevisionId: null,
+      editableRevisionId: null,
+      headRevision: null,
+      loadedContent: '',
+    })
+
+    await useArtifactStore.getState().save('')
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().headRevision).toBeNull()
+  })
+
+  it('does not update an existing draft when content is unchanged', async () => {
+    const artifact = makeArtifact()
+    const rev = makeRevision({ message_id: null, content: 'same content' })
+    seedStore(artifact, [rev])
+
+    await useArtifactStore.getState().save('same content')
+
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+  })
+
   it('3: _persistToHead updates content when HEAD is a user draft', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision({ message_id: null }) // draft
     seedStore(artifact, [rev])
     await useArtifactStore.getState().save('updated')
     expect(mockUpdateRevisionContent).toHaveBeenCalledWith('rev-1', 'updated')
+    expect(useArtifactStore.getState().loadedContent).toBe('updated')
   })
 
   it('4: _createDraftThenPersist creates new draft when HEAD is sealed', async () => {
@@ -193,9 +212,28 @@ describe('save chain', () => {
     mockCreateRevision.mockResolvedValue('rev-first')
     await useArtifactStore.getState().save('first content')
     expect(mockCreateRevision).toHaveBeenCalled()
-    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-first')
     expect(useArtifactStore.getState().editableRevisionId).toBe('rev-first')
+    expect(useArtifactStore.getState().loadedContent).toBe('first content')
+  })
+
+  it('does not create duplicate revisions for repeated identical saves', async () => {
+    const artifact = makeArtifact({ current_revision_id: null })
+    seedStore(artifact, [])
+    useArtifactStore.setState({
+      loadedRevisionId: null,
+      editableRevisionId: null,
+      headRevision: null,
+      loadedContent: '',
+    })
+    mockCreateRevision.mockResolvedValue('rev-first')
+
+    await useArtifactStore.getState().save('first content')
+    vi.clearAllMocks()
+    await useArtifactStore.getState().save('first content')
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
   })
 
   it('creates a new user draft instead of editing an unsealed AI revision in place', async () => {
@@ -224,6 +262,21 @@ describe('save chain', () => {
     await useArtifactStore.getState().save('forked')
     expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-new')
     expect(useArtifactStore.getState().editableRevisionId).toBe('rev-new')
+    expect(useArtifactStore.getState().loadedContent).toBe('forked')
+  })
+
+  it('does not fork a sealed head when content is unchanged', async () => {
+    const artifact = makeArtifact()
+    const sealedRev = makeRevision({
+      content: 'sealed content',
+      message_id: 'msg-1',
+    })
+    seedStore(artifact, [sealedRev])
+
+    await useArtifactStore.getState().save('sealed content')
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
   })
 
   it('creates a new draft when saving from a loaded historical revision', async () => {
@@ -261,30 +314,49 @@ describe('save chain', () => {
     expect(useArtifactStore.getState().editableRevisionId).toBe(
       'rev-from-history'
     )
+    expect(useArtifactStore.getState().loadedContent).toBe('historical edit')
+  })
+
+  it('does not fork a loaded historical revision when content is unchanged', async () => {
+    const artifact = makeArtifact({ current_revision_id: 'rev-2' })
+    const rev1 = makeRevision({
+      id: 'rev-1',
+      content: 'historical',
+      message_id: 'msg-1',
+    })
+    const rev2 = makeRevision({
+      id: 'rev-2',
+      content: 'head',
+      message_id: null,
+    })
+    seedStore(artifact, [rev1, rev2])
+    useArtifactStore.setState({
+      loadedRevisionId: 'rev-1',
+      editableRevisionId: null,
+      loadedContent: 'historical',
+      editorKey: 'fresh-draft-id',
+    })
+
+    await useArtifactStore.getState().save('historical')
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
   })
 })
 
 // ── Seal chain ─────────────────────────────────────────────────────────────────
 
 describe('sealForSend', () => {
-  it('1: isDraft && changed → _sealDraftInPlace — creates system message and seals revision', async () => {
+  it('1: isDraft && changed → _sealDraftInPlace — seals revision with the user message', async () => {
     const artifact = makeArtifact()
     const draft = makeRevision({ content: 'new content', message_id: null })
     seedStore(artifact, [draft])
-    mockAddSystemRevisionMessage.mockResolvedValue('sys-1')
-    const result = await useArtifactStore
-      .getState()
-      .sealForSend(mockAddSystemRevisionMessage)
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'user',
-      'art-1',
-      'rev-1'
-    )
-    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'sys-1')
+    const result = await useArtifactStore.getState().sealForSend('user-msg-1')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'user-msg-1')
     expect(result?.revisionId).toBe('rev-1')
   })
 
-  it('2: isDraft && !changed → _reuseLastSealed — no system message created', async () => {
+  it('2: isDraft && !changed → _reuseLastSealed — no sealing work', async () => {
     const artifact = makeArtifact({ current_revision_id: 'rev-2' })
     const sealed = makeRevision({
       id: 'rev-1',
@@ -299,13 +371,12 @@ describe('sealForSend', () => {
     seedStore(artifact, [sealed, draft])
     const result = await useArtifactStore
       .getState()
-      .sealForSend(mockAddSystemRevisionMessage)
-    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
+      .sealForSend(anchorMessageId)
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(result?.revisionId).toBe('rev-1')
   })
 
-  it('3: !isDraft && changed → _createSealedRevision — creates system message, seals new revision', async () => {
+  it('3: !isDraft && changed → _createSealedRevision — seals new revision with the user message', async () => {
     const artifactWithSealed = makeArtifact({
       current_revision_id: 'rev-sealed2',
     })
@@ -324,27 +395,21 @@ describe('sealForSend', () => {
       headRevision: { ...sealedRev2, content: 'v3-different' },
     })
     mockCreateRevision.mockResolvedValue('rev-new-sealed')
-    mockAddSystemRevisionMessage.mockResolvedValue('sys-2')
-    const result = await useArtifactStore
-      .getState()
-      .sealForSend(mockAddSystemRevisionMessage)
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'user',
-      'art-1',
-      'rev-new-sealed'
+    const result = await useArtifactStore.getState().sealForSend('user-msg-2')
+    expect(mockSealRevision).toHaveBeenCalledWith(
+      'rev-new-sealed',
+      'user-msg-2'
     )
-    expect(mockSealRevision).toHaveBeenCalledWith('rev-new-sealed', 'sys-2')
     expect(result?.revisionId).toBe('rev-new-sealed')
   })
 
-  it('4: !isDraft && !changed → _reuseCurrentHead — no system message created', async () => {
+  it('4: !isDraft && !changed → _reuseCurrentHead — no sealing work', async () => {
     const sealed = makeRevision({ message_id: 'msg-1', content: 'same' })
     const artifact = makeArtifact({ current_revision_id: 'rev-1' })
     seedStore(artifact, [sealed])
     const result = await useArtifactStore
       .getState()
-      .sealForSend(mockAddSystemRevisionMessage)
-    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
+      .sealForSend(anchorMessageId)
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(result?.revisionId).toBe('rev-1')
   })
@@ -369,9 +434,8 @@ describe('sealForSend', () => {
 
     const result = await useArtifactStore
       .getState()
-      .sealForSend(mockAddSystemRevisionMessage)
+      .sealForSend(anchorMessageId)
 
-    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockCreateRevision).not.toHaveBeenCalled()
     expect(result).toEqual({
       artifactId: 'art-1',
@@ -450,27 +514,21 @@ describe('loadForConversation', () => {
 })
 
 describe('applyAiRevision', () => {
-  it('inserts ai revision, creates system message with "ai", seals revision, sets loaded/editable ids', async () => {
+  it('inserts ai revision, seals it with the assistant message, sets loaded/editable ids', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     seedStore(artifact, [rev])
     mockCreateRevision.mockResolvedValue('rev-ai')
-    mockAddSystemRevisionMessage.mockResolvedValue('sys-ai')
 
-    await useArtifactStore
-      .getState()
-      .applyAiRevision('ai content', mockAddSystemRevisionMessage)
+    await useArtifactStore.getState().applyAiRevision('ai content', 'ai-msg-1')
 
     expect(mockCreateRevision).toHaveBeenCalledWith(
       expect.objectContaining({ author: 'ai' })
     )
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'ai',
-      'art-1',
-      'rev-ai'
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-ai', 'ai-msg-1')
+    expect(useArtifactStore.getState().headRevision?.message_id).toBe(
+      'ai-msg-1'
     )
-    expect(mockSealRevision).toHaveBeenCalledWith('rev-ai', 'sys-ai')
-    expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-ai')
     expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-ai')
     expect(useArtifactStore.getState().editableRevisionId).toBe('rev-ai')
   })
@@ -625,90 +683,24 @@ describe('createNewArtifact', () => {
   })
 })
 
-describe('ensureDocumentThreadMessage', () => {
-  it('creates an editable empty draft and thread message for a brand-new artifact', async () => {
-    const artifact = makeArtifact({ current_revision_id: null })
-    useArtifactStore.setState({
-      status: 'ready',
-      artifact,
-      headRevision: null,
-      loadedRevisionId: null,
-      editableRevisionId: null,
-      loadedContent: '',
-      editorKey: 'rev-empty',
-      revisions: [],
-    })
-    mockCreateRevision.mockResolvedValue('rev-empty')
-    mockAddSystemRevisionMessage.mockResolvedValue('sys-doc')
+// ── Revision message anchor integration ───────────────────────────────────────
 
-    await useArtifactStore
-      .getState()
-      .ensureDocumentThreadMessage(mockAddSystemRevisionMessage)
-
-    expect(mockCreateRevision).toHaveBeenCalledWith(
-      expect.objectContaining({
-        artifact_id: 'art-1',
-        author: 'user',
-        content: '',
-        id: 'rev-empty',
-      })
-    )
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'user',
-      'art-1',
-      'rev-empty'
-    )
-    expect(mockSealRevision).not.toHaveBeenCalled()
-    expect(useArtifactStore.getState().headRevision?.message_id).toBeNull()
-    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-empty')
-  })
-
-  it('anchors an existing editable draft without sealing it', async () => {
-    const artifact = makeArtifact()
-    const draft = makeRevision({ message_id: null })
-    seedStore(artifact, [draft])
-
-    await useArtifactStore
-      .getState()
-      .ensureDocumentThreadMessage(mockAddSystemRevisionMessage)
-
-    expect(mockCreateRevision).not.toHaveBeenCalled()
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'user',
-      'art-1',
-      'rev-1'
-    )
-    expect(mockSealRevision).not.toHaveBeenCalled()
-    expect(useArtifactStore.getState().headRevision?.message_id).toBeNull()
-  })
-})
-
-// ── Revision system message integration ───────────────────────────────────────
-
-describe('system message integration — send flow', () => {
-  it('9.9: user sends with changed content — system message created, revision sealed', async () => {
+describe('message anchor integration — send flow', () => {
+  it('9.9: user sends with changed content — revision sealed with user message', async () => {
     const artifact = makeArtifact()
     const draft = makeRevision({ content: 'edited content', message_id: null })
     seedStore(artifact, [draft])
-    mockAddSystemRevisionMessage.mockResolvedValue('sys-msg-new')
 
-    const result = await useArtifactStore
-      .getState()
-      .sealForSend(mockAddSystemRevisionMessage)
+    const result = await useArtifactStore.getState().sealForSend('user-msg-new')
 
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'user',
-      'art-1',
-      'rev-1'
-    )
-    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'sys-msg-new')
+    expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'user-msg-new')
     expect(useArtifactStore.getState().headRevision?.message_id).toBe(
-      'sys-msg-new'
+      'user-msg-new'
     )
     expect(result?.revisionId).toBe('rev-1')
   })
 
-  it('9.10: user sends without changes — no system message, no new revision', async () => {
+  it('9.10: user sends without changes — no sealing work, no new revision', async () => {
     const artifact = makeArtifact({ current_revision_id: 'rev-2' })
     const sealed = makeRevision({
       id: 'rev-1',
@@ -722,37 +714,35 @@ describe('system message integration — send flow', () => {
     })
     seedStore(artifact, [sealed, draft])
 
-    await useArtifactStore.getState().sealForSend(mockAddSystemRevisionMessage)
+    await useArtifactStore.getState().sealForSend(anchorMessageId)
 
-    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(mockCreateRevision).not.toHaveBeenCalled()
     expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-1')
     expect(useArtifactStore.getState().editableRevisionId).toBeNull()
   })
 
-  it('9.11: AI responds with artifact content — system message created with "ai", revision sealed', async () => {
+  it('9.11: AI responds with artifact content — revision sealed with assistant message', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     seedStore(artifact, [rev])
     mockCreateRevision.mockResolvedValue('rev-ai-new')
-    mockAddSystemRevisionMessage.mockResolvedValue('sys-ai')
 
     await useArtifactStore
       .getState()
-      .applyAiRevision('AI wrote this', mockAddSystemRevisionMessage)
+      .applyAiRevision('AI wrote this', 'assistant-msg-1')
 
-    expect(mockAddSystemRevisionMessage).toHaveBeenCalledWith(
-      'ai',
-      'art-1',
-      'rev-ai-new'
+    expect(mockSealRevision).toHaveBeenCalledWith(
+      'rev-ai-new',
+      'assistant-msg-1'
     )
-    expect(mockSealRevision).toHaveBeenCalledWith('rev-ai-new', 'sys-ai')
     expect(useArtifactStore.getState().headRevision?.author).toBe('ai')
-    expect(useArtifactStore.getState().headRevision?.message_id).toBe('sys-ai')
+    expect(useArtifactStore.getState().headRevision?.message_id).toBe(
+      'assistant-msg-1'
+    )
   })
 
-  it('9.12: loading a new empty document defers thread anchoring to chat session', async () => {
+  it('9.12: loading a new empty document leaves it revisionless until save', async () => {
     mockListArtifacts.mockResolvedValue([])
     mockCreateArtifact.mockResolvedValue('art-new')
     mockGetArtifact.mockResolvedValue(
@@ -764,7 +754,6 @@ describe('system message integration — send flow', () => {
 
     expect(mockSealRevision).not.toHaveBeenCalled()
     expect(mockCreateRevision).not.toHaveBeenCalled()
-    expect(mockAddSystemRevisionMessage).not.toHaveBeenCalled()
     expect(useArtifactStore.getState().headRevision).toBeNull()
   })
 })

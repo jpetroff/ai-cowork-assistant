@@ -12,12 +12,5 @@ export interface SealResult {
   content: string
 }
 
-/** Parsed metadata on a system message that anchors an artifact revision in the thread. */
-export interface RevisionMessageMetadata {
-  artifactId?: string
-  revisionId: string
-  author: 'user' | 'ai'
-}
-
 /** A single item in the merged chat thread. */
 export type ThreadItem = { type: 'message'; data: Message }

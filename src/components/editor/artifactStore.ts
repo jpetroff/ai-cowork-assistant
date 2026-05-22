@@ -29,12 +29,6 @@ import {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
-type RevisionMessageAuthor = 'user' | 'ai'
-type EnsureRevisionMessage = (
-  author: RevisionMessageAuthor,
-  artifactId: string,
-  revisionId: string
-) => Promise<string>
 type ArtifactRevisionSummary = Omit<ArtifactRevision, 'content'>
 
 /** @property artifactId - artifact referenced by a thread revision message */
@@ -98,19 +92,15 @@ interface ArtifactActions {
   /**
    * Seal the active revision before sending. Returns the revision to attach to
    * the outgoing message, or null if there is no artifact / no revisions.
-   * A system message is created automatically when a revision is actually sealed/created.
+   * The supplied user message ID is stored as the revision anchor when a revision
+   * is actually sealed/created.
    */
-  sealForSend: (
-    ensureRevisionMessage: EnsureRevisionMessage
-  ) => Promise<SealResult | null>
+  sealForSend: (messageId: string) => Promise<SealResult | null>
   /**
    * Apply an AI-generated revision. Inserts a new author='ai' sealed revision as HEAD
    * and remounts the editor with the new content.
    */
-  applyAiRevision: (
-    content: string,
-    ensureRevisionMessage: EnsureRevisionMessage
-  ) => Promise<void>
+  applyAiRevision: (content: string, messageId: string) => Promise<void>
   /**
    * Load a revision into the editor.
    * - Flushes any pending save and waits for it to complete.
@@ -121,16 +111,14 @@ interface ArtifactActions {
    */
   requestRevisionLoad: (revisionId: string) => Promise<void>
   /**
+   * Load an artifact into the editor, mounting its current/last revision when one
+   * exists or an empty editor state when it does not.
+   */
+  requestArtifactLoad: (artifactId: string) => Promise<void>
+  /**
    * Create a brand-new artifact for the conversation with no initial revision.
    */
   createNewArtifact: (conversationId: string) => Promise<void>
-  /**
-   * Ensure the active artifact has a chat-visible anchor message. Creates an
-   * empty user draft for brand-new artifacts, but leaves draft revisions editable.
-   */
-  ensureDocumentThreadMessage: (
-    ensureRevisionMessage: EnsureRevisionMessage
-  ) => Promise<void>
   /** Rename the active artifact title. */
   rename: (title: string | null) => Promise<void>
   /** Check whether the linked disk file has changed since last sync. */
@@ -163,13 +151,9 @@ interface ArtifactActions {
   _persistToHead: (content: string) => Promise<void>
   _createDraftThenPersist: (content: string) => Promise<void>
   _syncToDiskIfLinked: (content: string) => Promise<void>
-  _sealDraftInPlace: (
-    ensureRevisionMessage: EnsureRevisionMessage
-  ) => Promise<SealResult>
+  _sealDraftInPlace: (messageId: string) => Promise<SealResult>
   _reuseLastSealed: () => SealResult | null
-  _createSealedRevision: (
-    ensureRevisionMessage: EnsureRevisionMessage
-  ) => Promise<SealResult>
+  _createSealedRevision: (messageId: string) => Promise<SealResult>
   _reuseCurrentHead: () => SealResult | null
   /**
    * Set editor-relevant state and transition to 'ready'.
@@ -329,7 +313,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     /**
      * Creates a user-owned draft revision and marks it as the artifact head. This
-     * method does not create chat/system messages.
+     * method does not create chat messages.
      */
     async _createUserDraft(content: string): Promise<ArtifactRevision> {
       const { artifact, revisions, editorKey } = get()
@@ -368,6 +352,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         headRevision: newRevision,
         loadedRevisionId: revisionId,
         editableRevisionId: revisionId,
+        loadedContent: content,
         revisions: [...revisions, newRevision],
         artifactRevisionMetaByRevisionId: {
           ...get().artifactRevisionMetaByRevisionId,
@@ -392,6 +377,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         isSaving,
         artifact,
         revisions,
+        loadedContent,
       } = get()
 
       console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] save:requested', {
@@ -409,6 +395,12 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
       // Guard: no artifact to save to
       if (!artifact) return
+
+      // Guard: empty editor updates should not create revisions
+      if (content.trim() === '') return
+
+      // Guard: unchanged editor updates should not rewrite or fork revisions
+      if (content === loadedContent) return
 
       set({ isSaving: true, saveError: null })
       try {
@@ -461,6 +453,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         headRevision: s.headRevision
           ? { ...s.headRevision, content, updated_at: Date.now() }
           : null,
+        loadedContent: content,
         revisions: s.revisions.map((r) =>
           r.id === headRevision.id
             ? { ...r, content, updated_at: Date.now() }
@@ -523,7 +516,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
      * - !isDraft && changed  → _createSealedRevision
      * - !isDraft && !changed → _reuseCurrentHead
      */
-    async sealForSend(ensureRevisionMessage) {
+    async sealForSend(messageId) {
       const {
         editableRevisionId,
         headRevision,
@@ -560,32 +553,26 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       })
 
       if (isDraft && changed) {
-        return get()._sealDraftInPlace(ensureRevisionMessage)
+        return get()._sealDraftInPlace(messageId)
       } else if (isDraft && !changed) {
         return get()._reuseLastSealed()
       } else if (!isDraft && changed) {
-        return get()._createSealedRevision(ensureRevisionMessage)
+        return get()._createSealedRevision(messageId)
       } else {
         return get()._reuseCurrentHead()
       }
     },
 
     /**
-     * Seals the current user draft and asks the caller to ensure the chat/system
-     * revision anchor exists. This keeps message ownership outside artifact state.
+     * Seals the current user draft by linking it to the user message that is being
+     * submitted.
      */
-    async _sealDraftInPlace(ensureRevisionMessage): Promise<SealResult> {
+    async _sealDraftInPlace(messageId): Promise<SealResult> {
       const { headRevision, artifact } = get()
       if (!headRevision || !artifact) throw new Error('No active revision')
 
-      const sysMsgId = await ensureRevisionMessage(
-        'user',
-        artifact.id,
-        headRevision.id
-      )
-
-      await sealRevision(headRevision.id, sysMsgId)
-      const sealed = { ...headRevision, message_id: sysMsgId }
+      await sealRevision(headRevision.id, messageId)
+      const sealed = { ...headRevision, message_id: messageId }
       set((s) => ({
         headRevision: sealed,
         revisions: s.revisions.map((r) =>
@@ -629,7 +616,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
      * Creates and seals a new user revision when the current head is sealed but its
      * content has changed in memory.
      */
-    async _createSealedRevision(ensureRevisionMessage): Promise<SealResult> {
+    async _createSealedRevision(messageId): Promise<SealResult> {
       const { headRevision, artifact, revisions } = get()
       if (!headRevision || !artifact) throw new Error('No active revision')
 
@@ -638,18 +625,13 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         author: 'user',
         content: headRevision.content,
       })
-      const sysMsgId = await ensureRevisionMessage(
-        'user',
-        artifact.id,
-        revisionId
-      )
-      await sealRevision(revisionId, sysMsgId)
+      await sealRevision(revisionId, messageId)
       await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
       const newRevision: ArtifactRevision = {
         id: revisionId,
         artifact_id: artifact.id,
-        message_id: sysMsgId,
+        message_id: messageId,
         author: 'user',
         content: headRevision.content,
         created_at: Date.now(),
@@ -696,10 +678,10 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
     // ── External triggers ────────────────────────────────────────────────────────
 
     /**
-     * Applies sidecar-generated artifact content as a sealed AI revision. The caller
-     * supplies the message coordinator so chat anchoring remains outside this store.
+     * Applies sidecar-generated artifact content as a sealed AI revision linked to
+     * the assistant message that produced it.
      */
-    async applyAiRevision(content: string, ensureRevisionMessage) {
+    async applyAiRevision(content: string, messageId) {
       const { artifact, revisions } = get()
       if (!artifact) return
 
@@ -708,18 +690,13 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         author: 'ai',
         content,
       })
-      const sysMsgId = await ensureRevisionMessage(
-        'ai',
-        artifact.id,
-        revisionId
-      )
-      await sealRevision(revisionId, sysMsgId)
+      await sealRevision(revisionId, messageId)
       await updateArtifact(artifact.id, { current_revision_id: revisionId })
 
       const newRevision: ArtifactRevision = {
         id: revisionId,
         artifact_id: artifact.id,
-        message_id: sysMsgId,
+        message_id: messageId,
         author: 'ai',
         content,
         created_at: Date.now(),
@@ -818,6 +795,65 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
     },
 
     /**
+     * Loads an artifact and mounts its current revision. Empty artifacts are shown
+     * as editable blank documents so users can switch back to freshly created items.
+     */
+    async requestArtifactLoad(artifactId) {
+      console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] artifact-load:start', {
+        artifactId,
+      })
+      set({ status: 'loading' })
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+      const currentArtifact = get().artifact
+      const targetArtifact =
+        currentArtifact?.id === artifactId
+          ? currentArtifact
+          : await getArtifact(artifactId)
+
+      if (!targetArtifact) {
+        set({ status: 'ready' })
+        return
+      }
+
+      const allRevisions = await listRevisions(targetArtifact.id)
+      const revisionsAsc = [...allRevisions].reverse()
+      const targetHead = targetArtifact.current_revision_id
+        ? (revisionsAsc.find(
+            (r) => r.id === targetArtifact.current_revision_id
+          ) ??
+          revisionsAsc[revisionsAsc.length - 1] ??
+          null)
+        : (revisionsAsc[revisionsAsc.length - 1] ?? null)
+
+      set({
+        artifact: targetArtifact,
+        headRevision: targetHead,
+        revisions: revisionsAsc,
+        artifactRevisionMetaByRevisionId: {
+          ...get().artifactRevisionMetaByRevisionId,
+          ...Object.fromEntries(
+            revisionsAsc.map((targetRevision) => [
+              targetRevision.id,
+              buildRevisionMeta(targetArtifact, targetRevision),
+            ])
+          ),
+        },
+      })
+
+      await setConversationActiveArtifact(
+        targetArtifact.conversation_id,
+        targetArtifact.id
+      )
+      get()._mountRevision(targetHead, true)
+
+      if (targetArtifact.file_path) {
+        get().checkExternalChange()
+      }
+    },
+
+    /**
      * Creates a new empty artifact for the conversation and makes it the active
      * editor target without creating an initial revision.
      */
@@ -839,52 +875,6 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         artifactRevisionMetaByRevisionId: {},
         status: 'ready',
       })
-    },
-
-    /**
-     * Makes the loaded artifact discoverable from the chat thread. New artifacts
-     * need a revision ID before they can be represented by the existing revision
-     * card, so this creates an empty user draft when no head revision exists.
-     *
-     * The draft is intentionally not sealed here. Anchoring the message lets users
-     * find the document immediately, while message_id stays null so first edits can
-     * persist in place and the send flow can seal the same revision later.
-     */
-    async ensureDocumentThreadMessage(ensureRevisionMessage) {
-      let { artifact, headRevision } = get()
-      if (!artifact) return
-
-      if (!headRevision) {
-        headRevision = await get()._createUserDraft('')
-        artifact = get().artifact
-      }
-
-      if (!artifact || !headRevision) return
-
-      const sysMsgId = await ensureRevisionMessage(
-        headRevision.author === 'ai' ? 'ai' : 'user',
-        artifact.id,
-        headRevision.id
-      )
-
-      if (
-        headRevision.message_id !== null &&
-        headRevision.message_id !== sysMsgId
-      ) {
-        await sealRevision(headRevision.id, sysMsgId)
-        const sealed = { ...headRevision, message_id: sysMsgId }
-        set((s) => ({
-          headRevision:
-            s.headRevision?.id === headRevision.id ? sealed : s.headRevision,
-          revisions: s.revisions.map((r) =>
-            r.id === headRevision.id ? sealed : r
-          ),
-          artifactRevisionMetaByRevisionId: {
-            ...s.artifactRevisionMetaByRevisionId,
-            [sealed.id]: buildRevisionMeta(artifact, sealed),
-          },
-        }))
-      }
     },
 
     /**
@@ -958,9 +948,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
     /**
      * Loads missing thread revision metadata in a small deduped batch. The cache is
-     * keyed by revision ID because system messages already have exact revision
-     * anchors, and loaded/current revisions are added to the same cache by save,
-     * rename, load, and AI-apply paths.
+     * keyed by revision ID; loaded/current revisions are added to the same cache
+     * by save, rename, load, and AI-apply paths.
      */
     async loadArtifactRevisionMetas(references) {
       const uniqueReferences = new Map<string, ArtifactRevisionMetaReference>()

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { useArtifactStore } from '@/components/editor/artifactStore'
 import { console_if } from '@/lib/logger'
-import { parseRevisionMetadata } from '@/lib/revision-utils'
 import type { ChatCompletionRequest } from './sidecarStore'
 import { useMessageStore } from './messageStore'
 import { useSidecarStore } from './sidecarStore'
@@ -9,7 +8,6 @@ import { useSidecarStore } from './sidecarStore'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
-type RevisionMessageAuthor = 'user' | 'ai'
 
 /** @property projectId - project that owns the chat route */
 /** @property conversationId - conversation loaded for chat */
@@ -35,11 +33,6 @@ interface ChatSessionActions {
   loadChat: (params: LoadChatParams) => Promise<void>
   createNewDocument: (conversationId: string) => Promise<void>
   submitMessage: (content: string) => Promise<void>
-  ensureRevisionMessage: (
-    author: RevisionMessageAuthor,
-    artifactId: string,
-    revisionId: string
-  ) => Promise<string>
   reset: () => void
 }
 
@@ -49,15 +42,6 @@ const INITIAL_STATE: ChatSessionState = {
   activeConversationId: null,
   isAssistantStreaming: false,
   error: null,
-}
-
-function getThreadRevisionReferences() {
-  return useMessageStore.getState().messages.flatMap((message) => {
-    const meta = parseRevisionMetadata(message)
-    return meta?.artifactId
-      ? [{ artifactId: meta.artifactId, revisionId: meta.revisionId }]
-      : []
-  })
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -86,12 +70,6 @@ export const useChatSessionStore = create<
     try {
       await useMessageStore.getState().loadForConversation(conversationId)
       await useArtifactStore.getState().loadForConversation(conversationId)
-      await useArtifactStore
-        .getState()
-        .ensureDocumentThreadMessage(get().ensureRevisionMessage)
-      await useArtifactStore
-        .getState()
-        .loadArtifactRevisionMetas(getThreadRevisionReferences())
       set({ status: 'ready' })
       console_if('CHAT_SESSION').log('[CHAT_SESSION] load:ready', {
         projectId,
@@ -106,17 +84,10 @@ export const useChatSessionStore = create<
   },
 
   /**
-   * Creates a new document and immediately anchors it into the chat thread so it
-   * remains discoverable even before the user writes or sends a message.
+   * Creates a new document and makes it the active editor target.
    */
   async createNewDocument(conversationId) {
     await useArtifactStore.getState().createNewArtifact(conversationId)
-    await useArtifactStore
-      .getState()
-      .ensureDocumentThreadMessage(get().ensureRevisionMessage)
-    await useArtifactStore
-      .getState()
-      .loadArtifactRevisionMetas(getThreadRevisionReferences())
   },
 
   /**
@@ -136,10 +107,11 @@ export const useChatSessionStore = create<
     const artifactStore = useArtifactStore.getState()
 
     try {
-      await messageStore.addUserMessage(text)
-      const sealResult = await artifactStore.sealForSend(
-        get().ensureRevisionMessage
-      )
+      const userMessageId = await messageStore.addUserMessage(text)
+      if (!userMessageId) {
+        throw new Error('No active conversation')
+      }
+      const sealResult = await artifactStore.sealForSend(userMessageId)
       const refreshedMessages = useMessageStore.getState().messages
       const conversationId = useMessageStore.getState().conversationId
 
@@ -187,10 +159,7 @@ export const useChatSessionStore = create<
       if (finalMessageId && streamResult.artifactContent !== null) {
         await useArtifactStore
           .getState()
-          .applyAiRevision(
-            streamResult.artifactContent,
-            get().ensureRevisionMessage
-          )
+          .applyAiRevision(streamResult.artifactContent, finalMessageId)
       }
 
       console_if('CHAT_SESSION').log('[CHAT_SESSION] submit:done', {
@@ -207,30 +176,6 @@ export const useChatSessionStore = create<
     } finally {
       set({ isAssistantStreaming: false })
     }
-  },
-
-  /**
-   * Returns an existing revision anchor message for the loaded thread or creates a
-   * new one through messageStore. Artifact store receives this as an explicit callback.
-   */
-  async ensureRevisionMessage(author, artifactId, revisionId) {
-    const existingAnchor = useMessageStore
-      .getState()
-      .messages.find(
-        (message) => parseRevisionMetadata(message)?.revisionId === revisionId
-      )
-
-    if (existingAnchor) {
-      console_if('CHAT_SESSION').log('[CHAT_SESSION] revision-message:reuse', {
-        revisionId,
-        messageId: existingAnchor.id,
-      })
-      return existingAnchor.id
-    }
-
-    return useMessageStore
-      .getState()
-      .addSystemRevisionMessage(author, artifactId, revisionId)
   },
 
   /**

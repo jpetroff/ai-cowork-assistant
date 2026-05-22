@@ -4,6 +4,7 @@ import { useChatSessionStore } from '@/components/chat/chatSessionStore'
 import { useArtifactStore } from '@/components/editor/artifactStore'
 import { Button } from '@/components/ui/button'
 import { RevisionPicker } from './RevisionPicker'
+import { ArtifactMenu } from './ArtifactMenu'
 import { cn } from '@/lib/utils'
 
 function SaveStatus({
@@ -107,6 +108,7 @@ export function ArtifactTitleBar() {
       </div>
 
       <div className='flex items-center gap-2 shrink-0'>
+        <ArtifactMenu />
         <RevisionPicker />
         {/* STUB: link-to-file — file sync button here (FR-EDT-010) */}
         <SaveStatus isSaving={isSaving} saveError={saveError} />
