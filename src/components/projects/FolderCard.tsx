@@ -31,14 +31,14 @@ export function FolderCard({ project }: FolderCardProps) {
     <Card size='sm'>
       <CardHeader>
         <CardTitle className='flex items-center gap-2'>
-          <FolderIcon className='size-3.5 text-muted-foreground' />
+          <FolderIcon className='size-icon-sm text-muted-foreground' />
           Project Folder
         </CardTitle>
       </CardHeader>
       <CardContent>
         {project.folder_path ? (
           <div className='flex flex-col gap-2'>
-            <p className='text-xs text-muted-foreground truncate font-mono'>
+            <p className='type-ui-xs text-muted-foreground truncate font-mono'>
               {project.folder_path}
             </p>
             <Button
@@ -48,7 +48,7 @@ export function FolderCard({ project }: FolderCardProps) {
               disabled={picking}
               className='w-full'
             >
-              <FolderOpenIcon className='size-3.5' />
+              <FolderOpenIcon className='size-icon-sm' />
               Change folder
             </Button>
           </div>
@@ -60,7 +60,7 @@ export function FolderCard({ project }: FolderCardProps) {
             disabled={picking}
             className='w-full'
           >
-            <FolderOpenIcon className='size-3.5' />
+            <FolderOpenIcon className='size-icon-sm' />
             Attach folder
           </Button>
         )}

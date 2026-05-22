@@ -9,46 +9,45 @@
     ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --ed-font-mono:
     ui-monospace, 'SF Mono', 'Cascadia Code', 'Fira Code', Menlo, monospace;
-  --ed-size-body: 15px;
-  --ed-size-sm: 13px;
-  --ed-line-body: 1.8;
+  --ed-size-body: var(--ui-text-editor-body);
+  --ed-size-sm: var(--ui-text-sm);
+  --ed-line-body: var(--ui-text-editor-body-line-height);
   --ed-line-tight: 1.3;
   --ed-line-heading: 1.2;
   --ed-space-block: 1.15em; /* spacing between block elements */
   --ed-space-tight: 0.5em;
   --ed-indent-list: 1.6em;
 
-  /* Warm ink colours — adapts to light/dark */
-  --ed-ink: oklch(0.147 0.004 49.25);
-  --ed-ink-muted: oklch(0.45 0.012 50);
-  --ed-ink-faint: oklch(0.68 0.01 50);
-  --ed-accent: oklch(0.45 0.09 40); /* warm brown accent */
-  --ed-accent-subtle: oklch(0.45 0.09 40 / 0.12);
-  --ed-code-bg: oklch(0.965 0.006 60); /* warm cream */
-  --ed-code-border: oklch(0.88 0.01 55);
-  --ed-pre-bg: oklch(0.16 0.005 50); /* near-black for code blocks */
-  --ed-pre-fg: oklch(0.93 0.012 70);
-  --ed-quote-bar: oklch(0.5 0.08 42); /* editorial accent bar */
-  --ed-hr: oklch(0.87 0.008 55);
-  --ed-selection: oklch(0.45 0.09 40 / 0.15);
-  --ed-link: oklch(0.4 0.09 40);
+  --ed-ink: var(--foreground);
+  --ed-ink-muted: var(--muted-foreground);
+  --ed-ink-faint: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  --ed-accent: var(--primary);
+  --ed-accent-subtle: color-mix(in oklab, var(--primary) 12%, transparent);
+  --ed-code-bg: var(--muted);
+  --ed-code-border: var(--border);
+  --ed-pre-bg: var(--foreground);
+  --ed-pre-fg: var(--background);
+  --ed-quote-bar: var(--primary);
+  --ed-hr: var(--border);
+  --ed-selection: color-mix(in oklab, var(--primary) 16%, transparent);
+  --ed-link: var(--primary);
 }
 
 /* Dark-mode overrides via .dark ancestor */
 .dark .ProseMirror {
-  --ed-ink: oklch(0.93 0.006 55);
-  --ed-ink-muted: oklch(0.65 0.01 55);
-  --ed-ink-faint: oklch(0.48 0.01 55);
-  --ed-accent: oklch(0.75 0.07 55);
-  --ed-accent-subtle: oklch(0.75 0.07 55 / 0.12);
-  --ed-code-bg: oklch(0.22 0.006 50);
-  --ed-code-border: oklch(0.3 0.008 50);
-  --ed-pre-bg: oklch(0.14 0.004 50);
-  --ed-pre-fg: oklch(0.88 0.01 65);
-  --ed-quote-bar: oklch(0.68 0.07 55);
-  --ed-hr: oklch(0.3 0.006 50);
-  --ed-selection: oklch(0.75 0.07 55 / 0.2);
-  --ed-link: oklch(0.72 0.07 55);
+  --ed-ink: var(--foreground);
+  --ed-ink-muted: var(--muted-foreground);
+  --ed-ink-faint: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  --ed-accent: var(--primary);
+  --ed-accent-subtle: color-mix(in oklab, var(--primary) 16%, transparent);
+  --ed-code-bg: var(--muted);
+  --ed-code-border: var(--border);
+  --ed-pre-bg: var(--popover);
+  --ed-pre-fg: var(--popover-foreground);
+  --ed-quote-bar: var(--primary);
+  --ed-hr: var(--border);
+  --ed-selection: color-mix(in oklab, var(--primary) 24%, transparent);
+  --ed-link: var(--primary);
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
@@ -65,7 +64,7 @@
     'kern' 1,
     'liga' 1,
     'calt' 1;
-  letter-spacing: -0.003em;
+  letter-spacing: 0;
   text-rendering: optimizeLegibility;
   /* Optimal reading measure — centered in the panel */
   max-width: 68ch;
@@ -121,7 +120,7 @@
   font-size: 2em;
   font-weight: 800;
   line-height: var(--ed-line-heading);
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
   color: var(--ed-ink);
 }
 
@@ -129,7 +128,7 @@
   font-size: 1.5em;
   font-weight: 700;
   line-height: var(--ed-line-heading);
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
   color: var(--ed-ink);
 }
 
@@ -137,21 +136,21 @@
   font-size: 1.2em;
   font-weight: 650;
   line-height: var(--ed-line-tight);
-  letter-spacing: -0.018em;
+  letter-spacing: 0;
 }
 
 .ProseMirror h4 {
   font-size: 1em;
   font-weight: 650;
   line-height: var(--ed-line-tight);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .ProseMirror h5 {
   font-size: 0.9em;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   color: var(--ed-ink-muted);
 }
 
@@ -159,7 +158,7 @@
   font-size: 0.875em;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   color: var(--ed-ink-faint);
 }
 
@@ -209,13 +208,13 @@
 
 /* Highlight */
 .ProseMirror mark {
-  background: oklch(0.88 0.1 85 / 0.55);
+  background: var(--ed-accent-subtle);
   border-radius: 2px;
   padding: 0 0.1em;
 }
 
 .dark .ProseMirror mark {
-  background: oklch(0.65 0.09 70 / 0.3);
+  background: var(--ed-accent-subtle);
 }
 
 /* ── Links ────────────────────────────────────────────────────────────────── */
@@ -371,7 +370,7 @@
 .ProseMirror th {
   font-weight: 650;
   font-size: 0.82em;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   text-transform: uppercase;
   background-color: var(--ed-code-bg);
   color: var(--ed-ink-muted);
@@ -380,11 +379,11 @@
 
 /* Alternating row tint */
 .ProseMirror tr:nth-child(even) td {
-  background-color: oklch(0.98 0.003 55 / 0.5);
+  background-color: color-mix(in oklab, var(--muted) 50%, transparent);
 }
 
 .dark .ProseMirror tr:nth-child(even) td {
-  background-color: oklch(1 0 0 / 0.03);
+  background-color: color-mix(in oklab, var(--muted) 35%, transparent);
 }
 
 .ProseMirror .selectedCell::after {

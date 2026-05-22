@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowUpIcon } from '@phosphor-icons/react'
 import { useConversationStore } from '@/components/conversations/conversationStore'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 interface NewTaskInputProps {
@@ -39,8 +40,8 @@ export function NewTaskInput({ projectId }: NewTaskInputProps) {
   }
 
   return (
-    <div className='relative rounded-none ring-1 ring-foreground/10 bg-card focus-within:ring-foreground/30 transition-shadow'>
-      <textarea
+    <div className='relative rounded-card ring-1 ring-foreground/10 bg-card focus-within:ring-foreground/30 transition-shadow'>
+      <Textarea
         ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -49,23 +50,23 @@ export function NewTaskInput({ projectId }: NewTaskInputProps) {
         rows={3}
         disabled={submitting}
         className={cn(
-          'w-full resize-none bg-transparent px-4 pt-4 pb-12 text-sm outline-none',
+          'min-h-28 w-full resize-none border-0 bg-transparent px-surface-card-lg pt-surface-card-lg pb-16 type-ui-lg outline-none shadow-none focus-visible:ring-0',
           'placeholder:text-muted-foreground disabled:opacity-50',
           'max-h-[8rem] overflow-y-auto'
         )}
         style={{ fieldSizing: 'content' } as React.CSSProperties}
       />
-      <div className='absolute bottom-3 right-3 flex items-center gap-2'>
-        <span className='text-muted-foreground text-xs hidden sm:block'>
+      <div className='absolute bottom-4 right-4 flex items-center gap-3'>
+        <span className='text-muted-foreground type-ui-xs hidden sm:block'>
           {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+↵
         </span>
         <Button
-          size='icon-sm'
+          size='icon'
           onClick={handleSubmit}
           disabled={isEmpty || submitting}
           aria-label='Start task'
         >
-          <ArrowUpIcon className='size-3.5' />
+          <ArrowUpIcon className='size-icon-md' />
         </Button>
       </div>
     </div>

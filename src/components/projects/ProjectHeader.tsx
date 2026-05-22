@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeftIcon, CheckIcon, XIcon } from '@phosphor-icons/react'
 import { useProjectStore } from '@/components/projects/projectStore'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import type { Project } from '@/lib/db/types'
 
@@ -47,25 +48,25 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
   }
 
   return (
-    <div className='flex items-center gap-3 px-6 py-4 border-b'>
+    <div className='flex items-center gap-3 px-page-x py-surface-card border-b'>
       <Link
         to='/'
-        className='text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors shrink-0'
+        className='text-muted-foreground hover:text-foreground flex h-control-sm items-center gap-1.5 rounded-control px-2 type-ui-sm transition-colors shrink-0'
       >
-        <ArrowLeftIcon className='size-3.5' />
+        <ArrowLeftIcon className='size-icon-sm' />
         Projects
       </Link>
 
-      <span className='text-muted-foreground text-xs'>/</span>
+      <span className='text-muted-foreground type-ui-sm'>/</span>
 
       {editing ? (
-        <div className='flex items-center gap-1 min-w-0'>
-          <input
+        <div className='flex items-center gap-2 min-w-0'>
+          <Input
             ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKeyDown}
-            className='bg-transparent border-b border-primary text-sm font-medium outline-none min-w-0 w-48'
+            className='h-control-sm min-w-0 w-56 border-0 border-b border-primary bg-transparent px-0 type-title-sm font-medium shadow-none rounded-none focus-visible:ring-0'
             autoFocus
           />
           <Button
@@ -78,7 +79,7 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
             {isRenaming ? (
               <Spinner className='size-3' />
             ) : (
-              <CheckIcon className='size-3.5' />
+              <CheckIcon className='size-icon-sm' />
             )}
           </Button>
           <Button
@@ -87,17 +88,19 @@ export function ProjectHeader({ project }: ProjectHeaderProps) {
             onClick={discard}
             aria-label='Discard rename'
           >
-            <XIcon className='size-3.5' />
+            <XIcon className='size-icon-sm' />
           </Button>
         </div>
       ) : (
-        <button
+        <Button
+          variant='ghost'
+          size='sm'
           onClick={startEdit}
-          className='text-sm font-medium hover:text-muted-foreground transition-colors truncate text-left'
+          className='min-w-0 max-w-full justify-start px-2 type-title-sm font-medium'
           title='Click to rename'
         >
           {project.name}
-        </button>
+        </Button>
       )}
     </div>
   )

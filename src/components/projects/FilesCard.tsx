@@ -5,23 +5,23 @@ import { Badge } from '@/components/ui/badge'
 
 export function FilesCard() {
   return (
-    <Card size="sm">
+    <Card size='sm'>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <UploadSimpleIcon className="size-3.5 text-muted-foreground" />
+        <CardTitle className='flex items-center gap-2'>
+          <UploadSimpleIcon className='size-icon-sm text-muted-foreground' />
           Files
-          <Badge variant="secondary" className="ml-auto text-xs font-normal">
+          <Badge variant='secondary' className='ml-auto font-normal'>
             Coming soon
           </Badge>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className='flex flex-col gap-3'>
         {/* TODO: implement file upload when backend is ready */}
-        <Button variant="outline" size="sm" className="w-full" disabled>
-          <UploadSimpleIcon className="size-3.5" />
+        <Button variant='outline' size='sm' className='w-full' disabled>
+          <UploadSimpleIcon className='size-icon-sm' />
           Upload file
         </Button>
-        <p className="text-xs text-muted-foreground text-center">
+        <p className='type-ui-sm text-muted-foreground text-center'>
           No files uploaded yet
         </p>
       </CardContent>

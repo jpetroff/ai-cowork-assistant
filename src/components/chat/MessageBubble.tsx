@@ -12,13 +12,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[80%] rounded-lg px-3 py-2 text-sm',
+          'max-w-[80%] rounded-card px-surface-card py-control-y-md type-ui-md',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-foreground prose prose-sm dark:prose-invert'
         )}
       >
-        <p className="whitespace-pre-wrap wrap-break-word m-0">{message.content}</p>
+        <p className='whitespace-pre-wrap wrap-break-word m-0'>
+          {message.content}
+        </p>
       </div>
     </div>
   )

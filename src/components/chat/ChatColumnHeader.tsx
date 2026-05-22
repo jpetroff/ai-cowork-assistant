@@ -62,7 +62,7 @@ export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
   }
 
   return (
-    <div className='flex items-center gap-1 px-3 py-2 border-b shrink-0'>
+    <div className='flex items-center gap-2 px-surface-card py-control-y-md border-b shrink-0'>
       <Link
         to={`/projects/${projectId}`}
         aria-label='Back to project'
@@ -85,10 +85,10 @@ export function ChatColumnHeader({ projectId }: ChatColumnHeaderProps) {
               }
               if (e.key === 'Escape') setIsRenaming(false)
             }}
-            className='h-7 text-sm'
+            className='h-control-sm type-ui-md'
           />
         ) : (
-          <p className='text-sm font-medium truncate'>
+          <p className='type-title-sm font-medium truncate'>
             {activeConversation?.title ?? 'Untitled conversation'}
           </p>
         )}

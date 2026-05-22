@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -12,6 +12,44 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+  --radius-control: var(--ui-radius-control);
+  --radius-card: var(--ui-radius-card);
+  --radius-popover: var(--ui-radius-popover);
+  --radius-pill: var(--ui-radius-pill);
+  --spacing-control-xs: var(--ui-control-height-xs);
+  --spacing-control-sm: var(--ui-control-height-sm);
+  --spacing-control-md: var(--ui-control-height-md);
+  --spacing-control-lg: var(--ui-control-height-lg);
+  --spacing-icon-sm: var(--ui-icon-size-sm);
+  --spacing-icon-md: var(--ui-icon-size-md);
+  --spacing-icon-lg: var(--ui-icon-size-lg);
+  --spacing-control-x-sm: var(--ui-control-padding-x-sm);
+  --spacing-control-x-md: var(--ui-control-padding-x-md);
+  --spacing-control-x-lg: var(--ui-control-padding-x-lg);
+  --spacing-control-y-sm: var(--ui-control-padding-y-sm);
+  --spacing-control-y-md: var(--ui-control-padding-y-md);
+  --spacing-surface-panel: var(--ui-surface-panel);
+  --spacing-surface-card: var(--ui-surface-card);
+  --spacing-surface-card-lg: var(--ui-surface-card-lg);
+  --spacing-page-x: var(--ui-page-padding-x);
+  --spacing-page-y: var(--ui-page-padding-y);
+  --spacing-section-gap: var(--ui-section-gap);
+  --text-ui-xs: var(--ui-text-xs);
+  --text-ui-xs--line-height: var(--ui-text-xs-line-height);
+  --text-ui-sm: var(--ui-text-sm);
+  --text-ui-sm--line-height: var(--ui-text-sm-line-height);
+  --text-ui-md: var(--ui-text-md);
+  --text-ui-md--line-height: var(--ui-text-md-line-height);
+  --text-ui-lg: var(--ui-text-lg);
+  --text-ui-lg--line-height: var(--ui-text-lg-line-height);
+  --text-title-sm: var(--ui-text-title-sm);
+  --text-title-sm--line-height: var(--ui-text-title-sm-line-height);
+  --text-title-md: var(--ui-text-title-md);
+  --text-title-md--line-height: var(--ui-text-title-md-line-height);
+  --text-title-lg: var(--ui-text-title-lg);
+  --text-title-lg--line-height: var(--ui-text-title-lg-line-height);
+  --text-editor-body: var(--ui-text-editor-body);
+  --text-editor-body--line-height: var(--ui-text-editor-body-line-height);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,6 +85,44 @@
 
 :root {
   --radius: 0.625rem;
+  --ui-radius-control: 0.5rem;
+  --ui-radius-card: 0.5rem;
+  --ui-radius-popover: 0.625rem;
+  --ui-radius-pill: 999px;
+  --ui-control-height-xs: 1.75rem;
+  --ui-control-height-sm: 2rem;
+  --ui-control-height-md: 2.25rem;
+  --ui-control-height-lg: 2.5rem;
+  --ui-control-padding-x-sm: 0.625rem;
+  --ui-control-padding-x-md: 0.875rem;
+  --ui-control-padding-x-lg: 1rem;
+  --ui-control-padding-y-sm: 0.375rem;
+  --ui-control-padding-y-md: 0.5rem;
+  --ui-surface-panel: 1rem;
+  --ui-surface-card: 1rem;
+  --ui-surface-card-lg: 1.25rem;
+  --ui-page-padding-x: 2rem;
+  --ui-page-padding-y: 2rem;
+  --ui-section-gap: 1.5rem;
+  --ui-icon-size-sm: 0.875rem;
+  --ui-icon-size-md: 1rem;
+  --ui-icon-size-lg: 1.125rem;
+  --ui-text-xs: 0.75rem;
+  --ui-text-xs-line-height: 1rem;
+  --ui-text-sm: 0.8125rem;
+  --ui-text-sm-line-height: 1.125rem;
+  --ui-text-md: 0.875rem;
+  --ui-text-md-line-height: 1.25rem;
+  --ui-text-lg: 1rem;
+  --ui-text-lg-line-height: 1.5rem;
+  --ui-text-title-sm: 1rem;
+  --ui-text-title-sm-line-height: 1.5rem;
+  --ui-text-title-md: 1.25rem;
+  --ui-text-title-md-line-height: 1.75rem;
+  --ui-text-title-lg: 1.5rem;
+  --ui-text-title-lg-line-height: 2rem;
+  --ui-text-editor-body: 1rem;
+  --ui-text-editor-body-line-height: 1.75;
   --background: oklch(1 0 0);
   --foreground: oklch(0.147 0.004 49.25);
   --card: oklch(1 0 0);
@@ -115,18 +191,62 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .type-ui-xs {
+    font-size: var(--ui-text-xs);
+    line-height: var(--ui-text-xs-line-height);
+  }
+
+  .type-ui-sm {
+    font-size: var(--ui-text-sm);
+    line-height: var(--ui-text-sm-line-height);
+  }
+
+  .type-ui-md {
+    font-size: var(--ui-text-md);
+    line-height: var(--ui-text-md-line-height);
+  }
+
+  .type-ui-lg {
+    font-size: var(--ui-text-lg);
+    line-height: var(--ui-text-lg-line-height);
+  }
+
+  .type-title-sm {
+    font-size: var(--ui-text-title-sm);
+    line-height: var(--ui-text-title-sm-line-height);
+  }
+
+  .type-title-md {
+    font-size: var(--ui-text-title-md);
+    line-height: var(--ui-text-title-md-line-height);
+  }
+
+  .type-title-lg {
+    font-size: var(--ui-text-title-lg);
+    line-height: var(--ui-text-title-lg-line-height);
+  }
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  html, body, #root {
+  html,
+  body,
+  #root {
     @apply h-full;
   }
   body {
     @apply bg-background text-foreground;
+    letter-spacing: 0;
   }
 }

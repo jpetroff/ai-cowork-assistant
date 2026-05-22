@@ -36,9 +36,9 @@ export function RevisionPicker() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className='h-7 gap-1 text-xs text-muted-foreground px-2 flex items-center rounded hover:bg-accent transition-colors'>
+      <DropdownMenuTrigger className='h-control-xs gap-1 type-ui-xs text-muted-foreground px-control-x-sm flex items-center rounded-control hover:bg-accent transition-colors'>
         v{displayN} of {total}
-        <ChevronDown className='size-3 ml-1' />
+        <ChevronDown className='size-icon-sm ml-1' />
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-64'>
         {revisionItems.map((revision, idx) => {
@@ -58,22 +58,22 @@ export function RevisionPicker() {
               )}
             >
               <span className='flex items-center gap-1.5 w-full'>
-                <span className='font-medium text-xs'>v{versionN}</span>
-                <span className='text-xs text-muted-foreground'>
+                <span className='font-medium type-ui-xs'>v{versionN}</span>
+                <span className='type-ui-xs text-muted-foreground'>
                   · {authorLabel}
                 </span>
                 {isDraft && (
-                  <span className='ml-auto text-[10px] text-muted-foreground border rounded px-1'>
+                  <span className='ml-auto type-ui-xs text-muted-foreground border rounded-control px-1'>
                     draft
                   </span>
                 )}
                 {isCurrent && !isDraft && (
-                  <span className='ml-auto text-[10px] text-primary border border-primary/30 rounded px-1'>
+                  <span className='ml-auto type-ui-xs text-primary border border-primary/30 rounded-control px-1'>
                     current
                   </span>
                 )}
               </span>
-              <span className='text-[10px] text-muted-foreground'>
+              <span className='type-ui-xs text-muted-foreground'>
                 {formatTimestamp(revision.created_at)}
               </span>
             </DropdownMenuItem>

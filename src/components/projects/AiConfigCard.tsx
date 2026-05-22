@@ -5,6 +5,7 @@ import { useProjectSettingsStore } from '@/components/projects/projectSettingsSt
 import type { ProjectAiConfig } from '@/components/projects/projectSettingsStore'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -50,14 +51,14 @@ export function AiConfigCard({ projectId }: AiConfigCardProps) {
     <Card size='sm'>
       <CardHeader>
         <CardTitle className='flex items-center gap-2'>
-          <CpuIcon className='size-3.5 text-muted-foreground' />
+          <CpuIcon className='size-icon-sm text-muted-foreground' />
           AI Configuration
         </CardTitle>
       </CardHeader>
       <CardContent className='flex flex-col gap-3'>
         {!hasProviders ? (
           <>
-            <p className='text-xs text-muted-foreground'>
+            <p className='type-ui-sm text-muted-foreground'>
               No AI providers configured yet.
             </p>
             <Select disabled>
@@ -85,13 +86,13 @@ export function AiConfigCard({ projectId }: AiConfigCardProps) {
               onClick={() => navigate('/settings')}
             >
               Configure in Settings
-              <ArrowRightIcon className='size-3.5 ml-1' />
+              <ArrowRightIcon className='size-icon-sm ml-1' />
             </Button>
           </>
         ) : (
           <>
             <div className='flex flex-col gap-1'>
-              <label className='text-xs text-muted-foreground'>Provider</label>
+              <Label className='text-muted-foreground'>Provider</Label>
               <Select
                 value={current.provider_id ?? undefined}
                 onValueChange={handleProviderChange}
@@ -110,7 +111,7 @@ export function AiConfigCard({ projectId }: AiConfigCardProps) {
             </div>
 
             <div className='flex flex-col gap-1'>
-              <label className='text-xs text-muted-foreground'>Model</label>
+              <Label className='text-muted-foreground'>Model</Label>
               <Select
                 value={current.model ?? undefined}
                 onValueChange={(model) => {
@@ -132,9 +133,7 @@ export function AiConfigCard({ projectId }: AiConfigCardProps) {
             </div>
 
             <div className='flex flex-col gap-1'>
-              <label className='text-xs text-muted-foreground'>
-                Embedding model
-              </label>
+              <Label className='text-muted-foreground'>Embedding model</Label>
               <Select
                 value={current.embedding_model ?? undefined}
                 onValueChange={(embedding_model) => {

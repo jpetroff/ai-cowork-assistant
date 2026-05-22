@@ -93,14 +93,14 @@ export function ArtifactMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className='h-7 gap-1 text-xs text-muted-foreground px-2 flex items-center rounded hover:bg-accent transition-colors disabled:pointer-events-none disabled:opacity-50'
+        className='h-control-xs gap-1 type-ui-xs text-muted-foreground px-control-x-sm flex items-center rounded-control hover:bg-accent transition-colors disabled:pointer-events-none disabled:opacity-50'
         disabled={!conversationId}
         aria-label='Artifacts'
         title='Artifacts'
       >
-        <FileText className='size-3.5' />
+        <FileText className='size-icon-sm' />
         <span className='hidden sm:inline'>Artifacts</span>
-        <ChevronDown className='size-3' />
+        <ChevronDown className='size-icon-sm' />
       </DropdownMenuTrigger>
       <DropdownMenuContent align='end' className='w-72'>
         <DropdownMenuLabel>Artifacts</DropdownMenuLabel>
@@ -139,17 +139,17 @@ export function ArtifactMenu() {
                   isActive && 'bg-accent'
                 )}
               >
-                <FileText className='mt-0.5 size-3.5 text-muted-foreground' />
+                <FileText className='mt-0.5 size-icon-sm text-muted-foreground' />
                 <span className='min-w-0 flex-1'>
                   <span className='block truncate font-medium'>{title}</span>
-                  <span className='block truncate text-[10px] text-muted-foreground'>
+                  <span className='block truncate type-ui-xs text-muted-foreground'>
                     {revisionLabel}
                     {item.latestRevision
                       ? ` · Last edited ${formatTimestamp(item.latestRevision.updated_at)}`
                       : ' · No revisions yet'}
                   </span>
                 </span>
-                {isActive && <Check className='mt-0.5 size-3.5' />}
+                {isActive && <Check className='mt-0.5 size-icon-sm' />}
               </DropdownMenuItem>
             )
           })}

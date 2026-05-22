@@ -30,9 +30,9 @@ export function ChatInput() {
   }
 
   return (
-    <div className='border-t p-3 shrink-0'>
+    <div className='border-t p-surface-card shrink-0'>
       {/* STUB: selection-context — show editor selection badge here (FR-CHT-005) */}
-      <div className='flex gap-2 items-end'>
+      <div className='flex gap-3 items-end'>
         <Textarea
           ref={textareaRef}
           value={value}
@@ -43,7 +43,7 @@ export function ChatInput() {
           }
           disabled={isStreaming}
           rows={3}
-          className='resize-none flex-1 text-sm'
+          className='resize-none flex-1 type-ui-md'
         />
         <Button
           size='icon'

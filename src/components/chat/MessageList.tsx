@@ -6,7 +6,7 @@ import { MessageBubble } from './MessageBubble'
 
 function MessageListEmpty() {
   return (
-    <div className='flex-1 flex items-center justify-center text-muted-foreground text-sm'>
+    <div className='flex-1 flex items-center justify-center text-muted-foreground type-ui-md'>
       Start a conversation below.
     </div>
   )
@@ -15,7 +15,7 @@ function MessageListEmpty() {
 function StreamingBubble({ content }: { content: string }) {
   return (
     <div className='flex justify-start'>
-      <div className='max-w-[80%] rounded-lg px-3 py-2 text-sm bg-muted text-foreground'>
+      <div className='max-w-[80%] rounded-card px-surface-card py-control-y-md type-ui-md bg-muted text-foreground'>
         {content ? (
           <p className='whitespace-pre-wrap wrap-break-word m-0'>{content}</p>
         ) : (
@@ -47,7 +47,7 @@ export function MessageList() {
   if (status === 'loading') return <MessageListSkeleton />
 
   return (
-    <div className='flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-3 min-h-0'>
+    <div className='flex-1 overflow-y-auto px-surface-card py-surface-card-lg flex flex-col gap-surface-card min-h-0'>
       {thread.length === 0 && status === 'ready' && <MessageListEmpty />}
 
       {thread.map((item) => (

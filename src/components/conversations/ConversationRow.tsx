@@ -111,7 +111,7 @@ export function ConversationRow({
         onClick={handleClick}
         onKeyDown={(e) => e.key === 'Enter' && handleClick()}
         className={cn(
-          'group flex items-center gap-3 px-3 py-2.5 rounded-none',
+          'group flex items-center gap-3 px-surface-card py-control-y-md rounded-card',
           'hover:bg-muted/50 transition-colors cursor-pointer select-none',
           isBusy && 'opacity-50 cursor-not-allowed pointer-events-none'
         )}
@@ -128,7 +128,7 @@ export function ConversationRow({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={handleRenameKeyDown}
-                className='flex-1 bg-transparent border-b border-primary text-sm outline-none min-w-0'
+                className='flex-1 bg-transparent border-b border-primary type-ui-md outline-none min-w-0'
                 autoFocus
               />
               <Button
@@ -153,9 +153,9 @@ export function ConversationRow({
               </Button>
             </div>
           ) : (
-            <p className='text-sm truncate'>{displayTitle}</p>
+            <p className='type-ui-md truncate'>{displayTitle}</p>
           )}
-          <p className='text-xs text-muted-foreground mt-0.5'>
+          <p className='type-ui-xs text-muted-foreground mt-1'>
             {formatRelativeTime(conversation.updated_at)}
           </p>
         </div>

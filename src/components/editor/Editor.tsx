@@ -250,7 +250,7 @@ const LinkWithShortcut = Link.extend({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function Sep() {
-  return <div className='h-4 w-px bg-border/70 mx-0.5 shrink-0' />
+  return <div className='h-4 w-px bg-border/70 mx-1 shrink-0' />
 }
 
 function TipBtn({
@@ -274,7 +274,6 @@ function TipBtn({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className='rounded-none'
     >
       {children}
     </Toggle>
@@ -346,9 +345,8 @@ function LinkPopover({
             disabled={disabled}
             aria-label='Link (⌘K)'
             title='Link (⌘K)'
-            className='rounded-none'
           >
-            <Link2 className='h-3.5 w-3.5' />
+            <Link2 className='size-icon-sm' />
           </Toggle>
         }
       />
@@ -356,14 +354,14 @@ function LinkPopover({
         side='bottom'
         align='start'
         sideOffset={6}
-        className='w-72 p-2 flex flex-col gap-2'
+        className='w-72 p-surface-card flex flex-col gap-2'
       >
-        <div className='flex gap-1.5'>
+        <div className='flex gap-2'>
           <Input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder='https://…'
-            className='h-7 text-xs rounded-none flex-1'
+            className='h-control-xs type-ui-xs flex-1'
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()
@@ -380,7 +378,7 @@ function LinkPopover({
             size='sm'
             variant='outline'
             onClick={apply}
-            className='h-7 px-2 text-xs rounded-none'
+            className='h-control-xs px-control-x-sm type-ui-xs'
           >
             Apply
           </Button>
@@ -390,7 +388,7 @@ function LinkPopover({
             size='sm'
             variant='ghost'
             onClick={remove}
-            className='h-7 text-xs justify-start text-muted-foreground hover:text-destructive rounded-none'
+            className='h-control-xs type-ui-xs justify-start text-muted-foreground hover:text-destructive'
           >
             Remove link
           </Button>
@@ -412,20 +410,20 @@ function TableContextBar({
   return (
     <>
       <Sep />
-      <div className='flex items-center gap-0.5'>
+      <div className='flex items-center gap-1'>
         <TipBtn
           label='Select row'
           disabled={disabled}
           onClick={() => editor.commands.selectTableRow()}
         >
-          <TableRowsSplit className='h-3.5 w-3.5' />
+          <TableRowsSplit className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Select column'
           disabled={disabled}
           onClick={() => editor.commands.selectTableColumn()}
         >
-          <TableColumnsSplit className='h-3.5 w-3.5' />
+          <TableColumnsSplit className='size-icon-sm' />
         </TipBtn>
         <Sep />
         <TipBtn
@@ -433,28 +431,28 @@ function TableContextBar({
           disabled={disabled}
           onClick={() => editor.chain().focus().addRowAfter().run()}
         >
-          <Rows3 className='h-3.5 w-3.5' />
+          <Rows3 className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Add column'
           disabled={disabled}
           onClick={() => editor.chain().focus().addColumnAfter().run()}
         >
-          <Columns3 className='h-3.5 w-3.5' />
+          <Columns3 className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Delete row'
           disabled={disabled}
           onClick={() => editor.chain().focus().deleteRow().run()}
         >
-          <span className='text-[10px] font-medium leading-none'>−R</span>
+          <span className='type-ui-xs font-medium leading-none'>−R</span>
         </TipBtn>
         <TipBtn
           label='Delete column'
           disabled={disabled}
           onClick={() => editor.chain().focus().deleteColumn().run()}
         >
-          <span className='text-[10px] font-medium leading-none'>−C</span>
+          <span className='type-ui-xs font-medium leading-none'>−C</span>
         </TipBtn>
         <Sep />
         <Toggle
@@ -464,9 +462,9 @@ function TableContextBar({
           disabled={disabled}
           aria-label='Delete table'
           title='Delete table'
-          className='rounded-none text-muted-foreground hover:text-destructive'
+          className='text-muted-foreground hover:text-destructive'
         >
-          <Trash2 className='h-3.5 w-3.5' />
+          <Trash2 className='size-icon-sm' />
         </Toggle>
       </div>
     </>
@@ -517,12 +515,12 @@ function MarkdownDialog({
         onClick={() => onOpenChange(false)}
       />
       {/* Panel */}
-      <div className='fixed inset-[5%] z-50 flex flex-col bg-background ring-1 ring-foreground/10 overflow-hidden rounded-none'>
+      <div className='fixed inset-[5%] z-50 flex flex-col bg-background ring-1 ring-foreground/10 overflow-hidden rounded-popover'>
         {/* Header */}
-        <div className='flex items-center justify-between px-5 py-3 border-b shrink-0'>
+        <div className='flex items-center justify-between px-surface-card-lg py-surface-card border-b shrink-0'>
           <div>
-            <div className='text-sm font-medium'>Markdown source</div>
-            <div className='text-xs text-muted-foreground mt-0.5'>
+            <div className='type-title-sm font-medium'>Markdown source</div>
+            <div className='type-ui-sm text-muted-foreground mt-0.5'>
               Read-only
             </div>
           </div>
@@ -531,12 +529,12 @@ function MarkdownDialog({
               size='sm'
               variant='outline'
               onClick={copy}
-              className='gap-1.5 rounded-none h-7 text-xs'
+              className='gap-1.5 h-control-sm type-ui-sm'
             >
               {copied ? (
-                <Check className='h-3.5 w-3.5' />
+                <Check className='size-icon-sm' />
               ) : (
-                <Copy className='h-3.5 w-3.5' />
+                <Copy className='size-icon-sm' />
               )}
               {copied ? 'Copied!' : 'Copy'}
             </Button>
@@ -544,7 +542,7 @@ function MarkdownDialog({
               size='sm'
               variant='ghost'
               onClick={() => onOpenChange(false)}
-              className='rounded-none h-7 text-xs'
+              className='h-control-sm type-ui-sm'
             >
               Close
             </Button>
@@ -552,7 +550,7 @@ function MarkdownDialog({
         </div>
         {/* Content */}
         <ScrollArea className='flex-1 min-h-0'>
-          <pre className='p-5 font-mono text-xs text-foreground/80 whitespace-pre-wrap wrap-break-word leading-relaxed'>
+          <pre className='p-surface-card-lg font-mono type-ui-sm text-foreground/80 whitespace-pre-wrap wrap-break-word leading-relaxed'>
             {markdown || (
               <span className='text-muted-foreground italic'>
                 Empty document
@@ -616,19 +614,19 @@ function EditorToolbarInner({
   }, [editor, onLinkOpenChange])
 
   return (
-    <div className='flex items-center gap-0.5 px-2 flex-wrap'>
+    <div className='flex items-center gap-1 px-2 flex-wrap'>
       {/* Block format */}
       <DropdownMenu>
         <DropdownMenuTrigger
           disabled={disabled}
           className={cn(
-            'flex items-center gap-1 h-7 px-2 rounded-none text-xs font-medium',
+            'flex h-control-xs items-center gap-1 rounded-control px-control-x-sm type-ui-xs font-medium',
             'hover:bg-muted transition-colors disabled:opacity-40 disabled:pointer-events-none',
             'text-foreground/80 min-w-24.5 justify-between'
           )}
         >
           <span>{s.blockLabel}</span>
-          <ChevronDown className='h-3 w-3 opacity-50' />
+          <ChevronDown className='size-3 opacity-50' />
         </DropdownMenuTrigger>
         <DropdownMenuContent align='start' className='min-w-36'>
           <DropdownMenuItem
@@ -673,14 +671,14 @@ function EditorToolbarInner({
       <Sep />
 
       {/* Inline formatting */}
-      <div className='flex items-center gap-0.5'>
+      <div className='flex items-center gap-1'>
         <TipBtn
           label='Bold (⌘B)'
           isActive={s.isBold}
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleBold().run()}
         >
-          <BoldIcon className='h-3.5 w-3.5' />
+          <BoldIcon className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Italic (⌘I)'
@@ -688,7 +686,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleItalic().run()}
         >
-          <ItalicIcon className='h-3.5 w-3.5' />
+          <ItalicIcon className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Underline (⌘U)'
@@ -696,7 +694,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
-          <UnderlineIcon className='h-3.5 w-3.5' />
+          <UnderlineIcon className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Strikethrough'
@@ -704,7 +702,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleStrike().run()}
         >
-          <Strikethrough className='h-3.5 w-3.5' />
+          <Strikethrough className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Inline code'
@@ -712,7 +710,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleCode().run()}
         >
-          <CodeIcon className='h-3.5 w-3.5' />
+          <CodeIcon className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Highlight'
@@ -720,21 +718,21 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleHighlight().run()}
         >
-          <Highlighter className='h-3.5 w-3.5' />
+          <Highlighter className='size-icon-sm' />
         </TipBtn>
       </div>
 
       <Sep />
 
       {/* Text alignment */}
-      <div className='flex items-center gap-0.5'>
+      <div className='flex items-center gap-1'>
         <TipBtn
           label='Align left'
           isActive={s.isAlignLeft}
           disabled={disabled}
           onClick={() => editor.chain().focus().setTextAlign('left').run()}
         >
-          <AlignLeft className='h-3.5 w-3.5' />
+          <AlignLeft className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Align center'
@@ -742,7 +740,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().setTextAlign('center').run()}
         >
-          <AlignCenter className='h-3.5 w-3.5' />
+          <AlignCenter className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Align right'
@@ -750,21 +748,21 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().setTextAlign('right').run()}
         >
-          <AlignRight className='h-3.5 w-3.5' />
+          <AlignRight className='size-icon-sm' />
         </TipBtn>
       </div>
 
       <Sep />
 
       {/* Lists */}
-      <div className='flex items-center gap-0.5'>
+      <div className='flex items-center gap-1'>
         <TipBtn
           label='Bullet list'
           isActive={s.isBullet}
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
-          <List className='h-3.5 w-3.5' />
+          <List className='size-icon-sm' />
         </TipBtn>
         <TipBtn
           label='Ordered list'
@@ -772,7 +770,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
-          <ListOrdered className='h-3.5 w-3.5' />
+          <ListOrdered className='size-icon-sm' />
         </TipBtn>
       </div>
 
@@ -800,15 +798,14 @@ function EditorToolbarInner({
         disabled={disabled}
         aria-label='Insert table'
         title='Insert table'
-        className='rounded-none'
       >
-        <Table2 className='h-3.5 w-3.5' />
+        <Table2 className='size-icon-sm' />
       </Toggle>
 
       {/* Contextual table controls */}
       {s.isInTable && <TableContextBar editor={editor} disabled={disabled} />}
 
-      <div className='ml-auto flex items-center gap-0.5 pr-1'>
+      <div className='ml-auto flex items-center gap-1 pr-1'>
         <Sep />
 
         {/* Invisible characters */}
@@ -818,7 +815,7 @@ function EditorToolbarInner({
           disabled={disabled}
           onClick={() => editor.commands.toggleInvisibleCharacters()}
         >
-          <Pilcrow className='h-3.5 w-3.5' />
+          <Pilcrow className='size-icon-sm' />
         </TipBtn>
 
         {/* Markdown source */}
@@ -828,9 +825,8 @@ function EditorToolbarInner({
           onPressedChange={() => setMarkdownOpen(true)}
           aria-label='View markdown source'
           title='View markdown source'
-          className='rounded-none'
         >
-          <FileCode2 className='h-3.5 w-3.5' />
+          <FileCode2 className='size-icon-sm' />
         </Toggle>
       </div>
 
@@ -855,13 +851,13 @@ function EditorToolbar({
   onLinkOpenChange: (open: boolean) => void
 }) {
   if (!editor) {
-    return <div className='h-9 border-b bg-background/80 shrink-0' />
+    return <div className='h-control-lg border-b bg-background/80 shrink-0' />
   }
 
   return (
     <div
       className={cn(
-        'flex items-center min-h-9 border-b bg-background/80 shrink-0 overflow-x-auto',
+        'flex items-center min-h-control-lg border-b bg-background/80 shrink-0 overflow-x-auto',
         isStreaming && 'opacity-50 pointer-events-none'
       )}
     >
@@ -989,7 +985,7 @@ export function Editor({
           onLinkOpenChange={setLinkOpen}
         />
         <ScrollArea className='flex-1 min-h-0'>
-          <div className='px-8 py-10'>
+          <div className='px-10 py-12'>
             <EditorContent
               editor={editor}
               className='min-h-50 focus-within:outline-none'

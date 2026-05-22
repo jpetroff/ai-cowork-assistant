@@ -31,7 +31,7 @@ function SaveStatus({
   if (saveError) {
     return (
       <span
-        className='text-xs text-destructive truncate max-w-32'
+        className='type-ui-xs text-destructive truncate max-w-32'
         title={saveError}
       >
         Save error
@@ -40,13 +40,13 @@ function SaveStatus({
   }
 
   if (isSaving) {
-    return <span className='text-xs text-muted-foreground'>Saving…</span>
+    return <span className='type-ui-xs text-muted-foreground'>Saving…</span>
   }
 
   return (
     <span
       className={cn(
-        'text-xs text-muted-foreground transition-opacity duration-500',
+        'type-ui-xs text-muted-foreground transition-opacity duration-500',
         showSaved ? 'opacity-100' : 'opacity-0'
       )}
     >
@@ -77,7 +77,7 @@ export function ArtifactTitleBar() {
   }
 
   return (
-    <div className='flex items-center gap-3 px-4 py-2 border-b shrink-0'>
+    <div className='flex items-center gap-3 px-surface-card py-control-y-md border-b shrink-0'>
       <div className='flex-1 min-w-0'>
         {isEditing ? (
           <input
@@ -93,12 +93,12 @@ export function ArtifactTitleBar() {
               if (e.key === 'Escape') setIsEditing(false)
             }}
             placeholder='Untitled'
-            className='w-full text-xl font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/50'
+            className='w-full type-title-md font-semibold bg-transparent border-none outline-none placeholder:text-muted-foreground/50'
           />
         ) : (
           <button
             onClick={handleTitleClick}
-            className='text-xl font-semibold text-left w-full truncate hover:opacity-70 transition-opacity'
+            className='type-title-md font-semibold text-left w-full truncate hover:opacity-70 transition-opacity'
           >
             {artifact?.title ?? (
               <span className='text-muted-foreground/50'>Untitled</span>
