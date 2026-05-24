@@ -8,7 +8,7 @@ import type { Message } from '@/lib/db/types'
 /** Returned by `artifactStore.sealForSend()` — identifies the revision to attach to the outgoing message. */
 export interface SealResult {
   artifactId: string
-  revisionId: string
+  revisionId: string | null
   content: string
 }
 

@@ -19,6 +19,7 @@ const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
       artifact: { id: 'active-art' } as { id: string } | null,
       loadForConversation: vi.fn(),
       createNewArtifact: vi.fn(),
+      requestArtifactLoad: vi.fn(),
       sealForSend: vi.fn(),
       getArtifactContextForSend: vi.fn(),
       applyAiRevision: vi.fn(),
@@ -82,7 +83,8 @@ beforeEach(() => {
   })
   messageApi.finalizeStreaming.mockResolvedValue('assistant-1')
   artifactApi.loadForConversation.mockResolvedValue(undefined)
-  artifactApi.createNewArtifact.mockResolvedValue(undefined)
+  artifactApi.createNewArtifact.mockResolvedValue('new-art')
+  artifactApi.requestArtifactLoad.mockResolvedValue(undefined)
   artifactApi.artifact = { id: 'active-art' }
   artifactApi.sealForSend.mockResolvedValue(null)
   artifactApi.getArtifactContextForSend.mockResolvedValue(null)
@@ -166,7 +168,61 @@ describe('useChatSessionStore', () => {
     const requestBody = sidecarApi.sendChatRequest.mock.calls[0][0]
     expect(artifactApi.sealForSend).not.toHaveBeenCalled()
     expect(artifactApi.getArtifactContextForSend).not.toHaveBeenCalled()
-    expect(requestBody).not.toHaveProperty('artifact')
+    expect(artifactApi.createNewArtifact).toHaveBeenCalledWith('conv-1')
+    expect(requestBody.artifact).toBeNull()
+  })
+
+  it('submits an attached empty artifact with empty content', async () => {
+    const sealResult: SealResult = {
+      artifactId: 'active-art',
+      revisionId: null,
+      content: '',
+    }
+    artifactApi.sealForSend.mockResolvedValue(sealResult)
+    sidecarApi.sendChatRequest.mockResolvedValue({
+      messageId: 'assistant-1',
+      content: 'final',
+      artifactContent: 'generated from empty artifact',
+    })
+
+    await useChatSessionStore.getState().submitMessage(' fill it ')
+
+    expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifact: {
+          artifact_id: 'active-art',
+          revision_id: null,
+          content: '',
+        },
+      }),
+      expect.any(Object)
+    )
+    expect(artifactApi.applyAiRevision).toHaveBeenCalledWith(
+      'generated from empty artifact',
+      'assistant-1',
+      'active-art'
+    )
+  })
+
+  it('creates and targets a new artifact when no artifact is attached', async () => {
+    sidecarApi.sendChatRequest.mockResolvedValue({
+      messageId: 'assistant-1',
+      content: 'final',
+      artifactContent: 'new artifact content',
+    })
+
+    await useChatSessionStore.getState().submitMessage(' new doc ', null)
+
+    expect(artifactApi.createNewArtifact).toHaveBeenCalledWith('conv-1')
+    expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ artifact: null }),
+      expect.any(Object)
+    )
+    expect(artifactApi.applyAiRevision).toHaveBeenCalledWith(
+      'new artifact content',
+      'assistant-1',
+      'new-art'
+    )
   })
 
   it('submits an explicit non-active artifact context', async () => {
@@ -191,6 +247,7 @@ describe('useChatSessionStore', () => {
       'art-2',
       'user-1'
     )
+    expect(artifactApi.requestArtifactLoad).toHaveBeenCalledWith('art-2')
     expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         artifact: {

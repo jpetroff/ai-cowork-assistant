@@ -4,21 +4,11 @@ import WebSocket, {
   type Message as WebSocketMessage,
 } from '@tauri-apps/plugin-websocket'
 import { console_if } from '@/lib/logger'
+import type { ChatCompletionRequest as ApiChatCompletionRequest } from '@/lib/api-types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-/** @property message - latest user message to process */
-/** @property chat_history - previous non-system chat history sent for context */
-/** @property artifact - optional artifact revision context attached to the request */
-export interface ChatCompletionRequest {
-  message: string
-  chat_history: Array<{ role: 'user' | 'assistant'; content: string }>
-  artifact?: {
-    artifact_id: string
-    revision_id: string
-    content: string
-  }
-}
+export type ChatCompletionRequest = ApiChatCompletionRequest
 
 type SidecarEvent = {
   type:
@@ -107,7 +97,7 @@ export const useSidecarStore = create<SidecarState & SidecarActions>(
 
       console_if('SIDECAR_STORE').log('[SIDECAR_STORE] stream:start', {
         messageLength: requestBody.message.length,
-        historyCount: requestBody.chat_history.length,
+        historyCount: requestBody.chat_history?.length ?? 0,
         artifactRevisionId: requestBody.artifact?.revision_id ?? null,
       })
 

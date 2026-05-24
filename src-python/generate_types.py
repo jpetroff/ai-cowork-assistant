@@ -7,6 +7,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 
+def normalize_nullable_primitive_titles(schema):
+    if isinstance(schema, list):
+        for item in schema:
+            normalize_nullable_primitive_titles(item)
+        return
+
+    if not isinstance(schema, dict):
+        return
+
+    any_of = schema.get("anyOf")
+    if isinstance(any_of, list) and len(any_of) == 2:
+        any_of_types = [
+            item.get("type")
+            for item in any_of
+            if isinstance(item, dict) and set(item.keys()) == {"type"}
+        ]
+        if len(any_of_types) == 2 and "null" in any_of_types:
+            schema.pop("title", None)
+
+    for value in schema.values():
+        normalize_nullable_primitive_titles(value)
+
+
 def generate_typescript(output_path: str = "../src/lib/api-types.ts"):
     output_file = Path(output_path)
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +104,8 @@ def generate_via_json_schema(output_path: str = "../src/lib/api-types.ts"):
             for def_name, def_schema in schema.pop("$defs").items():
                 schemas["definitions"][def_name] = def_schema
         schemas["definitions"][model.__name__] = schema
+
+    normalize_nullable_primitive_titles(schemas)
 
     json_path = Path("/tmp/api-schemas.json")
     json_path.write_text(json.dumps(schemas, indent=2))

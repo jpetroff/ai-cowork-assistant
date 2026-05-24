@@ -91,7 +91,7 @@ interface ArtifactActions {
   save: (content: string) => Promise<void>
   /**
    * Seal the active revision before sending. Returns the revision to attach to
-   * the outgoing message, or null if there is no artifact / no revisions.
+   * the outgoing message, or null if there is no artifact.
    * The supplied user message ID is stored as the revision anchor when a revision
    * is actually sealed/created.
    */
@@ -127,7 +127,7 @@ interface ArtifactActions {
   /**
    * Create a brand-new artifact for the conversation with no initial revision.
    */
-  createNewArtifact: (conversationId: string) => Promise<void>
+  createNewArtifact: (conversationId: string) => Promise<string>
   /** Rename the active artifact title. */
   rename: (title: string | null) => Promise<void>
   /** Check whether the linked disk file has changed since last sync. */
@@ -533,7 +533,14 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         revisions,
         artifact,
       } = get()
-      if (!headRevision || !artifact) return null
+      if (!artifact) return null
+      if (!headRevision) {
+        return {
+          artifactId: artifact.id,
+          revisionId: null,
+          content: '',
+        }
+      }
 
       const loadedRevision = loadedRevisionId
         ? revisions.find((r) => r.id === loadedRevisionId)
@@ -702,7 +709,13 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         ? await getRevision(targetArtifact.current_revision_id)
         : ((await listRevisions(targetArtifact.id))[0] ?? null)
 
-      if (!revision) return null
+      if (!revision) {
+        return {
+          artifactId: targetArtifact.id,
+          revisionId: null,
+          content: '',
+        }
+      }
 
       return {
         artifactId: targetArtifact.id,
@@ -943,6 +956,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         artifactRevisionMetaByRevisionId: {},
         status: 'ready',
       })
+
+      return artifactId
     },
 
     /**

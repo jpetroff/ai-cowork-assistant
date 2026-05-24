@@ -443,6 +443,29 @@ describe('sealForSend', () => {
       content: 'historical content',
     })
   })
+
+  it('returns empty content for an active artifact with no revisions', async () => {
+    const artifact = makeArtifact({ current_revision_id: null })
+    seedStore(artifact, [])
+    useArtifactStore.setState({
+      headRevision: null,
+      loadedRevisionId: null,
+      editableRevisionId: null,
+      loadedContent: '',
+    })
+
+    const result = await useArtifactStore
+      .getState()
+      .sealForSend(anchorMessageId)
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockSealRevision).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      artifactId: 'art-1',
+      revisionId: null,
+      content: '',
+    })
+  })
 })
 
 // ── Lifecycle ──────────────────────────────────────────────────────────────────
@@ -680,6 +703,30 @@ describe('createNewArtifact', () => {
     expect(useArtifactStore.getState().loadedRevisionId).toBeNull()
     expect(useArtifactStore.getState().editableRevisionId).toBeNull()
     expect(useArtifactStore.getState().headRevision).toBeNull()
+  })
+})
+
+describe('getArtifactContextForSend', () => {
+  it('returns empty content for a selected artifact with no revisions', async () => {
+    const activeArtifact = makeArtifact({ id: 'active-art' })
+    const selectedArtifact = makeArtifact({
+      id: 'selected-art',
+      current_revision_id: null,
+    })
+    seedStore(activeArtifact, [makeRevision({ artifact_id: 'active-art' })])
+    mockGetArtifact.mockResolvedValue(selectedArtifact)
+    mockListRevisions.mockResolvedValue([])
+
+    const result = await useArtifactStore
+      .getState()
+      .getArtifactContextForSend('selected-art', anchorMessageId)
+
+    expect(mockGetArtifact).toHaveBeenCalledWith('selected-art')
+    expect(result).toEqual({
+      artifactId: 'selected-art',
+      revisionId: null,
+      content: '',
+    })
   })
 })
 

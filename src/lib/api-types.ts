@@ -28,10 +28,6 @@ export type Content = string | number | null;
  */
 export type ArtifactId = string;
 /**
- * Current artifact revision identifier
- */
-export type RevisionId = string;
-/**
  * Current artifact revision content
  */
 export type Content1 = string;
@@ -57,17 +53,9 @@ export type Message = string;
  */
 export type ChatHistory = ChatMessageBase[];
 /**
- * Enable Phoenix observability for this request
- */
-export type Observability = boolean | null;
-/**
  * List of file paths to process
  */
 export type FileUploads = string[] | null;
-/**
- * Working folder path
- */
-export type WorkingFolder = string | null;
 /**
  * Subset of documents in vector database
  */
@@ -104,10 +92,6 @@ export type Processed = number;
  * Total files to process
  */
 export type Total = number;
-/**
- * Error message if processing failed
- */
-export type Error = string | null;
 /**
  * The highlighted content
  */
@@ -155,7 +139,10 @@ export interface DefaultResponse {
  */
 export interface ChatCompletionArtifactContext {
   artifact_id: ArtifactId;
-  revision_id: RevisionId;
+  /**
+   * Current artifact revision identifier
+   */
+  revision_id?: string | null;
   content: Content1;
   [k: string]: unknown;
 }
@@ -179,9 +166,15 @@ export interface ChatCompletionRequest {
    * Current artifact revision context
    */
   artifact?: ChatCompletionArtifactContext | null;
-  observability?: Observability;
+  /**
+   * Enable Phoenix observability for this request
+   */
+  observability?: boolean | null;
   file_uploads?: FileUploads;
-  working_folder?: WorkingFolder;
+  /**
+   * Working folder path
+   */
+  working_folder?: string | null;
   knowledge_hubs?: KnowledgeHubs;
   [k: string]: unknown;
 }
@@ -212,7 +205,10 @@ export interface EmbeddingProgress {
   progress: Progress;
   processed: Processed;
   total: Total;
-  error?: Error;
+  /**
+   * Error message if processing failed
+   */
+  error?: string | null;
   [k: string]: unknown;
 }
 /**

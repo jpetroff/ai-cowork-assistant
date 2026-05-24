@@ -13,7 +13,10 @@ from llama_index.core.workflow import (
 
 from typing import Any, List, Optional
 
-from llama_index.llms.openai_like.base import CompletionResponse, CompletionResponseAsyncGen
+from llama_index.llms.openai_like.base import (
+    CompletionResponse,
+    CompletionResponseAsyncGen,
+)
 from llama_index_instrumentation.span_handlers import null
 
 from .prompts import SIMPLE_PROMPT
@@ -32,6 +35,7 @@ class QueryStartEvent(Event):
 class QueryCompleteEvent(Event):
     response_text: Optional[CompletionResponse]
     response_gen: Optional[CompletionResponseAsyncGen]
+
 
 class WorkflowResult:
     response_gen: CompletionResponseAsyncGen | None = None
@@ -52,8 +56,8 @@ class WorkflowResult:
             self.result = response_gen
         elif response_text:
             self.result = response_text
-        else: 
-            self.result = CompletionResponse(text='')
+        else:
+            self.result = CompletionResponse(text="")
 
 
 def _format_chat_history(chat_history: list) -> str:
@@ -68,7 +72,15 @@ def _format_chat_history(chat_history: list) -> str:
 
 def _format_artifact_context(artifact: Any) -> str:
     if artifact is None:
-        return "No current artifact."
+        return "No artifact is attached to this request. Generate a new artifact."
+
+    if artifact.revision_id is None and artifact.content == "":
+        return (
+            f"Artifact ID: {artifact.artifact_id}\n"
+            "Revision ID: None\n"
+            "Content:\n"
+            "[Attached artifact is empty. Generate content for this artifact.]"
+        )
 
     return (
         f"Artifact ID: {artifact.artifact_id}\n"
@@ -119,18 +131,17 @@ class SimpleQueryWorkflow(Workflow):
 
         ctx.write_event_to_stream(ProgressEvent(msg="Processing your query…"))
 
-        if (self._response_streaming):
-            response_gen = await self._llm.astream_complete(
-                prompt
-            )
+        if self._response_streaming:
+            response_gen = await self._llm.astream_complete(prompt)
             return QueryCompleteEvent(response_gen=response_gen, response_text=None)
         else:
-            response_text = self._llm.complete(
-                prompt
-            )
+            response_text = self._llm.complete(prompt)
             return QueryCompleteEvent(response_gen=None, response_text=response_text)
+
     @step
     async def finalize(self, ctx: Context, ev: QueryCompleteEvent) -> StopEvent:
         ctx.write_event_to_stream(ProgressEvent(msg="Finalizing workflow"))
 
-        return StopEvent(WorkflowResult(response_gen=ev.response_gen, response_text=ev.response_text))
+        return StopEvent(
+            WorkflowResult(response_gen=ev.response_gen, response_text=ev.response_text)
+        )

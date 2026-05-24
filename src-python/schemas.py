@@ -59,7 +59,9 @@ class ChatCompletionArtifactContext(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     artifact_id: str = Field(description="Current artifact identifier")
-    revision_id: str = Field(description="Current artifact revision identifier")
+    revision_id: Optional[str] = Field(
+        default=None, description="Current artifact revision identifier"
+    )
     content: str = Field(description="Current artifact revision content")
 
 

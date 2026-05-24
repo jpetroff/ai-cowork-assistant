@@ -36,7 +36,7 @@ interface ChatSessionState {
 
 interface ChatSessionActions {
   loadChat: (params: LoadChatParams) => Promise<void>
-  createNewDocument: (conversationId: string) => Promise<void>
+  createNewDocument: (conversationId: string) => Promise<string>
   submitMessage: (
     content: string,
     artifactContext?: SubmitArtifactContext | null
@@ -95,7 +95,7 @@ export const useChatSessionStore = create<
    * Creates a new document and makes it the active editor target.
    */
   async createNewDocument(conversationId) {
-    await useArtifactStore.getState().createNewArtifact(conversationId)
+    return useArtifactStore.getState().createNewArtifact(conversationId)
   },
 
   /**
@@ -119,7 +119,7 @@ export const useChatSessionStore = create<
       if (!userMessageId) {
         throw new Error('No active conversation')
       }
-      const artifactTargetId =
+      const requestedArtifactId =
         artifactContext === undefined
           ? (artifactStore.artifact?.id ?? null)
           : (artifactContext?.artifactId ?? null)
@@ -132,12 +132,24 @@ export const useChatSessionStore = create<
                 userMessageId
               )
             : null
-      const artifactUpdateTargetId = sealResult?.artifactId ?? artifactTargetId
       const refreshedMessages = useMessageStore.getState().messages
       const conversationId = useMessageStore.getState().conversationId
 
       if (!conversationId) {
         throw new Error('No active conversation')
+      }
+
+      let artifactUpdateTargetId = sealResult?.artifactId ?? requestedArtifactId
+      const activeArtifactId = useArtifactStore.getState().artifact?.id ?? null
+
+      if (sealResult && activeArtifactId !== sealResult.artifactId) {
+        await useArtifactStore
+          .getState()
+          .requestArtifactLoad(sealResult.artifactId)
+      } else if (!sealResult && requestedArtifactId === null) {
+        artifactUpdateTargetId = await useArtifactStore
+          .getState()
+          .createNewArtifact(conversationId)
       }
 
       const chatHistory = refreshedMessages
@@ -150,15 +162,13 @@ export const useChatSessionStore = create<
       const requestBody: ChatCompletionRequest = {
         message: text,
         chat_history: chatHistory.slice(0, -1),
-        ...(sealResult
+        artifact: sealResult
           ? {
-              artifact: {
-                artifact_id: sealResult.artifactId,
-                revision_id: sealResult.revisionId,
-                content: sealResult.content,
-              },
+              artifact_id: sealResult.artifactId,
+              revision_id: sealResult.revisionId,
+              content: sealResult.content,
             }
-          : {}),
+          : null,
       }
 
       messageStore.beginStreaming()
