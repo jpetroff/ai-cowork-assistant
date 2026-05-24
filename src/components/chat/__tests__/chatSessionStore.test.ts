@@ -16,9 +16,11 @@ const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
       finalizeStreaming: vi.fn(),
     },
     artifactApi: {
+      artifact: { id: 'active-art' } as { id: string } | null,
       loadForConversation: vi.fn(),
       createNewArtifact: vi.fn(),
       sealForSend: vi.fn(),
+      getArtifactContextForSend: vi.fn(),
       applyAiRevision: vi.fn(),
     },
     sidecarApi: {
@@ -81,7 +83,9 @@ beforeEach(() => {
   messageApi.finalizeStreaming.mockResolvedValue('assistant-1')
   artifactApi.loadForConversation.mockResolvedValue(undefined)
   artifactApi.createNewArtifact.mockResolvedValue(undefined)
+  artifactApi.artifact = { id: 'active-art' }
   artifactApi.sealForSend.mockResolvedValue(null)
+  artifactApi.getArtifactContextForSend.mockResolvedValue(null)
   artifactApi.applyAiRevision.mockResolvedValue(undefined)
   sidecarApi.sendChatRequest.mockResolvedValue({
     messageId: 'assistant-1',
@@ -150,8 +154,57 @@ describe('useChatSessionStore', () => {
     )
     expect(artifactApi.applyAiRevision).toHaveBeenCalledWith(
       'updated artifact',
-      'assistant-1'
+      'assistant-1',
+      'art-1'
     )
     expect(useChatSessionStore.getState().isAssistantStreaming).toBe(false)
+  })
+
+  it('submits without artifact context when explicitly removed', async () => {
+    await useChatSessionStore.getState().submitMessage(' hello ', null)
+
+    const requestBody = sidecarApi.sendChatRequest.mock.calls[0][0]
+    expect(artifactApi.sealForSend).not.toHaveBeenCalled()
+    expect(artifactApi.getArtifactContextForSend).not.toHaveBeenCalled()
+    expect(requestBody).not.toHaveProperty('artifact')
+  })
+
+  it('submits an explicit non-active artifact context', async () => {
+    const sealResult: SealResult = {
+      artifactId: 'art-2',
+      revisionId: 'rev-2',
+      content: 'selected artifact content',
+    }
+    artifactApi.getArtifactContextForSend.mockResolvedValue(sealResult)
+    sidecarApi.sendChatRequest.mockResolvedValue({
+      messageId: 'assistant-1',
+      content: 'final',
+      artifactContent: 'updated selected artifact',
+    })
+
+    await useChatSessionStore
+      .getState()
+      .submitMessage(' hello ', { artifactId: 'art-2' })
+
+    expect(artifactApi.sealForSend).not.toHaveBeenCalled()
+    expect(artifactApi.getArtifactContextForSend).toHaveBeenCalledWith(
+      'art-2',
+      'user-1'
+    )
+    expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifact: {
+          artifact_id: 'art-2',
+          revision_id: 'rev-2',
+          content: 'selected artifact content',
+        },
+      }),
+      expect.any(Object)
+    )
+    expect(artifactApi.applyAiRevision).toHaveBeenCalledWith(
+      'updated selected artifact',
+      'assistant-1',
+      'art-2'
+    )
   })
 })

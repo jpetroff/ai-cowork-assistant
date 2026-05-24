@@ -96,11 +96,20 @@ interface ArtifactActions {
    * is actually sealed/created.
    */
   sealForSend: (messageId: string) => Promise<SealResult | null>
+  /** @property getArtifactContextForSend - returns message context for a specific artifact without loading it into the editor */
+  getArtifactContextForSend: (
+    artifactId: string,
+    messageId: string
+  ) => Promise<SealResult | null>
   /**
    * Apply an AI-generated revision. Inserts a new author='ai' sealed revision as HEAD
    * and remounts the editor with the new content.
    */
-  applyAiRevision: (content: string, messageId: string) => Promise<void>
+  applyAiRevision: (
+    content: string,
+    messageId: string,
+    artifactId?: string
+  ) => Promise<void>
   /**
    * Load a revision into the editor.
    * - Flushes any pending save and waits for it to complete.
@@ -675,39 +684,98 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       }
     },
 
+    /**
+     * Builds artifact context for an outgoing message without changing the active
+     * editor artifact. Current editor context still uses the seal chain so draft
+     * content and historical revision selection are preserved.
+     */
+    async getArtifactContextForSend(artifactId, messageId) {
+      const currentArtifact = get().artifact
+      if (currentArtifact?.id === artifactId) {
+        return get().sealForSend(messageId)
+      }
+
+      const targetArtifact = await getArtifact(artifactId)
+      if (!targetArtifact) return null
+
+      const revision = targetArtifact.current_revision_id
+        ? await getRevision(targetArtifact.current_revision_id)
+        : ((await listRevisions(targetArtifact.id))[0] ?? null)
+
+      if (!revision) return null
+
+      return {
+        artifactId: targetArtifact.id,
+        revisionId: revision.id,
+        content: revision.content,
+      }
+    },
+
     // ── External triggers ────────────────────────────────────────────────────────
 
     /**
      * Applies sidecar-generated artifact content as a sealed AI revision linked to
-     * the assistant message that produced it.
+     * the assistant message that produced it. Non-active targets are persisted but
+     * do not change the editor selection.
      */
-    async applyAiRevision(content: string, messageId) {
+    async applyAiRevision(content: string, messageId, artifactId) {
       const { artifact, revisions } = get()
-      if (!artifact) return
+      const targetArtifactId = artifactId ?? artifact?.id
+      if (!targetArtifactId) return
+
+      const isActiveArtifact = artifact?.id === targetArtifactId
+      const targetArtifact =
+        isActiveArtifact && artifact
+          ? artifact
+          : await getArtifact(targetArtifactId)
+
+      if (!targetArtifact) return
 
       const revisionId = await createRevision({
-        artifact_id: artifact.id,
+        artifact_id: targetArtifact.id,
         author: 'ai',
         content,
       })
       await sealRevision(revisionId, messageId)
-      await updateArtifact(artifact.id, { current_revision_id: revisionId })
+      await updateArtifact(targetArtifact.id, {
+        current_revision_id: revisionId,
+      })
+
+      const now = Date.now()
 
       const newRevision: ArtifactRevision = {
         id: revisionId,
-        artifact_id: artifact.id,
+        artifact_id: targetArtifact.id,
         message_id: messageId,
         author: 'ai',
         content,
-        created_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: now,
+        updated_at: now,
       }
 
       const updatedArtifact = {
-        ...artifact,
+        ...targetArtifact,
         current_revision_id: revisionId,
-        updated_at: Date.now(),
+        updated_at: now,
       }
+
+      if (!isActiveArtifact) {
+        set({
+          artifactRevisionMetaByRevisionId: {
+            ...get().artifactRevisionMetaByRevisionId,
+            [revisionId]: buildRevisionMeta(updatedArtifact, newRevision),
+          },
+        })
+        console_if('ARTIFACT_STORE').log(
+          '[ARTIFACT_STORE] ai-revision:applied',
+          {
+            artifactId: targetArtifact.id,
+            revisionId,
+          }
+        )
+        return
+      }
+
       set({
         artifact: updatedArtifact,
         headRevision: newRevision,
@@ -722,7 +790,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         },
       })
       console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] ai-revision:applied', {
-        artifactId: artifact.id,
+        artifactId: targetArtifact.id,
         revisionId,
       })
     },

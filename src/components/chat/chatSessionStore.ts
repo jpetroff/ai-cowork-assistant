@@ -9,6 +9,11 @@ import { useSidecarStore } from './sidecarStore'
 
 type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
 
+/** @property artifactId - artifact selected as context for one outgoing message */
+export interface SubmitArtifactContext {
+  artifactId: string
+}
+
 /** @property projectId - project that owns the chat route */
 /** @property conversationId - conversation loaded for chat */
 interface LoadChatParams {
@@ -32,7 +37,10 @@ interface ChatSessionState {
 interface ChatSessionActions {
   loadChat: (params: LoadChatParams) => Promise<void>
   createNewDocument: (conversationId: string) => Promise<void>
-  submitMessage: (content: string) => Promise<void>
+  submitMessage: (
+    content: string,
+    artifactContext?: SubmitArtifactContext | null
+  ) => Promise<void>
   reset: () => void
 }
 
@@ -94,7 +102,7 @@ export const useChatSessionStore = create<
    * Coordinates the complete send flow: persist user message, seal artifact context,
    * stream sidecar output, finalize assistant message, then apply AI artifact output.
    */
-  async submitMessage(content) {
+  async submitMessage(content, artifactContext) {
     const text = content.trim()
     if (!text) return
 
@@ -111,7 +119,20 @@ export const useChatSessionStore = create<
       if (!userMessageId) {
         throw new Error('No active conversation')
       }
-      const sealResult = await artifactStore.sealForSend(userMessageId)
+      const artifactTargetId =
+        artifactContext === undefined
+          ? (artifactStore.artifact?.id ?? null)
+          : (artifactContext?.artifactId ?? null)
+      const sealResult =
+        artifactContext === undefined
+          ? await artifactStore.sealForSend(userMessageId)
+          : artifactContext
+            ? await artifactStore.getArtifactContextForSend(
+                artifactContext.artifactId,
+                userMessageId
+              )
+            : null
+      const artifactUpdateTargetId = sealResult?.artifactId ?? artifactTargetId
       const refreshedMessages = useMessageStore.getState().messages
       const conversationId = useMessageStore.getState().conversationId
 
@@ -159,7 +180,11 @@ export const useChatSessionStore = create<
       if (finalMessageId && streamResult.artifactContent !== null) {
         await useArtifactStore
           .getState()
-          .applyAiRevision(streamResult.artifactContent, finalMessageId)
+          .applyAiRevision(
+            streamResult.artifactContent,
+            finalMessageId,
+            artifactUpdateTargetId ?? undefined
+          )
       }
 
       console_if('CHAT_SESSION').log('[CHAT_SESSION] submit:done', {

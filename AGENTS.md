@@ -14,6 +14,8 @@
 - do not hard code colors
 - do not use divs if we have a component already
 - do not add new heavy dependencies without approval
+- do not introduce new migrations to tauri SQLite database, always keep one SQL migration in development;
+  - if you need to modify SQL schema, do that and ask if database was deleted in chat so that it initializes again with new schema
 
 ## Commands
 
