@@ -172,10 +172,20 @@ export const useChatSessionStore = create<
       }
 
       messageStore.beginStreaming()
+      let streamedArtifactContent = ''
       const streamResult = await useSidecarStore
         .getState()
         .sendChatRequest(requestBody, {
           onChunk: (chunk) => useMessageStore.getState().appendChunk(chunk),
+          onArtifactChunk: (chunk) => {
+            streamedArtifactContent += chunk
+            useArtifactStore
+              .getState()
+              .previewAiRevisionDraft(
+                streamedArtifactContent,
+                artifactUpdateTargetId ?? undefined
+              )
+          },
         })
 
       if (!streamResult) {

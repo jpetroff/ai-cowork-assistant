@@ -22,6 +22,7 @@ const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
       requestArtifactLoad: vi.fn(),
       sealForSend: vi.fn(),
       getArtifactContextForSend: vi.fn(),
+      previewAiRevisionDraft: vi.fn(),
       applyAiRevision: vi.fn(),
     },
     sidecarApi: {
@@ -88,6 +89,7 @@ beforeEach(() => {
   artifactApi.artifact = { id: 'active-art' }
   artifactApi.sealForSend.mockResolvedValue(null)
   artifactApi.getArtifactContextForSend.mockResolvedValue(null)
+  artifactApi.previewAiRevisionDraft.mockReturnValue(undefined)
   artifactApi.applyAiRevision.mockResolvedValue(undefined)
   sidecarApi.sendChatRequest.mockResolvedValue({
     messageId: 'assistant-1',
@@ -124,6 +126,8 @@ describe('useChatSessionStore', () => {
     sidecarApi.sendChatRequest.mockImplementation(
       async (_request, handlers) => {
         handlers.onChunk('chunk')
+        handlers.onArtifactChunk('updated ')
+        handlers.onArtifactChunk('artifact')
         return {
           messageId: 'assistant-1',
           content: 'final',
@@ -150,6 +154,16 @@ describe('useChatSessionStore', () => {
     )
     expect(messageApi.beginStreaming).toHaveBeenCalled()
     expect(messageApi.appendChunk).toHaveBeenCalledWith('chunk')
+    expect(artifactApi.previewAiRevisionDraft).toHaveBeenNthCalledWith(
+      1,
+      'updated ',
+      'art-1'
+    )
+    expect(artifactApi.previewAiRevisionDraft).toHaveBeenNthCalledWith(
+      2,
+      'updated artifact',
+      'art-1'
+    )
     expect(messageApi.finalizeStreaming).toHaveBeenCalledWith(
       'assistant-1',
       'final'

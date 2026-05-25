@@ -1,17 +1,16 @@
-from inspect import isgeneratorfunction
-import json
 from typing import Sequence, List
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 from llama_index.core.callbacks.base_handler import BaseCallbackHandler
-from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.ollama import Ollama
-from llama_index.core.llms import LLM
-from llama_index.llms.openai_like.base import CompletionResponseGen
 from workflows.events import StopEvent
 
-from llamaflows.default.main import SimpleQueryWorkflow, WorkflowResult
+from llamaflows.default.main import (
+    CompletionChunkEvent,
+    CompletionThinkingEvent,
+    SimpleQueryWorkflow,
+    WorkflowResult,
+)
 from schemas import ChatCompletionArtifactContext, ChatMessageBase, DefaultResponse
-from config import settings
 import tiktoken
 
 
@@ -20,12 +19,6 @@ async def create_workflow(
     chat_history: Sequence[ChatMessageBase] | None = None,
     artifact: ChatCompletionArtifactContext | None = None,
 ):
-    # llm = OpenAILike(
-    #     model="gpt-oss-20b",
-    #     api_base=settings.api_base,
-    #     is_chat_model=True
-    # )
-
     # 1. Initialize token counter
     # Note: Since Ollama runs local models (e.g., Llama3), it's best to
     # use a tokenizer that matches, or simply the default for tracking.
@@ -56,30 +49,25 @@ async def create_workflow(
 
     # now we handle events coming back from the workflow
     async for event in handler.stream_events():
-        if isinstance(event, StopEvent) == False:
+        if isinstance(event, CompletionThinkingEvent):
+            yield DefaultResponse(
+                type="completion.chunk.thinking", content=event.content
+            )
+        elif isinstance(event, CompletionChunkEvent):
+            response = DefaultResponse(
+                type="completion.chunk",
+                content=event.content,
+            )
+            response.content_type = event.content_type
+            yield response
+        elif isinstance(event, StopEvent) == False:
             yield DefaultResponse(type="event", payload=event.model_dump())
 
-    final_result: WorkflowResult = await handler
+    _final_result: WorkflowResult = await handler
 
-    if final_result.response_gen != None:
-        async for response in final_result.response_gen:
-            thinking_delta = response.additional_kwargs.get(
-                "thinking_delta"
-            )  # Thinking text
-            if thinking_delta is not None:
-                yield DefaultResponse(
-                    type="completion.chunk.thinking", content=str(thinking_delta)
-                )
-            else:
-                yield DefaultResponse(
-                    type="completion.chunk", content=str(response.delta)
-                )
-        # Send completion signal after all chunks are streamed
-        yield DefaultResponse(type="completion.response", content="")
-    else:
-        yield DefaultResponse(
-            type="completion.response", content=str(final_result.response_text)
-        )
+    # Send completion signal after all chunks are streamed. The final result keeps
+    # accumulated artifact/message text for observability and future metadata steps.
+    yield DefaultResponse(type="completion.response", content="")
 
     if token_counter is not None:
         # --- Retrieve Statistics ---

@@ -132,6 +132,10 @@ export interface DefaultResponse {
   type: Type;
   payload?: unknown;
   content?: Content;
+  /**
+   * Optional MIME-style content marker for completion chunks
+   */
+  content_type?: string | null;
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema

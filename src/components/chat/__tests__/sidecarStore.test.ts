@@ -92,7 +92,7 @@ describe('useSidecarStore', () => {
     expect(useSidecarStore.getState().isConnected).toBe(true)
   })
 
-  it('streams Python websocket frames and extracts the artifact document', async () => {
+  it('routes typed artifact chunks separately from assistant text chunks', async () => {
     useSidecarStore.setState({
       sidecarUrl: 'http://127.0.0.1:9720',
       isConnected: true,
@@ -100,16 +100,25 @@ describe('useSidecarStore', () => {
     websocketMock.setFrames([
       { type: 'event', payload: { msg: 'Processing' } },
       { type: 'completion.chunk.thinking', content: 'internal notes' },
-      { type: 'completion.chunk', content: '|artifact|>\n# Title\n' },
-      { type: 'completion.chunk', content: 'Body\n<|artifact|\n' },
+      {
+        type: 'completion.chunk',
+        content_type: 'text/markdown',
+        content: '# Title\n',
+      },
+      {
+        type: 'completion.chunk',
+        content_type: 'text/markdown',
+        content: 'Body\n\n',
+      },
       { type: 'completion.chunk', content: 'Created it.' },
       { type: 'completion.response', content: '' },
     ])
     const onChunk = vi.fn()
+    const onArtifactChunk = vi.fn()
 
     const result = await useSidecarStore
       .getState()
-      .sendChatRequest(request, { onChunk })
+      .sendChatRequest(request, { onChunk, onArtifactChunk })
 
     expect(websocketMock.connect).toHaveBeenCalledWith(
       'ws://127.0.0.1:9720/completion'
@@ -117,6 +126,9 @@ describe('useSidecarStore', () => {
     expect(websocketMock.instances[0].sent).toEqual([JSON.stringify(request)])
     expect(onChunk).toHaveBeenCalledTimes(1)
     expect(onChunk).toHaveBeenCalledWith('Created it.')
+    expect(onArtifactChunk).toHaveBeenCalledTimes(2)
+    expect(onArtifactChunk).toHaveBeenNthCalledWith(1, '# Title\n')
+    expect(onArtifactChunk).toHaveBeenNthCalledWith(2, 'Body\n\n')
     expect(result).toEqual({
       messageId: null,
       content: 'Created it.',
@@ -125,7 +137,7 @@ describe('useSidecarStore', () => {
     expect(websocketMock.instances[0].disconnect).toHaveBeenCalled()
   })
 
-  it('uses completion.response content when the backend returns one final frame', async () => {
+  it('uses completion.response content as final assistant text', async () => {
     useSidecarStore.setState({
       sidecarUrl: 'http://127.0.0.1:9720',
       isConnected: true,
@@ -133,7 +145,7 @@ describe('useSidecarStore', () => {
     websocketMock.setFrames([
       {
         type: 'completion.response',
-        content: '|artifact|>\nfinal artifact\n<|artifact|\nDone.',
+        content: 'Done.',
       },
     ])
 
@@ -142,7 +154,31 @@ describe('useSidecarStore', () => {
     ).resolves.toEqual({
       messageId: null,
       content: 'Done.',
-      artifactContent: 'final artifact',
+      artifactContent: null,
+    })
+  })
+
+  it('accumulates mixed typed and untyped chunks into separate final content', async () => {
+    useSidecarStore.setState({
+      sidecarUrl: 'http://127.0.0.1:9720',
+      isConnected: true,
+    })
+    websocketMock.setFrames([
+      {
+        type: 'completion.chunk',
+        content_type: 'text/markdown',
+        content: 'artifact',
+      },
+      { type: 'completion.chunk', content: 'followup' },
+      { type: 'completion.response', content: '' },
+    ])
+
+    await expect(
+      useSidecarStore.getState().sendChatRequest(request)
+    ).resolves.toEqual({
+      messageId: null,
+      content: 'followup',
+      artifactContent: 'artifact',
     })
   })
 

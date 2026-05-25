@@ -35,6 +35,10 @@ class DefaultResponse(BaseModel):
     content: Optional[Union[str, float, int]] = Field(
         default=None, description="Response content"
     )
+    content_type: Optional[str] = Field(
+        default=None,
+        description="Optional MIME-style content marker for completion chunks",
+    )
 
 
 class TextHighlight(BaseModel):

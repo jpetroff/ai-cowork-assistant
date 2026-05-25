@@ -960,6 +960,16 @@ export function Editor({
     editor?.setEditable(!isStreaming)
   }, [editor, isStreaming])
 
+  // While the sidecar streams artifact markdown, keep the read-only editor in
+  // sync without firing save updates for every generated chunk.
+  useEffect(() => {
+    if (!editor || !isStreaming) return
+    editor.commands.setContent(content ?? '', {
+      contentType: 'markdown',
+      emitUpdate: false,
+    })
+  }, [content, editor, isStreaming])
+
   // Paste-to-link: if text is selected and clipboard contains a URL, attach it as a link
   useEffect(() => {
     if (!editor) return

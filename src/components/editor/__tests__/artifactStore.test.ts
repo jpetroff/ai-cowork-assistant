@@ -537,6 +537,35 @@ describe('loadForConversation', () => {
 })
 
 describe('applyAiRevision', () => {
+  it('previews an ai draft in the active editor without creating a revision', () => {
+    const artifact = makeArtifact()
+    const rev = makeRevision()
+    seedStore(artifact, [rev])
+
+    useArtifactStore.getState().previewAiRevisionDraft('streaming ai content')
+
+    expect(useArtifactStore.getState().loadedContent).toBe(
+      'streaming ai content'
+    )
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-1')
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
+    expect(mockSealRevision).not.toHaveBeenCalled()
+  })
+
+  it('does not preview ai draft content for an inactive artifact target', () => {
+    const artifact = makeArtifact({ id: 'active-art' })
+    const rev = makeRevision({ artifact_id: 'active-art' })
+    seedStore(artifact, [rev])
+
+    useArtifactStore
+      .getState()
+      .previewAiRevisionDraft('inactive streaming content', 'other-art')
+
+    expect(useArtifactStore.getState().loadedContent).toBe('initial')
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+  })
+
   it('inserts ai revision, seals it with the assistant message, sets loaded/editable ids', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()

@@ -102,6 +102,10 @@ interface ArtifactActions {
     messageId: string
   ) => Promise<SealResult | null>
   /**
+   * Preview an AI-generated draft in the active editor without persisting it.
+   */
+  previewAiRevisionDraft: (content: string, artifactId?: string) => void
+  /**
    * Apply an AI-generated revision. Inserts a new author='ai' sealed revision as HEAD
    * and remounts the editor with the new content.
    */
@@ -725,6 +729,18 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
     },
 
     // ── External triggers ────────────────────────────────────────────────────────
+
+    /**
+     * Streams an AI-generated draft into the active editor without touching
+     * persisted revisions. Final persistence is handled by applyAiRevision.
+     */
+    previewAiRevisionDraft(content: string, artifactId) {
+      const { artifact } = get()
+      const targetArtifactId = artifactId ?? artifact?.id
+      if (!targetArtifactId || artifact?.id !== targetArtifactId) return
+
+      set({ loadedContent: content })
+    },
 
     /**
      * Applies sidecar-generated artifact content as a sealed AI revision linked to

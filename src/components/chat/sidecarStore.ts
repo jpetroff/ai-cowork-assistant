@@ -19,6 +19,7 @@ type SidecarEvent = {
     | 'event'
     | string
   content?: string | number | null
+  content_type?: string | null
   payload?: unknown
 }
 
@@ -34,8 +35,10 @@ export interface SidecarStreamResult {
 }
 
 /** @property onChunk - called for each streamed assistant text chunk */
+/** @property onArtifactChunk - called for each streamed artifact chunk */
 interface SidecarStreamHandlers {
   onChunk?: (chunk: string) => void
+  onArtifactChunk?: (chunk: string) => void
 }
 
 /** @property sidecarUrl - base URL for the local sidecar service */
@@ -54,9 +57,6 @@ interface SidecarActions {
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
-
-const ARTIFACT_START = '|artifact|>'
-const ARTIFACT_END = '<|artifact|'
 
 export const useSidecarStore = create<SidecarState & SidecarActions>(
   (set, get) => ({
@@ -139,8 +139,8 @@ async function streamCompletion(
 ): Promise<SidecarStreamResult> {
   let socket: WebSocket | null = null
   let removeListener: () => void = () => undefined
-  let rawContent = ''
-  let streamedContent = ''
+  let messageContent = ''
+  let artifactContent = ''
 
   try {
     socket = await WebSocket.connect(websocketUrl)
@@ -158,7 +158,7 @@ async function streamCompletion(
         if (settled) return
         settled = true
         removeListener()
-        void activeSocket.disconnect()
+        void activeSocket.disconnect().catch(() => undefined)
         callback(value)
       }
 
@@ -166,7 +166,7 @@ async function streamCompletion(
         if (settled) return
         settled = true
         removeListener()
-        void activeSocket.disconnect()
+        void activeSocket.disconnect().catch(() => undefined)
         reject(err)
       }
 
@@ -183,24 +183,29 @@ async function streamCompletion(
         try {
           const event = parseSidecarEvent(message)
           if (event.type === 'completion.chunk') {
-            rawContent += stringifyContent(event.content)
-            const visibleContent = getStreamingMessageContent(rawContent)
-            const chunk = visibleContent.slice(streamedContent.length)
-            streamedContent = visibleContent
-            if (chunk) handlers.onChunk?.(chunk)
+            const chunk = stringifyContent(event.content)
+            if (!chunk) return
+
+            if (event.content_type) {
+              artifactContent += chunk
+              handlers.onArtifactChunk?.(chunk)
+            } else {
+              messageContent += chunk
+              handlers.onChunk?.(chunk)
+            }
             return
           }
 
           if (event.type === 'completion.response') {
-            rawContent += stringifyContent(event.content)
-            const { artifactContent, messageContent } =
-              extractArtifactResponse(rawContent)
-            const chunk = messageContent.slice(streamedContent.length)
-            if (chunk) handlers.onChunk?.(chunk)
+            const finalContent = stringifyContent(event.content)
+            if (finalContent) {
+              messageContent += finalContent
+              handlers.onChunk?.(finalContent)
+            }
             settle(resolve, {
               messageId: null,
-              content: messageContent,
-              artifactContent,
+              content: messageContent.trim(),
+              artifactContent: artifactContent.trimEnd() || null,
             })
             return
           }
@@ -231,43 +236,6 @@ function parseSidecarEvent(message: WebSocketMessage): SidecarEvent {
 
 function stringifyContent(content: SidecarContent) {
   return content == null ? '' : String(content)
-}
-
-function getStreamingMessageContent(content: string) {
-  const artifactStart = content.indexOf(ARTIFACT_START)
-  if (artifactStart === -1) {
-    return ARTIFACT_START.startsWith(content) ? '' : content
-  }
-
-  const artifactEnd = content.indexOf(
-    ARTIFACT_END,
-    artifactStart + ARTIFACT_START.length
-  )
-  if (artifactEnd === -1) return ''
-
-  return content.slice(artifactEnd + ARTIFACT_END.length).trimStart()
-}
-
-function extractArtifactResponse(content: string) {
-  const artifactStart = content.indexOf(ARTIFACT_START)
-  if (artifactStart === -1) {
-    return { artifactContent: null, messageContent: content.trim() }
-  }
-
-  const artifactEnd = content.indexOf(
-    ARTIFACT_END,
-    artifactStart + ARTIFACT_START.length
-  )
-  if (artifactEnd === -1) {
-    return { artifactContent: null, messageContent: content.trim() }
-  }
-
-  return {
-    artifactContent: content
-      .slice(artifactStart + ARTIFACT_START.length, artifactEnd)
-      .trim(),
-    messageContent: content.slice(artifactEnd + ARTIFACT_END.length).trim(),
-  }
 }
 
 function getSidecarErrorMessage(event: SidecarEvent) {
