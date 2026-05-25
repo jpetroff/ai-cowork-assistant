@@ -10,6 +10,7 @@
     "tauri": "tauri",
     "db:generate": "uv run python scripts/generate_sqlite_types.py",
     "db:check": "uv run python scripts/generate_sqlite_types.py --check",
+    "e2e:tauri:mcp": "bun run scripts/e2e/tauri-mcp.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
