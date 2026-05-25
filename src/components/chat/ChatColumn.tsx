@@ -5,6 +5,7 @@ import { useConversationStore } from '@/components/conversations/conversationSto
 import { ChatColumnHeader } from './ChatColumnHeader'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
+import { GenerationDrawerProvider } from './GenerationSteps'
 
 interface ChatColumnProps {
   projectId: string
@@ -30,10 +31,12 @@ export function ChatColumn({ projectId }: ChatColumnProps) {
   }, [activeConversationId])
 
   return (
-    <div className='flex flex-col h-full'>
+    <div className='flex h-full flex-col'>
       <ChatColumnHeader projectId={projectId} />
-      <MessageList />
-      <ChatInput />
+      <GenerationDrawerProvider>
+        <MessageList />
+        <ChatInput />
+      </GenerationDrawerProvider>
     </div>
   )
 }
