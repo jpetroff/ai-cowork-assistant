@@ -61,7 +61,9 @@ async def create_workflow(
             response.content_type = event.content_type
             yield response
         elif isinstance(event, StopEvent) == False:
-            yield DefaultResponse(type="event", payload=event.model_dump())
+            payload = event.model_dump()
+            payload["event_name"] = event.__class__.__name__
+            yield DefaultResponse(type="event", payload=payload)
 
     _final_result: WorkflowResult = await handler
 

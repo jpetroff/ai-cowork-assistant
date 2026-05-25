@@ -32,6 +32,21 @@ describe('createMessage()', () => {
     expect(params).toContain('Reply')
     expect(params).toContain(1)
   })
+
+  it('serializes optional metadata', async () => {
+    const metadata = { generation: { startedAt: 1000, steps: [] } }
+
+    await createMessage({
+      conversation_id: 'c1',
+      role: 'assistant',
+      content: 'Reply',
+      metadata,
+      sequence_order: 1,
+    })
+
+    const { params } = mockDb.rows[0]
+    expect(params).toContain(JSON.stringify(metadata))
+  })
 })
 
 describe('listMessages()', () => {

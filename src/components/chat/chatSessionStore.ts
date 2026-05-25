@@ -177,6 +177,8 @@ export const useChatSessionStore = create<
         .getState()
         .sendChatRequest(requestBody, {
           onChunk: (chunk) => useMessageStore.getState().appendChunk(chunk),
+          onStep: (generation) =>
+            useMessageStore.getState().setStreamingGeneration(generation),
           onArtifactChunk: (chunk) => {
             streamedArtifactContent += chunk
             useArtifactStore
@@ -193,9 +195,15 @@ export const useChatSessionStore = create<
         return
       }
 
-      const finalMessageId = await useMessageStore
-        .getState()
-        .finalizeStreaming(streamResult.messageId, streamResult.content)
+      const finalMessageId = streamResult.generation
+        ? await useMessageStore
+            .getState()
+            .finalizeStreaming(streamResult.messageId, streamResult.content, {
+              generation: streamResult.generation,
+            })
+        : await useMessageStore
+            .getState()
+            .finalizeStreaming(streamResult.messageId, streamResult.content)
 
       if (finalMessageId && streamResult.artifactContent !== null) {
         await useArtifactStore

@@ -5,19 +5,22 @@ export async function createMessage(data: {
   conversation_id: string
   role: 'user' | 'assistant'
   content: string
+  metadata?: unknown
   sequence_order: number
 }): Promise<string> {
   // Messages have no updated_at column — insert manually to exclude it
   const id = crypto.randomUUID()
   const now = Date.now()
+  const metadata = data.metadata == null ? null : JSON.stringify(data.metadata)
   await db.execute(
     `INSERT INTO messages (id, conversation_id, role, content, metadata, sequence_order, created_at)
-     VALUES ($1, $2, $3, $4, NULL, $5, $6)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       id,
       data.conversation_id,
       data.role,
       data.content,
+      metadata,
       data.sequence_order,
       now,
     ]

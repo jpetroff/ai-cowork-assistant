@@ -129,12 +129,80 @@ describe('useSidecarStore', () => {
     expect(onArtifactChunk).toHaveBeenCalledTimes(2)
     expect(onArtifactChunk).toHaveBeenNthCalledWith(1, '# Title\n')
     expect(onArtifactChunk).toHaveBeenNthCalledWith(2, 'Body\n\n')
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       messageId: null,
       content: 'Created it.',
       artifactContent: '# Title\nBody',
+      generation: {
+        startedAt: expect.any(Number),
+        completedAt: expect.any(Number),
+        durationMs: expect.any(Number),
+        steps: [
+          expect.objectContaining({
+            id: 'step-1',
+            kind: 'event',
+            title: 'Processing',
+            payload: { msg: 'Processing' },
+            startedAt: expect.any(Number),
+            endedAt: expect.any(Number),
+            durationMs: expect.any(Number),
+          }),
+          expect.objectContaining({
+            id: 'step-2',
+            kind: 'thinking',
+            title: 'Thinking',
+            content: 'internal notes',
+            startedAt: expect.any(Number),
+            endedAt: expect.any(Number),
+            durationMs: expect.any(Number),
+          }),
+        ],
+      },
     })
     expect(websocketMock.instances[0].disconnect).toHaveBeenCalled()
+  })
+
+  it('supports alternate thinking event spelling and strips artifact payload fields', async () => {
+    useSidecarStore.setState({
+      sidecarUrl: 'http://127.0.0.1:9720',
+      isConnected: true,
+    })
+    websocketMock.setFrames([
+      { type: 'chunk.completion.thinking', content: 'first ' },
+      { type: 'chunk.completion.thinking', content: 'second' },
+      {
+        type: 'event',
+        payload: {
+          event_name: 'ArtifactGeneratedEvent',
+          artifact: { content: 'old' },
+          artifact_text: 'new artifact',
+          message_text: 'followup',
+        },
+      },
+      { type: 'completion.response', content: 'Done.' },
+    ])
+    const onStep = vi.fn()
+
+    const result = await useSidecarStore
+      .getState()
+      .sendChatRequest(request, { onStep })
+
+    expect(onStep).toHaveBeenCalled()
+    expect(result?.generation.steps).toEqual([
+      expect.objectContaining({
+        kind: 'thinking',
+        title: 'Thinking',
+        content: 'first second',
+      }),
+      expect.objectContaining({
+        kind: 'event',
+        title: 'ArtifactGeneratedEvent',
+        payload: {
+          event_name: 'ArtifactGeneratedEvent',
+          message_text: 'followup',
+        },
+      }),
+    ])
   })
 
   it('uses completion.response content as final assistant text', async () => {
@@ -151,10 +219,16 @@ describe('useSidecarStore', () => {
 
     await expect(
       useSidecarStore.getState().sendChatRequest(request)
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       messageId: null,
       content: 'Done.',
       artifactContent: null,
+      generation: {
+        startedAt: expect.any(Number),
+        completedAt: expect.any(Number),
+        durationMs: expect.any(Number),
+        steps: [],
+      },
     })
   })
 
@@ -175,10 +249,13 @@ describe('useSidecarStore', () => {
 
     await expect(
       useSidecarStore.getState().sendChatRequest(request)
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       messageId: null,
       content: 'followup',
       artifactContent: 'artifact',
+      generation: expect.objectContaining({
+        steps: [],
+      }),
     })
   })
 

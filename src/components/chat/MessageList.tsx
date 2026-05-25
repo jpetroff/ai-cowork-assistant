@@ -3,6 +3,8 @@ import { useMessageStore } from '@/components/chat/messageStore'
 import { buildThread } from '@/lib/revision-utils'
 import { MessageListSkeleton } from './MessageListSkeleton'
 import { MessageBubble } from './MessageBubble'
+import { GenerationStepTrigger } from './GenerationSteps'
+import type { GenerationMetadata } from './generationMetadata'
 
 function MessageListEmpty() {
   return (
@@ -12,19 +14,22 @@ function MessageListEmpty() {
   )
 }
 
-function StreamingBubble({ content }: { content: string }) {
+function StreamingBubble({
+  content,
+  generation,
+}: {
+  content: string
+  generation: GenerationMetadata | null
+}) {
+  const visibleGeneration = generation ?? { startedAt: Date.now(), steps: [] }
+
   return (
     <div className='flex justify-start'>
       <div className='max-w-[80%] rounded-card px-surface-card py-control-y-md type-ui-md bg-muted text-foreground'>
-        {content ? (
+        {content && (
           <p className='whitespace-pre-wrap wrap-break-word m-0'>{content}</p>
-        ) : (
-          <span className='flex gap-1 items-center h-5'>
-            <span className='w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]' />
-            <span className='w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]' />
-            <span className='w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]' />
-          </span>
         )}
+        <GenerationStepTrigger generation={visibleGeneration} isStreaming />
       </div>
     </div>
   )
@@ -35,6 +40,7 @@ export function MessageList() {
   const messages = useMessageStore((s) => s.messages)
   const isStreaming = useMessageStore((s) => s.isStreaming)
   const streamingContent = useMessageStore((s) => s.streamingContent)
+  const streamingGeneration = useMessageStore((s) => s.streamingGeneration)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const thread = useMemo(() => buildThread(messages), [messages])
@@ -42,7 +48,7 @@ export function MessageList() {
   // Auto-scroll to bottom when messages change or streaming updates
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [thread.length, streamingContent])
+  }, [thread.length, streamingContent, streamingGeneration?.steps.length])
 
   if (status === 'loading') return <MessageListSkeleton />
 
@@ -58,7 +64,12 @@ export function MessageList() {
 
       {/* STUB: hitl-approval — render approval card for AI-proposed actions here (FR-AI-004, BR-AI-005) */}
 
-      {isStreaming && <StreamingBubble content={streamingContent} />}
+      {isStreaming && (
+        <StreamingBubble
+          content={streamingContent}
+          generation={streamingGeneration}
+        />
+      )}
 
       <div ref={bottomRef} />
     </div>

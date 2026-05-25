@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { listMessages, createMessage } from '@/lib/db/repositories/messages'
 import type { Message } from '@/lib/db/types'
 import { console_if } from '@/lib/logger'
+import type { GenerationMetadata, MessageMetadata } from './generationMetadata'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -13,6 +14,7 @@ type StoreStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** @property isStreaming - whether an assistant stream is currently visible */
 /** @property streamingContent - accumulated assistant stream content */
 /** @property streamingMessageId - reserved assistant stream message id */
+/** @property streamingGeneration - live generation step timeline */
 export interface MessageState {
   messages: Message[]
   conversationId: string | null
@@ -20,6 +22,7 @@ export interface MessageState {
   isStreaming: boolean
   streamingContent: string
   streamingMessageId: string | null
+  streamingGeneration: GenerationMetadata | null
 }
 
 export interface MessageActions {
@@ -28,9 +31,11 @@ export interface MessageActions {
   clear: () => void
   beginStreaming: () => void
   appendChunk: (chunk: string) => void
+  setStreamingGeneration: (generation: GenerationMetadata) => void
   finalizeStreaming: (
     id: string | null,
-    content: string
+    content: string,
+    metadata?: MessageMetadata
   ) => Promise<string | null>
 }
 
@@ -41,6 +46,7 @@ const INITIAL_STATE: MessageState = {
   isStreaming: false,
   streamingContent: '',
   streamingMessageId: null,
+  streamingGeneration: null,
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -119,7 +125,15 @@ export const useMessageStore = create<MessageState & MessageActions>(
      */
     beginStreaming() {
       console_if('MESSAGE_STORE').log('[MESSAGE_STORE] stream:begin')
-      set({ isStreaming: true, streamingContent: '', streamingMessageId: null })
+      set({
+        isStreaming: true,
+        streamingContent: '',
+        streamingMessageId: null,
+        streamingGeneration: {
+          startedAt: Date.now(),
+          steps: [],
+        },
+      })
     },
 
     /**
@@ -130,27 +144,40 @@ export const useMessageStore = create<MessageState & MessageActions>(
     },
 
     /**
+     * Replaces the visible generation timeline with the latest sidecar step
+     * snapshot. Sidecar parsing keeps the immutable metadata shape ready for
+     * persistence when the assistant message is finalized.
+     */
+    setStreamingGeneration(generation) {
+      set({ streamingGeneration: generation })
+    },
+
+    /**
      * Closes the streaming slot and appends the final assistant message. If the sidecar
      * did not return an ID, this method persists the assistant message itself.
      */
-    async finalizeStreaming(id, content) {
+    async finalizeStreaming(id, content, metadata) {
       const { conversationId, messages } = get()
       if (!conversationId) {
         set({
           isStreaming: false,
           streamingContent: '',
           streamingMessageId: null,
+          streamingGeneration: null,
         })
         return null
       }
       if (content) {
         const sequence_order = messages.length
+        const serializedMetadata =
+          metadata && Object.keys(metadata).length > 0 ? metadata : undefined
         const messageId =
           id ??
           (await createMessage({
             conversation_id: conversationId,
             role: 'assistant',
             content,
+            metadata: serializedMetadata,
             sequence_order,
           }))
         const newMessage: Message = {
@@ -158,7 +185,9 @@ export const useMessageStore = create<MessageState & MessageActions>(
           conversation_id: conversationId,
           role: 'assistant',
           content,
-          metadata: null,
+          metadata: serializedMetadata
+            ? JSON.stringify(serializedMetadata)
+            : null,
           sequence_order,
           created_at: Date.now(),
         }
@@ -167,6 +196,7 @@ export const useMessageStore = create<MessageState & MessageActions>(
           isStreaming: false,
           streamingContent: '',
           streamingMessageId: null,
+          streamingGeneration: null,
         }))
         console_if('MESSAGE_STORE').log('[MESSAGE_STORE] stream:finalized', {
           conversationId,
@@ -178,6 +208,7 @@ export const useMessageStore = create<MessageState & MessageActions>(
           isStreaming: false,
           streamingContent: '',
           streamingMessageId: null,
+          streamingGeneration: null,
         })
         return null
       }

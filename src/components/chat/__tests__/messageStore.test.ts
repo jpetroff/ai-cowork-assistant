@@ -9,6 +9,7 @@ vi.mock('@/lib/db/repositories/messages', () => ({
 }))
 
 import { useMessageStore } from '../messageStore'
+import type { MessageMetadata } from '../generationMetadata'
 
 beforeEach(() => {
   useMessageStore.getState().clear()
@@ -71,5 +72,52 @@ describe('addUserMessage', () => {
         sequence_order: 0,
       }),
     ])
+  })
+})
+
+describe('finalizeStreaming', () => {
+  it('persists assistant generation metadata', async () => {
+    useMessageStore.setState({ conversationId: 'conv-1', messages: [] })
+    mockCreateMessage.mockResolvedValue('assistant-1')
+    const metadata: MessageMetadata = {
+      generation: {
+        startedAt: 1000,
+        completedAt: 2500,
+        durationMs: 1500,
+        steps: [
+          {
+            id: 'step-1',
+            kind: 'thinking',
+            title: 'Thinking',
+            content: 'notes',
+            startedAt: 1000,
+            endedAt: 2500,
+            durationMs: 1500,
+          },
+        ],
+      },
+    }
+
+    const id = await useMessageStore
+      .getState()
+      .finalizeStreaming(null, 'done', metadata)
+
+    expect(id).toBe('assistant-1')
+    expect(mockCreateMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversation_id: 'conv-1',
+        role: 'assistant',
+        content: 'done',
+        metadata,
+        sequence_order: 0,
+      })
+    )
+    expect(useMessageStore.getState().messages[0]).toEqual(
+      expect.objectContaining({
+        id: 'assistant-1',
+        role: 'assistant',
+        metadata: JSON.stringify(metadata),
+      })
+    )
   })
 })

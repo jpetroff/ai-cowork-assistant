@@ -5,6 +5,7 @@ import WebSocket, {
 } from '@tauri-apps/plugin-websocket'
 import { console_if } from '@/lib/logger'
 import type { ChatCompletionRequest as ApiChatCompletionRequest } from '@/lib/api-types'
+import type { GenerationMetadata, GenerationStep } from './generationMetadata'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ type SidecarEvent = {
   type:
     | 'completion.chunk'
     | 'completion.chunk.thinking'
+    | 'chunk.completion.thinking'
     | 'completion.response'
     | 'error'
     | 'event'
@@ -28,17 +30,21 @@ type SidecarContent = string | number | null | undefined
 /** @property messageId - assistant message ID returned by the sidecar, if any */
 /** @property content - final assistant response text */
 /** @property artifactContent - optional artifact content produced by the assistant */
+/** @property generation - captured generation step timeline */
 export interface SidecarStreamResult {
   messageId: string | null
   content: string
   artifactContent: string | null
+  generation: GenerationMetadata
 }
 
 /** @property onChunk - called for each streamed assistant text chunk */
 /** @property onArtifactChunk - called for each streamed artifact chunk */
+/** @property onStep - called when generation step metadata changes */
 interface SidecarStreamHandlers {
   onChunk?: (chunk: string) => void
   onArtifactChunk?: (chunk: string) => void
+  onStep?: (generation: GenerationMetadata) => void
 }
 
 /** @property sidecarUrl - base URL for the local sidecar service */
@@ -141,6 +147,11 @@ async function streamCompletion(
   let removeListener: () => void = () => undefined
   let messageContent = ''
   let artifactContent = ''
+  let generation: GenerationMetadata = {
+    startedAt: Date.now(),
+    steps: [],
+  }
+  let activeStepId: string | null = null
 
   try {
     socket = await WebSocket.connect(websocketUrl)
@@ -170,6 +181,72 @@ async function streamCompletion(
         reject(err)
       }
 
+      const emitGeneration = () => {
+        handlers.onStep?.(cloneGenerationMetadata(generation))
+      }
+
+      const closeActiveStep = (endedAt: number) => {
+        if (!activeStepId) return
+
+        generation = {
+          ...generation,
+          steps: generation.steps.map((step) =>
+            step.id === activeStepId
+              ? {
+                  ...step,
+                  endedAt,
+                  durationMs: Math.max(0, endedAt - step.startedAt),
+                }
+              : step
+          ),
+        }
+        activeStepId = null
+      }
+
+      const startStep = (
+        kind: GenerationStep['kind'],
+        title: string,
+        options: { content?: string; payload?: unknown } = {}
+      ) => {
+        const startedAt = Date.now()
+        closeActiveStep(startedAt)
+        const step: GenerationStep = {
+          id: `step-${generation.steps.length + 1}`,
+          kind,
+          title,
+          startedAt,
+          ...options,
+        }
+        activeStepId = step.id
+        generation = {
+          ...generation,
+          steps: [...generation.steps, step],
+        }
+        emitGeneration()
+      }
+
+      const appendThinking = (content: string) => {
+        if (!content) return
+
+        const activeStep = generation.steps.find(
+          (step) => step.id === activeStepId
+        )
+        if (!activeStep || activeStep.kind !== 'thinking') {
+          startStep('thinking', 'Thinking', { content })
+          return
+        }
+
+        generation = {
+          ...generation,
+          steps: generation.steps.map((step) =>
+            step.id === activeStepId
+              ? { ...step, content: `${step.content ?? ''}${content}` }
+              : step
+          ),
+        }
+        emitGeneration()
+      }
+
       removeListener = activeSocket.addListener((message) => {
         if (message.type === 'Close') {
           if (!settled) {
@@ -182,6 +259,18 @@ async function streamCompletion(
 
         try {
           const event = parseSidecarEvent(message)
+          if (isThinkingEvent(event)) {
+            appendThinking(stringifyContent(event.content))
+            return
+          }
+
+          if (event.type === 'event') {
+            startStep('event', getEventStepTitle(event.payload), {
+              payload: sanitizeEventPayload(event.payload),
+            })
+            return
+          }
+
           if (event.type === 'completion.chunk') {
             const chunk = stringifyContent(event.content)
             if (!chunk) return
@@ -197,6 +286,8 @@ async function streamCompletion(
           }
 
           if (event.type === 'completion.response') {
+            const completedAt = Date.now()
+            closeActiveStep(completedAt)
             const finalContent = stringifyContent(event.content)
             if (finalContent) {
               messageContent += finalContent
@@ -206,6 +297,11 @@ async function streamCompletion(
               messageId: null,
               content: messageContent.trim(),
               artifactContent: artifactContent.trimEnd() || null,
+              generation: {
+                ...generation,
+                completedAt,
+                durationMs: Math.max(0, completedAt - generation.startedAt),
+              },
             })
             return
           }
@@ -236,6 +332,52 @@ function parseSidecarEvent(message: WebSocketMessage): SidecarEvent {
 
 function stringifyContent(content: SidecarContent) {
   return content == null ? '' : String(content)
+}
+
+function isThinkingEvent(event: SidecarEvent) {
+  return (
+    event.type === 'completion.chunk.thinking' ||
+    event.type === 'chunk.completion.thinking'
+  )
+}
+
+function getEventStepTitle(payload: unknown) {
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>
+    if (typeof record.msg === 'string' && record.msg.trim()) {
+      return record.msg.trim()
+    }
+    if (typeof record.event_name === 'string' && record.event_name.trim()) {
+      return record.event_name.trim()
+    }
+  }
+
+  return 'Workflow event'
+}
+
+function sanitizeEventPayload(payload: unknown): unknown {
+  if (Array.isArray(payload)) {
+    return payload.map(sanitizeEventPayload)
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.fromEntries(
+      Object.entries(payload as Record<string, unknown>)
+        .filter(([key]) => key !== 'artifact' && key !== 'artifact_text')
+        .map(([key, value]) => [key, sanitizeEventPayload(value)])
+    )
+  }
+
+  return payload
+}
+
+function cloneGenerationMetadata(
+  generation: GenerationMetadata
+): GenerationMetadata {
+  return {
+    ...generation,
+    steps: generation.steps.map((step) => ({ ...step })),
+  }
 }
 
 function getSidecarErrorMessage(event: SidecarEvent) {

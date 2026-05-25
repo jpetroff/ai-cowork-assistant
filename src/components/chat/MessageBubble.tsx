@@ -1,5 +1,7 @@
 import type { Message } from '@/lib/db/types'
 import { cn } from '@/lib/utils'
+import { GenerationStepTrigger } from './GenerationSteps'
+import { getGenerationMetadata } from './generationMetadata'
 
 interface MessageBubbleProps {
   message: Message
@@ -7,6 +9,7 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
+  const generation = isUser ? null : getGenerationMetadata(message.metadata)
 
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
@@ -21,6 +24,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <p className='whitespace-pre-wrap wrap-break-word m-0'>
           {message.content}
         </p>
+        {generation && <GenerationStepTrigger generation={generation} />}
       </div>
     </div>
   )
