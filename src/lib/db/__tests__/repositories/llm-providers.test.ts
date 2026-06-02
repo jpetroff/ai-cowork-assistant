@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { mockDb } from '../setup'
-import { createLlmProvider, setDefaultProvider } from '../../repositories/llm-providers'
+import {
+  createLlmProvider,
+  setDefaultProvider,
+} from '../../repositories/llm-providers'
 
 describe('createLlmProvider()', () => {
   it('executes INSERT and returns a UUID', async () => {
@@ -23,8 +26,25 @@ describe('createLlmProvider()', () => {
       base_url: 'https://api.openai.com',
     })
     const { params } = mockDb.rows[0]
-    expect(params).toContain(null)  // api_key
-    expect(params).toContain(0)     // is_default
+    expect(params).toContain(null) // api_key
+    expect(params).toContain(null) // default_model
+    expect(params).toContain(null) // config_json
+    expect(params).toContain(0) // is_default
+  })
+
+  it('persists default model and provider config JSON', async () => {
+    await createLlmProvider({
+      name: 'OpenAI',
+      provider_type: 'openai',
+      base_url: 'https://api.openai.com/v1',
+      default_model: 'gpt-test',
+      config_json: '{"temperature":0.2}',
+    })
+    const { sql, params } = mockDb.rows[0]
+    expect(sql).toContain('default_model')
+    expect(sql).toContain('config_json')
+    expect(params).toContain('gpt-test')
+    expect(params).toContain('{"temperature":0.2}')
   })
 })
 
@@ -34,7 +54,9 @@ describe('setDefaultProvider()', () => {
     expect(mockDb.rows).toHaveLength(2)
     const [clear, set] = mockDb.rows
     expect(clear.sql).toContain('UPDATE llm_providers SET is_default = 0')
-    expect(set.sql).toContain('UPDATE llm_providers SET is_default = 1 WHERE id =')
+    expect(set.sql).toContain(
+      'UPDATE llm_providers SET is_default = 1 WHERE id ='
+    )
     expect(set.params).toContain('provider-1')
   })
 })

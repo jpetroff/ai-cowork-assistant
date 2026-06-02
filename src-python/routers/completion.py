@@ -23,6 +23,7 @@ async def completion_websocket(websocket: WebSocket):
 
         handler = create_workflow(
             user_query=request.message,
+            llm_provider=request.llm_provider,
             chat_history=request.chat_history,
             artifact=request.artifact,
         )

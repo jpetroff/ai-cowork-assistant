@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Message } from '@/lib/db/types'
+import type { LlmProvider, Message } from '@/lib/db/types'
 import type { SealResult } from '@/lib/types'
+import { useLlmProviderStore } from '@/components/projects/llmProviderStore'
+import { useProjectSettingsStore } from '@/components/projects/projectSettingsStore'
 import type { GenerationMetadata } from '../generationMetadata'
 
 const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
@@ -51,6 +53,25 @@ vi.mock('@/components/chat/sidecarStore', () => ({
 }))
 
 import { useChatSessionStore } from '../chatSessionStore'
+
+function makeProvider(overrides: Partial<LlmProvider> = {}): LlmProvider {
+  return {
+    id: 'provider-1',
+    name: 'Local Ollama',
+    provider_type: 'ollama',
+    base_url: 'http://localhost:11434',
+    api_key: null,
+    default_model: 'llama3',
+    config_json: JSON.stringify({
+      context_window: 8192,
+      is_function_calling_model: true,
+      thinking: true,
+    }),
+    is_default: 1,
+    created_at: 1000,
+    ...overrides,
+  }
+}
 
 function makeMessage(overrides: Partial<Message> = {}): Message {
   return {
@@ -114,6 +135,12 @@ function mockSidecarWorkflow(...messages: WorkflowMessage[]) {
 
 beforeEach(() => {
   useChatSessionStore.getState().reset()
+  useLlmProviderStore.setState({
+    providers: [makeProvider()],
+    modelsByProvider: {},
+    status: 'ready',
+  })
+  useProjectSettingsStore.setState({ aiConfigs: {} })
   vi.clearAllMocks()
   messageApi.conversationId = 'conv-1'
   messageApi.messages.splice(0, messageApi.messages.length)
@@ -188,6 +215,14 @@ describe('useChatSessionStore', () => {
       expect.objectContaining({
         message: 'hello',
         chat_history: [],
+        llm_provider: expect.objectContaining({
+          provider_id: 'provider-1',
+          provider_type: 'ollama',
+          model: 'llama3',
+          context_window: 8192,
+          is_function_calling_model: true,
+          thinking: true,
+        }),
         artifact: {
           artifact_id: 'art-1',
           revision_id: 'rev-1',
@@ -383,5 +418,64 @@ describe('useChatSessionStore', () => {
       'assistant-1',
       'art-2'
     )
+  })
+
+  it('uses project AI config provider and model before the default provider', async () => {
+    useChatSessionStore.setState({ activeProjectId: 'proj-1' })
+    useLlmProviderStore.setState({
+      providers: [
+        makeProvider({
+          id: 'default-provider',
+          default_model: 'default-model',
+        }),
+        makeProvider({
+          id: 'project-provider',
+          name: 'Project OpenAI',
+          provider_type: 'openai',
+          base_url: 'https://api.openai.com/v1',
+          api_key: 'sk-project',
+          default_model: 'provider-default',
+          config_json: JSON.stringify({ temperature: 0.2 }),
+          is_default: 0,
+        }),
+      ],
+      status: 'ready',
+    })
+    useProjectSettingsStore.setState({
+      aiConfigs: {
+        'proj-1': {
+          provider_id: 'project-provider',
+          model: 'project-model',
+          embedding_model: null,
+        },
+      },
+    })
+
+    await useChatSessionStore.getState().submitMessage('hello')
+
+    expect(sidecarApi.sendChatRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llm_provider: expect.objectContaining({
+          provider_id: 'project-provider',
+          provider_type: 'openai',
+          api_key: 'sk-project',
+          model: 'project-model',
+          temperature: 0.2,
+        }),
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('blocks send when no provider model can be resolved', async () => {
+    useLlmProviderStore.setState({
+      providers: [makeProvider({ default_model: null })],
+      status: 'ready',
+    })
+
+    await useChatSessionStore.getState().submitMessage('hello')
+
+    expect(sidecarApi.sendChatRequest).not.toHaveBeenCalled()
+    expect(useChatSessionStore.getState().error).toMatch(/select a model/i)
   })
 })

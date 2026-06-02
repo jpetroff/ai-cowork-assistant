@@ -1,21 +1,27 @@
 from typing import Sequence, List
 from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
 from llama_index.core.callbacks.base_handler import BaseCallbackHandler
-from llama_index.llms.ollama import Ollama
 from workflows.events import StopEvent
 
+from llamaflows.llm_factory import create_llm
 from llamaflows.default.main import (
     CompletionChunkEvent,
     CompletionThinkingEvent,
     SimpleQueryWorkflow,
     WorkflowResult,
 )
-from schemas import ChatCompletionArtifactContext, ChatMessageBase, DefaultResponse
+from schemas import (
+    ChatCompletionArtifactContext,
+    ChatMessageBase,
+    DefaultResponse,
+    LlmProviderSettings,
+)
 import tiktoken
 
 
 async def create_workflow(
     user_query: str,
+    llm_provider: LlmProviderSettings,
     chat_history: Sequence[ChatMessageBase] | None = None,
     artifact: ChatCompletionArtifactContext | None = None,
 ):
@@ -24,22 +30,17 @@ async def create_workflow(
     # use a tokenizer that matches, or simply the default for tracking.
     callbacks: List[BaseCallbackHandler] = []
     try:
-        tiktoken.get_encoding("gpt-oss-20b")
+        tiktoken.get_encoding(llm_provider.model)
         token_counter = TokenCountingHandler(
-            tokenizer=tiktoken.encoding_for_model("gpt-oss-20b").encode
+            tokenizer=tiktoken.encoding_for_model(llm_provider.model).encode
         )
         callbacks.append(token_counter)
     except:
         token_counter = None
-        print("Could not initialize token encoding statistics…")
+        print("Could not initialize token encoding statistics...")
         pass
 
-    llm = Ollama(
-        model="gpt-oss:20b",
-        base_url="http://ollama.intranet",
-        thinking=True,
-        callback_manager=CallbackManager(callbacks),
-    )
+    llm = create_llm(llm_provider, CallbackManager(callbacks))
     w = SimpleQueryWorkflow(llm=llm)
     handler = w.run(
         user_query=user_query,

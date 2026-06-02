@@ -64,6 +64,8 @@ export interface LlmProvider {
   provider_type: string
   base_url: string
   api_key: string | null
+  default_model: string | null
+  config_json: string | null
   is_default: number
   created_at: number
 }

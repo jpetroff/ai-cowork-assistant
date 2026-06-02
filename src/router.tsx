@@ -5,6 +5,7 @@ import { SetupPage } from '@/pages/SetupPage'
 import { HomePage } from '@/pages/HomePage'
 import { ProjectPage } from '@/pages/ProjectPage'
 import { ChatPage } from '@/pages/ChatPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 import { useProjectStore } from '@/components/projects/projectStore'
 import { useConversationStore } from '@/components/conversations/conversationStore'
 import { useProjectSettingsStore } from '@/components/projects/projectSettingsStore'
@@ -22,6 +23,11 @@ export const router = createMemoryRouter([
     children: [
       { path: 'loading', element: <LoadingPage /> },
       { path: 'setup', element: <SetupPage /> },
+      {
+        path: 'settings',
+        loader: () => useLlmProviderStore.getState().loadAll(),
+        element: <SettingsPage />,
+      },
       {
         index: true,
         loader: () => useProjectStore.getState().loadAll(),
@@ -57,6 +63,11 @@ export const router = createMemoryRouter([
           }
 
           useConversationStore.getState().setActive(chatId)
+
+          await Promise.all([
+            useProjectSettingsStore.getState().loadAiConfig(projectId),
+            useLlmProviderStore.getState().loadAll(),
+          ])
 
           await useChatSessionStore.getState().loadChat({
             projectId,

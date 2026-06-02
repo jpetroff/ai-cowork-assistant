@@ -12,6 +12,8 @@ shortuuid
 llama-index
 llama-index-llms-ollama
 llama-index-llms-openai-like
+llama-index-llms-openai
+llama-index-llms-anthropic
 llama-index-embeddings-ollama
 llama-index-embeddings-openai-like
 llama-index-llms-gemini

@@ -88,6 +88,42 @@ class ChatMessageBase(BaseModel):
     content: str = Field(description="Message content")
 
 
+class LlmProviderSettings(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    provider_id: str = Field(description="Configured provider identifier")
+    provider_type: Literal["ollama", "openai_like", "openai", "anthropic"] = Field(
+        description="LlamaIndex provider constructor discriminator"
+    )
+    name: str = Field(description="Provider display name")
+    base_url: str = Field(description="Provider API base URL")
+    api_key: Optional[str] = Field(default=None, description="Provider API key")
+    model: str = Field(description="Model identifier")
+    temperature: Optional[float] = Field(
+        default=None, description="Sampling temperature"
+    )
+    max_tokens: Optional[int] = Field(default=None, description="Maximum output tokens")
+    timeout: Optional[float] = Field(
+        default=None, description="Request timeout in seconds"
+    )
+    context_window: Optional[int] = Field(default=None, description="Context window")
+    is_chat_model: Optional[bool] = Field(
+        default=None, description="Whether OpenAI-like provider uses chat endpoint"
+    )
+    is_function_calling_model: Optional[bool] = Field(
+        default=None, description="Whether provider supports function calling"
+    )
+    thinking: Optional[Union[bool, Literal["low", "medium", "high"]]] = Field(
+        default=None, description="Provider thinking mode"
+    )
+    reasoning_effort: Optional[str] = Field(
+        default=None, description="OpenAI reasoning effort"
+    )
+    config: dict[str, Any] = Field(
+        default_factory=dict, description="Provider-specific constructor options"
+    )
+
+
 class ChatCompletionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -100,6 +136,9 @@ class ChatCompletionRequest(BaseModel):
     artifact: Optional[ChatCompletionArtifactContext] = Field(
         default=None,
         description="Current artifact revision context",
+    )
+    llm_provider: LlmProviderSettings = Field(
+        description="Resolved LLM provider settings for this request"
     )
 
     observability: Optional[bool] = Field(

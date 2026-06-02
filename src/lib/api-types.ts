@@ -40,6 +40,30 @@ export type MessageRole = "user" | "assistant" | "system";
  */
 export type Content2 = string;
 /**
+ * Configured provider identifier
+ */
+export type ProviderId = string;
+/**
+ * LlamaIndex provider constructor discriminator
+ */
+export type ProviderType = "ollama" | "openai_like" | "openai" | "anthropic";
+/**
+ * Provider display name
+ */
+export type Name = string;
+/**
+ * Provider API base URL
+ */
+export type BaseUrl = string;
+/**
+ * Model identifier
+ */
+export type Model = string;
+/**
+ * Provider thinking mode
+ */
+export type Thinking = boolean | ("low" | "medium" | "high") | null;
+/**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "MessageRole".
  */
@@ -67,7 +91,7 @@ export type Status = "ok";
 /**
  * Workflow name identifier
  */
-export type Name = string;
+export type Name1 = string;
 /**
  * Workflow description
  */
@@ -161,6 +185,57 @@ export interface ChatMessageBase {
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
+ * via the `definition` "LlmProviderSettings".
+ */
+export interface LlmProviderSettings {
+  provider_id: ProviderId;
+  provider_type: ProviderType;
+  name: Name;
+  base_url: BaseUrl;
+  /**
+   * Provider API key
+   */
+  api_key?: string | null;
+  model: Model;
+  /**
+   * Sampling temperature
+   */
+  temperature?: number | null;
+  /**
+   * Maximum output tokens
+   */
+  max_tokens?: number | null;
+  /**
+   * Request timeout in seconds
+   */
+  timeout?: number | null;
+  /**
+   * Context window
+   */
+  context_window?: number | null;
+  /**
+   * Whether OpenAI-like provider uses chat endpoint
+   */
+  is_chat_model?: boolean | null;
+  /**
+   * Whether provider supports function calling
+   */
+  is_function_calling_model?: boolean | null;
+  thinking?: Thinking;
+  /**
+   * OpenAI reasoning effort
+   */
+  reasoning_effort?: string | null;
+  config?: Config;
+}
+/**
+ * Provider-specific constructor options
+ */
+export interface Config {
+  [k: string]: unknown;
+}
+/**
+ * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "ChatCompletionRequest".
  */
 export interface ChatCompletionRequest {
@@ -170,6 +245,7 @@ export interface ChatCompletionRequest {
    * Current artifact revision context
    */
   artifact?: ChatCompletionArtifactContext | null;
+  llm_provider: LlmProviderSettings1;
   /**
    * Enable Phoenix observability for this request
    */
@@ -181,6 +257,50 @@ export interface ChatCompletionRequest {
   working_folder?: string | null;
   knowledge_hubs?: KnowledgeHubs;
   [k: string]: unknown;
+}
+/**
+ * Resolved LLM provider settings for this request
+ */
+export interface LlmProviderSettings1 {
+  provider_id: ProviderId;
+  provider_type: ProviderType;
+  name: Name;
+  base_url: BaseUrl;
+  /**
+   * Provider API key
+   */
+  api_key?: string | null;
+  model: Model;
+  /**
+   * Sampling temperature
+   */
+  temperature?: number | null;
+  /**
+   * Maximum output tokens
+   */
+  max_tokens?: number | null;
+  /**
+   * Request timeout in seconds
+   */
+  timeout?: number | null;
+  /**
+   * Context window
+   */
+  context_window?: number | null;
+  /**
+   * Whether OpenAI-like provider uses chat endpoint
+   */
+  is_chat_model?: boolean | null;
+  /**
+   * Whether provider supports function calling
+   */
+  is_function_calling_model?: boolean | null;
+  thinking?: Thinking;
+  /**
+   * OpenAI reasoning effort
+   */
+  reasoning_effort?: string | null;
+  config?: Config;
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
@@ -195,7 +315,7 @@ export interface HealthResponse {
  * via the `definition` "WorkflowInfo".
  */
 export interface WorkflowInfo {
-  name: Name;
+  name: Name1;
   description?: Description;
   path: Path;
   [k: string]: unknown;

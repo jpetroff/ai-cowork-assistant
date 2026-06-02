@@ -97,6 +97,15 @@ import { useSidecarStore, type ChatCompletionRequest } from '../sidecarStore'
 const request: ChatCompletionRequest = {
   message: 'write the artifact',
   chat_history: [{ role: 'assistant', content: 'previous answer' }],
+  llm_provider: {
+    provider_id: 'provider-1',
+    provider_type: 'ollama',
+    name: 'Ollama',
+    base_url: 'http://localhost:11434',
+    api_key: null,
+    model: 'llama3',
+    config: {},
+  },
   artifact: {
     artifact_id: 'art-1',
     revision_id: 'rev-1',

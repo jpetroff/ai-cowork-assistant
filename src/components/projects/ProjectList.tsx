@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { PlusIcon } from '@phosphor-icons/react'
+import { SettingsIcon } from 'lucide-react'
 import { useProjectStore } from '@/components/projects/projectStore'
 import { ProjectCard } from './ProjectCard'
 import { ProjectListSkeleton } from './ProjectListSkeleton'
@@ -56,10 +57,20 @@ export function ProjectList() {
     <div className='flex flex-col gap-4'>
       <div className='flex items-center justify-between'>
         <h2 className='text-sm font-medium text-muted-foreground'>Projects</h2>
-        <Button size='sm' onClick={handleNewProject}>
-          <PlusIcon weight='bold' />
-          New Project
-        </Button>
+        <div className='flex items-center gap-2'>
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => navigate('/settings')}
+          >
+            <SettingsIcon className='size-icon-sm' />
+            Settings
+          </Button>
+          <Button size='sm' onClick={handleNewProject}>
+            <PlusIcon weight='bold' />
+            New Project
+          </Button>
+        </div>
       </div>
       <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3'>
         {projects.map((project) => (

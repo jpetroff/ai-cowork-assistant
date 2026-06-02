@@ -41,6 +41,8 @@ function makeProvider(overrides: Partial<LlmProvider> = {}): LlmProvider {
     provider_type: 'ollama',
     base_url: 'http://localhost:11434',
     api_key: null,
+    default_model: null,
+    config_json: null,
     is_default: 0,
     created_at: Date.now(),
     ...overrides,
