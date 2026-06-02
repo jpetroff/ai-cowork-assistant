@@ -11,7 +11,6 @@ router = APIRouter(tags=["completion"])
 logger = logging.getLogger(__name__)
 
 
-
 @router.websocket("/completion")
 async def completion_websocket(websocket: WebSocket):
     await websocket.accept()
@@ -31,6 +30,8 @@ async def completion_websocket(websocket: WebSocket):
         async for response in handler:
             await websocket.send_json(response.model_dump(exclude_none=True))
 
+        await websocket.close(code=1000, reason="workflow.complete")
+
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:
@@ -41,5 +42,6 @@ async def completion_websocket(websocket: WebSocket):
                 payload={"message": str(e), "code": "internal_error"},
             )
             await websocket.send_json(error_response.model_dump(exclude_none=True))
+            await websocket.close(code=1011, reason="workflow.error")
         except Exception:
             pass

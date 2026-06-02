@@ -1,16 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-type Listener = (message: { type: string; data?: string }) => void
+type Listener = (
+  message:
+    | { type: 'Text'; data: string }
+    | { type: 'Close'; data: { code: number; reason: string } | null }
+) => void
+
+type SocketFrame =
+  | Record<string, unknown>
+  | { frameType: 'Close'; data: { code: number; reason: string } | null }
 
 const websocketMock = vi.hoisted(() => {
-  let frames: unknown[] = []
+  let frames: SocketFrame[] = []
   const instances: Array<{
     addListener: ReturnType<typeof vi.fn>
     disconnect: ReturnType<typeof vi.fn>
+    emitFrame: (frame: SocketFrame) => void
     listeners: Listener[]
     send: ReturnType<typeof vi.fn>
     sent: string[]
   }> = []
+
+  const toSocketMessage = (frame: SocketFrame) => {
+    if (
+      frame &&
+      typeof frame === 'object' &&
+      'frameType' in frame &&
+      frame.frameType === 'Close'
+    ) {
+      const closeFrame = frame as {
+        data: { code: number; reason: string } | null
+      }
+      return { type: 'Close' as const, data: closeFrame.data }
+    }
+
+    return { type: 'Text' as const, data: JSON.stringify(frame) }
+  }
 
   const connect = vi.fn(async () => {
     const instance = {
@@ -24,12 +49,16 @@ const websocketMock = vi.hoisted(() => {
           )
         }
       }),
+      emitFrame(frame: SocketFrame) {
+        const message = toSocketMessage(frame)
+        for (const listener of instance.listeners) {
+          listener(message)
+        }
+      },
       send: vi.fn(async (message: string) => {
         instance.sent.push(message)
         for (const frame of frames) {
-          for (const listener of instance.listeners) {
-            listener({ type: 'Text', data: JSON.stringify(frame) })
-          }
+          instance.emitFrame(frame)
         }
       }),
       disconnect: vi.fn(async () => undefined),
@@ -41,11 +70,15 @@ const websocketMock = vi.hoisted(() => {
   return {
     connect,
     instances,
-    setFrames(nextFrames: unknown[]) {
+    setFrames(nextFrames: SocketFrame[]) {
       frames = nextFrames
     },
   }
 })
+
+function closeFrame(code = 1000, reason = 'workflow.complete'): SocketFrame {
+  return { frameType: 'Close', data: { code, reason } }
+}
 
 const invokeMock = vi.hoisted(() => vi.fn())
 
@@ -112,6 +145,7 @@ describe('useSidecarStore', () => {
       },
       { type: 'completion.chunk', content: 'Created it.' },
       { type: 'completion.response', content: '' },
+      closeFrame(),
     ])
     const onChunk = vi.fn()
     const onArtifactChunk = vi.fn()
@@ -129,7 +163,8 @@ describe('useSidecarStore', () => {
     expect(onArtifactChunk).toHaveBeenCalledTimes(2)
     expect(onArtifactChunk).toHaveBeenNthCalledWith(1, '# Title\n')
     expect(onArtifactChunk).toHaveBeenNthCalledWith(2, 'Body\n\n')
-    expect(result).toMatchObject({
+    expect(result?.messages).toHaveLength(1)
+    expect(result?.messages[0]).toMatchObject({
       messageId: null,
       content: 'Created it.',
       artifactContent: '# Title\nBody',
@@ -180,6 +215,7 @@ describe('useSidecarStore', () => {
         },
       },
       { type: 'completion.response', content: 'Done.' },
+      closeFrame(),
     ])
     const onStep = vi.fn()
 
@@ -188,7 +224,7 @@ describe('useSidecarStore', () => {
       .sendChatRequest(request, { onStep })
 
     expect(onStep).toHaveBeenCalled()
-    expect(result?.generation.steps).toEqual([
+    expect(result?.messages[0].generation.steps).toEqual([
       expect.objectContaining({
         kind: 'thinking',
         title: 'Thinking',
@@ -215,21 +251,144 @@ describe('useSidecarStore', () => {
         type: 'completion.response',
         content: 'Done.',
       },
+      closeFrame(),
     ])
 
     await expect(
       useSidecarStore.getState().sendChatRequest(request)
     ).resolves.toMatchObject({
-      messageId: null,
-      content: 'Done.',
-      artifactContent: null,
+      messages: [
+        {
+          messageId: null,
+          content: 'Done.',
+          artifactContent: null,
+          generation: {
+            startedAt: expect.any(Number),
+            completedAt: expect.any(Number),
+            durationMs: expect.any(Number),
+            steps: [],
+          },
+        },
+      ],
+    })
+  })
+
+  it('keeps listening after completion.response until the websocket closes', async () => {
+    useSidecarStore.setState({
+      sidecarUrl: 'http://127.0.0.1:9720',
+      isConnected: true,
+    })
+    websocketMock.setFrames([
+      {
+        type: 'completion.response',
+        content: 'Done.',
+      },
+    ])
+
+    let settled = false
+    const resultPromise = useSidecarStore
+      .getState()
+      .sendChatRequest(request)
+      .then((result) => {
+        settled = true
+        return result
+      })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+
+    websocketMock.instances[0].emitFrame(closeFrame())
+
+    await expect(resultPromise).resolves.toMatchObject({
+      messages: [
+        expect.objectContaining({
+          content: 'Done.',
+        }),
+      ],
+    })
+  })
+
+  it('resolves multiple completed messages with separate generation timelines', async () => {
+    useSidecarStore.setState({
+      sidecarUrl: 'http://127.0.0.1:9720',
+      isConnected: true,
+    })
+    websocketMock.setFrames([
+      { type: 'completion.chunk.thinking', content: 'first thought' },
+      { type: 'completion.chunk', content: 'First.' },
+      { type: 'completion.response', content: '' },
+      { type: 'completion.chunk.thinking', content: 'second thought' },
+      { type: 'completion.chunk', content: 'Second.' },
+      { type: 'completion.response', content: '' },
+      closeFrame(),
+    ])
+    const onMessageComplete = vi.fn(async (message) =>
+      message.content === 'First.' ? 'assistant-1' : 'assistant-2'
+    )
+
+    const result = await useSidecarStore
+      .getState()
+      .sendChatRequest(request, { onMessageComplete })
+
+    expect(onMessageComplete).toHaveBeenCalledTimes(2)
+    expect(result?.messages).toHaveLength(2)
+    expect(result?.messages.map((message) => message.messageId)).toEqual([
+      'assistant-1',
+      'assistant-2',
+    ])
+    expect(result?.messages[0]).toMatchObject({
+      content: 'First.',
       generation: {
-        startedAt: expect.any(Number),
-        completedAt: expect.any(Number),
-        durationMs: expect.any(Number),
-        steps: [],
+        steps: [
+          expect.objectContaining({
+            id: 'step-1',
+            kind: 'thinking',
+            content: 'first thought',
+          }),
+        ],
       },
     })
+    expect(result?.messages[1]).toMatchObject({
+      content: 'Second.',
+      generation: {
+        steps: [
+          expect.objectContaining({
+            id: 'step-1',
+            kind: 'thinking',
+            content: 'second thought',
+          }),
+        ],
+      },
+    })
+  })
+
+  it('resolves an empty workflow on normal close with no active message', async () => {
+    useSidecarStore.setState({
+      sidecarUrl: 'http://127.0.0.1:9720',
+      isConnected: true,
+    })
+    websocketMock.setFrames([closeFrame()])
+
+    await expect(
+      useSidecarStore.getState().sendChatRequest(request)
+    ).resolves.toEqual({ messages: [] })
+  })
+
+  it('returns null when the websocket closes before the active message completes', async () => {
+    useSidecarStore.setState({
+      sidecarUrl: 'http://127.0.0.1:9720',
+      isConnected: true,
+    })
+    websocketMock.setFrames([
+      { type: 'completion.chunk', content: 'partial' },
+      closeFrame(),
+    ])
+
+    await expect(
+      useSidecarStore.getState().sendChatRequest(request)
+    ).resolves.toBeNull()
   })
 
   it('accumulates mixed typed and untyped chunks into separate final content', async () => {
@@ -245,17 +404,22 @@ describe('useSidecarStore', () => {
       },
       { type: 'completion.chunk', content: 'followup' },
       { type: 'completion.response', content: '' },
+      closeFrame(),
     ])
 
     await expect(
       useSidecarStore.getState().sendChatRequest(request)
     ).resolves.toMatchObject({
-      messageId: null,
-      content: 'followup',
-      artifactContent: 'artifact',
-      generation: expect.objectContaining({
-        steps: [],
-      }),
+      messages: [
+        {
+          messageId: null,
+          content: 'followup',
+          artifactContent: 'artifact',
+          generation: expect.objectContaining({
+            steps: [],
+          }),
+        },
+      ],
     })
   })
 

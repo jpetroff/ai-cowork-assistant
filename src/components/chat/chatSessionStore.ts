@@ -188,6 +188,27 @@ export const useChatSessionStore = create<
                 artifactUpdateTargetId ?? undefined
               )
           },
+          onMessageComplete: async (message) => {
+            const finalMessageId = await useMessageStore
+              .getState()
+              .finalizeStreaming(message.messageId, message.content, {
+                generation: message.generation,
+              })
+
+            if (finalMessageId && message.artifactContent !== null) {
+              await useArtifactStore
+                .getState()
+                .applyAiRevision(
+                  message.artifactContent,
+                  finalMessageId,
+                  artifactUpdateTargetId ?? undefined
+                )
+            }
+
+            streamedArtifactContent = ''
+            useMessageStore.getState().beginStreaming()
+            return finalMessageId
+          },
         })
 
       if (!streamResult) {
@@ -195,30 +216,14 @@ export const useChatSessionStore = create<
         return
       }
 
-      const finalMessageId = streamResult.generation
-        ? await useMessageStore
-            .getState()
-            .finalizeStreaming(streamResult.messageId, streamResult.content, {
-              generation: streamResult.generation,
-            })
-        : await useMessageStore
-            .getState()
-            .finalizeStreaming(streamResult.messageId, streamResult.content)
-
-      if (finalMessageId && streamResult.artifactContent !== null) {
-        await useArtifactStore
-          .getState()
-          .applyAiRevision(
-            streamResult.artifactContent,
-            finalMessageId,
-            artifactUpdateTargetId ?? undefined
-          )
-      }
+      await useMessageStore.getState().finalizeStreaming(null, '')
 
       console_if('CHAT_SESSION').log('[CHAT_SESSION] submit:done', {
         conversationId,
-        finalMessageId,
-        hasArtifactContent: streamResult.artifactContent !== null,
+        messageCount: streamResult.messages.length,
+        hasArtifactContent: streamResult.messages.some(
+          (message) => message.artifactContent !== null
+        ),
       })
     } catch (err) {
       const message =

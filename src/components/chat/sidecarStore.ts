@@ -27,24 +27,33 @@ type SidecarEvent = {
 
 type SidecarContent = string | number | null | undefined
 
-/** @property messageId - assistant message ID returned by the sidecar, if any */
+/** @property messageId - assistant message ID returned by the sidecar or client persistence */
 /** @property content - final assistant response text */
 /** @property artifactContent - optional artifact content produced by the assistant */
 /** @property generation - captured generation step timeline */
-export interface SidecarStreamResult {
+export interface SidecarStreamMessageResult {
   messageId: string | null
   content: string
   artifactContent: string | null
   generation: GenerationMetadata
 }
 
+/** @property messages - assistant messages completed before the workflow closed */
+export interface SidecarWorkflowResult {
+  messages: SidecarStreamMessageResult[]
+}
+
 /** @property onChunk - called for each streamed assistant text chunk */
 /** @property onArtifactChunk - called for each streamed artifact chunk */
 /** @property onStep - called when generation step metadata changes */
+/** @property onMessageComplete - called when one assistant message is complete */
 interface SidecarStreamHandlers {
   onChunk?: (chunk: string) => void
   onArtifactChunk?: (chunk: string) => void
   onStep?: (generation: GenerationMetadata) => void
+  onMessageComplete?: (
+    message: SidecarStreamMessageResult
+  ) => string | null | void | Promise<string | null | void>
 }
 
 /** @property sidecarUrl - base URL for the local sidecar service */
@@ -59,7 +68,7 @@ interface SidecarActions {
   sendChatRequest: (
     requestBody: ChatCompletionRequest,
     handlers?: SidecarStreamHandlers
-  ) => Promise<SidecarStreamResult | null>
+  ) => Promise<SidecarWorkflowResult | null>
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -116,8 +125,10 @@ export const useSidecarStore = create<SidecarState & SidecarActions>(
         )
 
         console_if('SIDECAR_STORE').log('[SIDECAR_STORE] stream:done', {
-          messageId: result.messageId,
-          hasArtifactContent: result.artifactContent != null,
+          messageCount: result.messages.length,
+          hasArtifactContent: result.messages.some(
+            (message) => message.artifactContent != null
+          ),
         })
 
         return result
@@ -142,7 +153,7 @@ async function streamCompletion(
   websocketUrl: string,
   requestBody: ChatCompletionRequest,
   handlers: SidecarStreamHandlers
-): Promise<SidecarStreamResult> {
+): Promise<SidecarWorkflowResult> {
   let socket: WebSocket | null = null
   let removeListener: () => void = () => undefined
   let messageContent = ''
@@ -152,19 +163,21 @@ async function streamCompletion(
     steps: [],
   }
   let activeStepId: string | null = null
+  let processing = Promise.resolve()
 
   try {
     socket = await WebSocket.connect(websocketUrl)
     const activeSocket = socket
 
-    return await new Promise<SidecarStreamResult>((resolve, reject) => {
+    return await new Promise<SidecarWorkflowResult>((resolve, reject) => {
       let settled = false
+      const messages: SidecarStreamMessageResult[] = []
 
       const settle = (
         callback: (
-          value: SidecarStreamResult | PromiseLike<SidecarStreamResult>
+          value: SidecarWorkflowResult | PromiseLike<SidecarWorkflowResult>
         ) => void,
-        value: SidecarStreamResult
+        value: SidecarWorkflowResult
       ) => {
         if (settled) return
         settled = true
@@ -183,6 +196,16 @@ async function streamCompletion(
 
       const emitGeneration = () => {
         handlers.onStep?.(cloneGenerationMetadata(generation))
+      }
+
+      const resetMessageState = () => {
+        messageContent = ''
+        artifactContent = ''
+        generation = {
+          startedAt: Date.now(),
+          steps: [],
+        }
+        activeStepId = null
       }
 
       const closeActiveStep = (endedAt: number) => {
@@ -247,71 +270,109 @@ async function streamCompletion(
         emitGeneration()
       }
 
-      removeListener = activeSocket.addListener((message) => {
+      const hasOpenMessageState = () =>
+        messageContent.length > 0 ||
+        artifactContent.length > 0 ||
+        generation.steps.length > 0 ||
+        activeStepId !== null
+
+      const completeCurrentMessage = async () => {
+        const completedAt = Date.now()
+        closeActiveStep(completedAt)
+        const result: SidecarStreamMessageResult = {
+          messageId: null,
+          content: messageContent.trim(),
+          artifactContent: artifactContent.trimEnd() || null,
+          generation: {
+            ...generation,
+            completedAt,
+            durationMs: Math.max(0, completedAt - generation.startedAt),
+          },
+        }
+        messages.push(result)
+        const persistedId = await handlers.onMessageComplete?.({
+          ...result,
+          generation: cloneGenerationMetadata(result.generation),
+        })
+        if (persistedId) {
+          result.messageId = persistedId
+        }
+        resetMessageState()
+      }
+
+      const resolveOnClose = (message: WebSocketMessage) => {
+        const closeFrame = message.type === 'Close' ? message.data : null
+        const code = closeFrame?.code ?? 1000
+        if (code !== 1000) {
+          fail(
+            new Error(
+              closeFrame?.reason ||
+                `Sidecar websocket closed with code ${String(code)}`
+            )
+          )
+          return
+        }
+
+        if (hasOpenMessageState()) {
+          fail(new Error('Sidecar websocket closed before message completion'))
+          return
+        }
+
+        settle(resolve, { messages })
+      }
+
+      const handleMessage = async (message: WebSocketMessage) => {
         if (message.type === 'Close') {
-          if (!settled) {
-            fail(new Error('Sidecar websocket closed before completion'))
-          }
+          resolveOnClose(message)
           return
         }
 
         if (message.type !== 'Text') return
 
-        try {
-          const event = parseSidecarEvent(message)
-          if (isThinkingEvent(event)) {
-            appendThinking(stringifyContent(event.content))
-            return
-          }
-
-          if (event.type === 'event') {
-            startStep('event', getEventStepTitle(event.payload), {
-              payload: sanitizeEventPayload(event.payload),
-            })
-            return
-          }
-
-          if (event.type === 'completion.chunk') {
-            const chunk = stringifyContent(event.content)
-            if (!chunk) return
-
-            if (event.content_type) {
-              artifactContent += chunk
-              handlers.onArtifactChunk?.(chunk)
-            } else {
-              messageContent += chunk
-              handlers.onChunk?.(chunk)
-            }
-            return
-          }
-
-          if (event.type === 'completion.response') {
-            const completedAt = Date.now()
-            closeActiveStep(completedAt)
-            const finalContent = stringifyContent(event.content)
-            if (finalContent) {
-              messageContent += finalContent
-              handlers.onChunk?.(finalContent)
-            }
-            settle(resolve, {
-              messageId: null,
-              content: messageContent.trim(),
-              artifactContent: artifactContent.trimEnd() || null,
-              generation: {
-                ...generation,
-                completedAt,
-                durationMs: Math.max(0, completedAt - generation.startedAt),
-              },
-            })
-            return
-          }
-
-          if (event.type === 'error') {
-            fail(new Error(getSidecarErrorMessage(event)))
-          }
-        } catch (err) {
-          fail(err)
+        const event = parseSidecarEvent(message)
+        if (isThinkingEvent(event)) {
+          appendThinking(stringifyContent(event.content))
+          return
         }
+
+        if (event.type === 'event') {
+          startStep('event', getEventStepTitle(event.payload), {
+            payload: sanitizeEventPayload(event.payload),
+          })
+          return
+        }
+
+        if (event.type === 'completion.chunk') {
+          const chunk = stringifyContent(event.content)
+          if (!chunk) return
+
+          if (event.content_type) {
+            artifactContent += chunk
+            handlers.onArtifactChunk?.(chunk)
+          } else {
+            messageContent += chunk
+            handlers.onChunk?.(chunk)
+          }
+          return
+        }
+
+        if (event.type === 'completion.response') {
+          const finalContent = stringifyContent(event.content)
+          if (finalContent) {
+            messageContent += finalContent
+            handlers.onChunk?.(finalContent)
+          }
+          await completeCurrentMessage()
+          return
+        }
+
+        if (event.type === 'error') {
+          fail(new Error(getSidecarErrorMessage(event)))
+        }
+      }
+
+      removeListener = activeSocket.addListener((message) => {
+        processing = processing.then(() => handleMessage(message)).catch(fail)
       })
 
       activeSocket.send(JSON.stringify(requestBody)).catch(fail)

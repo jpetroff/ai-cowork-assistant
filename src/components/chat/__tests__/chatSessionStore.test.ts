@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '@/lib/db/types'
 import type { SealResult } from '@/lib/types'
+import type { GenerationMetadata } from '../generationMetadata'
 
 const { messageApi, artifactApi, sidecarApi } = vi.hoisted(() => {
   const messages: Message[] = []
@@ -64,6 +65,53 @@ function makeMessage(overrides: Partial<Message> = {}): Message {
   }
 }
 
+function makeGeneration(overrides: Partial<GenerationMetadata> = {}) {
+  return {
+    startedAt: 1000,
+    completedAt: 1500,
+    durationMs: 500,
+    steps: [],
+    ...overrides,
+  }
+}
+
+function makeWorkflowMessage(
+  overrides: {
+    messageId?: string | null
+    content?: string
+    artifactContent?: string | null
+    generation?: GenerationMetadata
+  } = {}
+) {
+  return {
+    messageId: Object.prototype.hasOwnProperty.call(overrides, 'messageId')
+      ? (overrides.messageId ?? null)
+      : 'assistant-1',
+    content: overrides.content ?? 'final',
+    artifactContent: overrides.artifactContent ?? null,
+    generation: overrides.generation ?? makeGeneration(),
+  }
+}
+
+type WorkflowMessage = ReturnType<typeof makeWorkflowMessage>
+
+type StreamHandlers = {
+  onChunk?: (chunk: string) => void
+  onArtifactChunk?: (chunk: string) => void
+  onMessageComplete?: (message: WorkflowMessage) => Promise<unknown>
+}
+
+function mockSidecarWorkflow(...messages: WorkflowMessage[]) {
+  sidecarApi.sendChatRequest.mockImplementation(
+    async (_request: unknown, handlers: StreamHandlers) => {
+      for (const message of messages) {
+        await handlers.onMessageComplete?.(message)
+      }
+      return { messages }
+    }
+  )
+}
+
 beforeEach(() => {
   useChatSessionStore.getState().reset()
   vi.clearAllMocks()
@@ -91,11 +139,7 @@ beforeEach(() => {
   artifactApi.getArtifactContextForSend.mockResolvedValue(null)
   artifactApi.previewAiRevisionDraft.mockReturnValue(undefined)
   artifactApi.applyAiRevision.mockResolvedValue(undefined)
-  sidecarApi.sendChatRequest.mockResolvedValue({
-    messageId: 'assistant-1',
-    content: 'final',
-    artifactContent: null,
-  })
+  mockSidecarWorkflow(makeWorkflowMessage())
 })
 
 describe('useChatSessionStore', () => {
@@ -124,15 +168,15 @@ describe('useChatSessionStore', () => {
     }
     artifactApi.sealForSend.mockResolvedValue(sealResult)
     sidecarApi.sendChatRequest.mockImplementation(
-      async (_request, handlers) => {
-        handlers.onChunk('chunk')
-        handlers.onArtifactChunk('updated ')
-        handlers.onArtifactChunk('artifact')
-        return {
-          messageId: 'assistant-1',
-          content: 'final',
+      async (_request: unknown, handlers: StreamHandlers) => {
+        handlers.onChunk?.('chunk')
+        handlers.onArtifactChunk?.('updated ')
+        handlers.onArtifactChunk?.('artifact')
+        const message = makeWorkflowMessage({
           artifactContent: 'updated artifact',
-        }
+        })
+        await handlers.onMessageComplete?.(message)
+        return { messages: [message] }
       }
     )
 
@@ -152,7 +196,7 @@ describe('useChatSessionStore', () => {
       }),
       expect.any(Object)
     )
-    expect(messageApi.beginStreaming).toHaveBeenCalled()
+    expect(messageApi.beginStreaming).toHaveBeenCalledTimes(2)
     expect(messageApi.appendChunk).toHaveBeenCalledWith('chunk')
     expect(artifactApi.previewAiRevisionDraft).toHaveBeenNthCalledWith(
       1,
@@ -164,14 +208,76 @@ describe('useChatSessionStore', () => {
       'updated artifact',
       'art-1'
     )
-    expect(messageApi.finalizeStreaming).toHaveBeenCalledWith(
+    expect(messageApi.finalizeStreaming).toHaveBeenNthCalledWith(
+      1,
       'assistant-1',
-      'final'
+      'final',
+      { generation: expect.any(Object) }
     )
+    expect(messageApi.finalizeStreaming).toHaveBeenNthCalledWith(2, null, '')
     expect(artifactApi.applyAiRevision).toHaveBeenCalledWith(
       'updated artifact',
       'assistant-1',
       'art-1'
+    )
+    expect(useChatSessionStore.getState().isAssistantStreaming).toBe(false)
+  })
+
+  it('persists multiple workflow messages before workflow streaming ends', async () => {
+    const firstMessage = makeWorkflowMessage({
+      messageId: null,
+      content: 'first',
+      artifactContent: 'first artifact',
+      generation: makeGeneration({ startedAt: 2000 }),
+    })
+    const secondMessage = makeWorkflowMessage({
+      messageId: null,
+      content: 'second',
+      artifactContent: 'second artifact',
+      generation: makeGeneration({ startedAt: 3000 }),
+    })
+    messageApi.finalizeStreaming
+      .mockResolvedValueOnce('assistant-1')
+      .mockResolvedValueOnce('assistant-2')
+      .mockResolvedValueOnce(null)
+    sidecarApi.sendChatRequest.mockImplementation(
+      async (_request: unknown, handlers: StreamHandlers) => {
+        expect(useChatSessionStore.getState().isAssistantStreaming).toBe(true)
+        await handlers.onMessageComplete?.(firstMessage)
+        expect(useChatSessionStore.getState().isAssistantStreaming).toBe(true)
+        await handlers.onMessageComplete?.(secondMessage)
+        expect(useChatSessionStore.getState().isAssistantStreaming).toBe(true)
+        return { messages: [firstMessage, secondMessage] }
+      }
+    )
+
+    await useChatSessionStore.getState().submitMessage(' hello ')
+
+    expect(messageApi.beginStreaming).toHaveBeenCalledTimes(3)
+    expect(messageApi.finalizeStreaming).toHaveBeenNthCalledWith(
+      1,
+      null,
+      'first',
+      { generation: firstMessage.generation }
+    )
+    expect(messageApi.finalizeStreaming).toHaveBeenNthCalledWith(
+      2,
+      null,
+      'second',
+      { generation: secondMessage.generation }
+    )
+    expect(messageApi.finalizeStreaming).toHaveBeenNthCalledWith(3, null, '')
+    expect(artifactApi.applyAiRevision).toHaveBeenNthCalledWith(
+      1,
+      'first artifact',
+      'assistant-1',
+      'active-art'
+    )
+    expect(artifactApi.applyAiRevision).toHaveBeenNthCalledWith(
+      2,
+      'second artifact',
+      'assistant-2',
+      'active-art'
     )
     expect(useChatSessionStore.getState().isAssistantStreaming).toBe(false)
   })
@@ -193,11 +299,11 @@ describe('useChatSessionStore', () => {
       content: '',
     }
     artifactApi.sealForSend.mockResolvedValue(sealResult)
-    sidecarApi.sendChatRequest.mockResolvedValue({
-      messageId: 'assistant-1',
-      content: 'final',
-      artifactContent: 'generated from empty artifact',
-    })
+    mockSidecarWorkflow(
+      makeWorkflowMessage({
+        artifactContent: 'generated from empty artifact',
+      })
+    )
 
     await useChatSessionStore.getState().submitMessage(' fill it ')
 
@@ -219,11 +325,11 @@ describe('useChatSessionStore', () => {
   })
 
   it('creates and targets a new artifact when no artifact is attached', async () => {
-    sidecarApi.sendChatRequest.mockResolvedValue({
-      messageId: 'assistant-1',
-      content: 'final',
-      artifactContent: 'new artifact content',
-    })
+    mockSidecarWorkflow(
+      makeWorkflowMessage({
+        artifactContent: 'new artifact content',
+      })
+    )
 
     await useChatSessionStore.getState().submitMessage(' new doc ', null)
 
@@ -246,11 +352,11 @@ describe('useChatSessionStore', () => {
       content: 'selected artifact content',
     }
     artifactApi.getArtifactContextForSend.mockResolvedValue(sealResult)
-    sidecarApi.sendChatRequest.mockResolvedValue({
-      messageId: 'assistant-1',
-      content: 'final',
-      artifactContent: 'updated selected artifact',
-    })
+    mockSidecarWorkflow(
+      makeWorkflowMessage({
+        artifactContent: 'updated selected artifact',
+      })
+    )
 
     await useChatSessionStore
       .getState()
