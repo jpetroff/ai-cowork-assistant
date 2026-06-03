@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useNavigation } from 'react-router-dom'
+import { useLocation, useNavigate, useNavigation } from 'react-router-dom'
 import { currentWindowLabel } from '@/lib/windows'
+import { setCurrentRoutePathname } from '@/lib/routePresence'
 import { useAppStore } from '@/app/appStore'
 import { LoadingPage } from '@/pages/LoadingPage'
 import { NotificationToast } from '@/components/ui/NotificationToast'
@@ -12,6 +13,7 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const [windowLabel, setWindowLabel] = useState<string | null>(null)
   const appPhase = useAppStore((s) => s.appPhase)
+  const location = useLocation()
   const navigate = useNavigate()
   const navigation = useNavigation()
   const isRouting = navigation.state === 'loading'
@@ -19,6 +21,10 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     setWindowLabel(currentWindowLabel())
   }, [])
+
+  useEffect(() => {
+    setCurrentRoutePathname(location.pathname)
+  }, [location.pathname])
 
   // Navigate main window to the correct route when appPhase changes
   useEffect(() => {

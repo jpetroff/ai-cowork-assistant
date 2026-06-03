@@ -10,9 +10,17 @@ import { useNotificationStore } from '@/components/ui/notificationStore'
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
+const backgroundStoreMock = vi.hoisted(() => ({
+  activeJobs: {} as Record<string, { projectId: string }>,
+}))
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
+}))
+
+vi.mock('@/components/chat/backgroundGenerationStore', () => ({
+  useBackgroundGenerationStore: (selector: (state: unknown) => unknown) =>
+    selector({ activeJobs: backgroundStoreMock.activeJobs }),
 }))
 
 vi.mock('@tauri-apps/plugin-sql', () => ({
@@ -53,6 +61,7 @@ beforeEach(() => {
     operationStates: {},
   })
   useNotificationStore.getState().dismissAll()
+  backgroundStoreMock.activeJobs = {}
   mockNavigate.mockReset()
   mockDeleteProject.mockReset()
   mockUpdateProject.mockReset()
@@ -133,6 +142,35 @@ describe('ProjectCard — options menu trigger', () => {
     // Trigger still rendered but the whole card is pointer-events-none
     const card = screen.getByRole('button', { name: /Open project/i })
     expect(card.className).toContain('pointer-events-none')
+  })
+})
+
+describe('ProjectCard — background job indicator', () => {
+  it('does not render a background job spinner when the project is idle', () => {
+    render(<ProjectCard project={makeProject({ id: 'proj-1' })} />)
+
+    expect(screen.queryByLabelText(/background job running/i)).toBeNull()
+  })
+
+  it('renders a background job spinner for the matching project', () => {
+    backgroundStoreMock.activeJobs = {
+      'conv-1': { projectId: 'proj-1' },
+    }
+
+    render(<ProjectCard project={makeProject({ id: 'proj-1' })} />)
+
+    expect(screen.getByLabelText(/background job running/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /options/i })).toBeInTheDocument()
+  })
+
+  it('does not render a background job spinner for another project', () => {
+    backgroundStoreMock.activeJobs = {
+      'conv-1': { projectId: 'other-proj' },
+    }
+
+    render(<ProjectCard project={makeProject({ id: 'proj-1' })} />)
+
+    expect(screen.queryByLabelText(/background job running/i)).toBeNull()
   })
 })
 

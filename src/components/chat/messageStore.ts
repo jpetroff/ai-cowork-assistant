@@ -28,6 +28,8 @@ export interface MessageState {
 export interface MessageActions {
   loadForConversation: (id: string) => Promise<void>
   addUserMessage: (content: string) => Promise<string | null>
+  upsertMessage: (message: Message) => void
+  patchMessage: (message: Message) => void
   clear: () => void
   beginStreaming: () => void
   appendChunk: (chunk: string) => void
@@ -111,6 +113,44 @@ export const useMessageStore = create<MessageState & MessageActions>(
         messageId: id,
       })
       return id
+    },
+
+    /**
+     * Inserts or replaces a message in the visible conversation only. Background
+     * streaming owns persistence and calls this to wake open chat views.
+     */
+    upsertMessage(message) {
+      const { conversationId } = get()
+      if (conversationId !== message.conversation_id) return
+
+      set((state) => {
+        const exists = state.messages.some((item) => item.id === message.id)
+        const messages = exists
+          ? state.messages.map((item) =>
+              item.id === message.id ? message : item
+            )
+          : [...state.messages, message]
+
+        return {
+          messages: messages.sort(
+            (a, b) => a.sequence_order - b.sequence_order
+          ),
+        }
+      })
+    },
+
+    /**
+     * Replaces a visible message row when it is already loaded.
+     */
+    patchMessage(message) {
+      const { conversationId } = get()
+      if (conversationId !== message.conversation_id) return
+
+      set((state) => ({
+        messages: state.messages.map((item) =>
+          item.id === message.id ? message : item
+        ),
+      }))
     },
 
     /**

@@ -5,10 +5,17 @@ import userEvent from '@testing-library/user-event'
 import { useNotificationStore } from '@/components/ui/notificationStore'
 import { NotificationToast } from '../NotificationToast'
 
+const mockNavigate = vi.hoisted(() => vi.fn())
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+}))
+
 afterEach(cleanup)
 
 beforeEach(() => {
   useNotificationStore.getState().dismissAll()
+  mockNavigate.mockReset()
 })
 
 describe('NotificationToast', () => {
@@ -92,5 +99,23 @@ describe('NotificationToast', () => {
     await userEvent.click(screen.getByRole('button', { name: /copy/i }))
 
     expect(writeText).toHaveBeenCalledWith('Clipboard content')
+  })
+
+  it('runs a notification route action and dismisses the toast', async () => {
+    useNotificationStore.getState().push({
+      kind: 'success',
+      message: 'Background job finished',
+      action: {
+        label: 'View',
+        to: '/projects/proj-1/chats/conv-1',
+      },
+    })
+    render(<NotificationToast />)
+
+    await userEvent.click(screen.getByRole('button', { name: /view/i }))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/projects/proj-1/chats/conv-1')
+    expect(screen.queryByText('Background job finished')).toBeNull()
+    expect(useNotificationStore.getState().notifications).toHaveLength(0)
   })
 })

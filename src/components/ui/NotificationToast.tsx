@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   XIcon,
   WarningIcon,
@@ -53,6 +54,7 @@ const KIND_CONFIG: Record<
 // ── Single toast item ─────────────────────────────────────────────────────────
 
 function ToastItem({ notification }: { notification: Notification }) {
+  const navigate = useNavigate()
   const dismiss = useNotificationStore((s) => s.dismiss)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -64,6 +66,12 @@ function ToastItem({ notification }: { notification: Notification }) {
     navigator.clipboard.writeText(notification.detail ?? notification.message)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
+  }
+
+  function handleAction() {
+    if (!notification.action) return
+    navigate(notification.action.to)
+    dismiss(notification.id)
   }
 
   return (
@@ -85,6 +93,16 @@ function ToastItem({ notification }: { notification: Notification }) {
         </span>
 
         <div className='flex items-center gap-1 shrink-0'>
+          {notification.action && (
+            <Button
+              variant='link'
+              size='xs'
+              className='h-auto p-0 text-xs text-muted-foreground hover:text-foreground'
+              onClick={handleAction}
+            >
+              {notification.action.label}
+            </Button>
+          )}
           {notification.detail && (
             <Button
               variant='link'

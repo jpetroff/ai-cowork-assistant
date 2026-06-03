@@ -1,5 +1,7 @@
 import { getCurrentWindow, Window } from '@tauri-apps/api/window'
 import { LogicalSize } from '@tauri-apps/api/dpi'
+import { confirm } from '@tauri-apps/plugin-dialog'
+import { useBackgroundGenerationStore } from '@/components/chat/backgroundGenerationStore'
 import { getSetting, setSetting } from './db/settings'
 
 const MAIN_LABEL = 'main'
@@ -36,8 +38,14 @@ export async function openMainWindow(): Promise<void> {
     getSetting('main_window_height'),
   ])
 
-  const width = Math.max(parseInt(rawW ?? String(DEFAULT_WIDTH), 10) || DEFAULT_WIDTH, MIN_WIDTH)
-  const height = Math.max(parseInt(rawH ?? String(DEFAULT_HEIGHT), 10) || DEFAULT_HEIGHT, MIN_HEIGHT)
+  const width = Math.max(
+    parseInt(rawW ?? String(DEFAULT_WIDTH), 10) || DEFAULT_WIDTH,
+    MIN_WIDTH
+  )
+  const height = Math.max(
+    parseInt(rawH ?? String(DEFAULT_HEIGHT), 10) || DEFAULT_HEIGHT,
+    MIN_HEIGHT
+  )
 
   const main = getMainWindow()
   await main.setSize(new LogicalSize(width, height))
@@ -69,4 +77,32 @@ export async function startWindowSizePersistence(): Promise<() => void> {
   })
 
   return unlisten
+}
+
+// ── Background job close guard ────────────────────────────────────────────────
+
+/**
+ * Prompt before closing the main window while background generation is active.
+ * Returns an unlisten function for React effect cleanup.
+ */
+export async function startBackgroundJobCloseGuard(): Promise<() => void> {
+  if (currentWindowLabel() !== MAIN_LABEL) return () => {}
+
+  const main = getMainWindow()
+
+  return main.onCloseRequested(async (event) => {
+    const hasActiveJobs =
+      Object.keys(useBackgroundGenerationStore.getState().activeJobs).length > 0
+
+    if (!hasActiveJobs) return
+
+    const shouldClose = await confirm(
+      'Background jobs are still running. Closing the application will interrupt them. Close anyway?',
+      { title: 'Close application?', kind: 'warning' }
+    )
+
+    if (!shouldClose) {
+      event.preventDefault()
+    }
+  })
 }

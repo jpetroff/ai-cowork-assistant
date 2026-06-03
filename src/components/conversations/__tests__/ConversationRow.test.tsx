@@ -9,9 +9,17 @@ import { useNotificationStore } from '@/components/ui/notificationStore'
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn()
+const backgroundStoreMock = vi.hoisted(() => ({
+  activeJobs: {} as Record<string, unknown>,
+}))
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
+}))
+
+vi.mock('@/components/chat/backgroundGenerationStore', () => ({
+  useBackgroundGenerationStore: (selector: (state: unknown) => unknown) =>
+    selector({ activeJobs: backgroundStoreMock.activeJobs }),
 }))
 
 vi.mock('@tauri-apps/plugin-sql', () => ({
@@ -58,6 +66,7 @@ beforeEach(() => {
     operationStates: {},
   })
   useNotificationStore.getState().dismissAll()
+  backgroundStoreMock.activeJobs = {}
   mockNavigate.mockReset()
   mockUpdateConversation.mockReset()
   mockDeleteConversation.mockReset()
@@ -170,5 +179,40 @@ describe('ConversationRow — busy state', () => {
       (el) => el.getAttribute('aria-label') === null && el.tagName !== 'BUTTON'
     )
     expect(rowDiv?.className).toContain('pointer-events-none')
+  })
+})
+
+describe('ConversationRow — background job indicator', () => {
+  it('does not render a background job spinner when the chat is idle', () => {
+    render(
+      <ConversationRow conversation={makeConversation()} projectId='proj-1' />
+    )
+
+    expect(screen.queryByLabelText(/background job running/i)).toBeNull()
+  })
+
+  it('renders a background job spinner for the matching chat', () => {
+    backgroundStoreMock.activeJobs = {
+      'conv-1': { projectId: 'proj-1' },
+    }
+
+    render(
+      <ConversationRow conversation={makeConversation()} projectId='proj-1' />
+    )
+
+    expect(screen.getByLabelText(/background job running/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /chat options/i })).toBeTruthy()
+  })
+
+  it('does not render a background job spinner for another chat', () => {
+    backgroundStoreMock.activeJobs = {
+      'conv-2': { projectId: 'proj-1' },
+    }
+
+    render(
+      <ConversationRow conversation={makeConversation()} projectId='proj-1' />
+    )
+
+    expect(screen.queryByLabelText(/background job running/i)).toBeNull()
   })
 })

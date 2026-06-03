@@ -4,13 +4,25 @@ import { create } from 'zustand'
 
 export type NotificationKind = 'info' | 'success' | 'warning' | 'error'
 
+/** @property label - button text shown in the toast */
+/** @property to - app route opened when the action is clicked */
+interface NotificationAction {
+  label: string
+  to: string
+}
+
+/** @property id - generated notification identifier */
+/** @property kind - notification visual treatment */
+/** @property message - primary toast text */
+/** @property detail - full error detail shown in the details dialog */
+/** @property action - optional route action shown beside dismiss */
+/** @property autoDismissMs - delay before automatic dismissal */
 export interface Notification {
   id: string
   kind: NotificationKind
   message: string
-  /** Full error detail shown in the details dialog */
   detail?: string
-  /** Auto-dismiss after this many ms. Omit for manual-dismiss only (required for errors). */
+  action?: NotificationAction
   autoDismissMs?: number
 }
 

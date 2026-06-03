@@ -28,9 +28,43 @@ export async function createMessage(data: {
   return id
 }
 
+export async function getMessage(id: string): Promise<Message | null> {
+  return db.get<Message>('messages', id)
+}
+
 export async function listMessages(conversationId: string): Promise<Message[]> {
   return db.select<Message>(
     'SELECT * FROM messages WHERE conversation_id = $1 ORDER BY sequence_order ASC',
     [conversationId]
   )
+}
+
+export async function updateMessageContentAndMetadata(
+  id: string,
+  content: string,
+  metadata?: unknown
+): Promise<void> {
+  await db.execute(
+    'UPDATE messages SET content = $1, metadata = $2 WHERE id = $3',
+    [content, metadata == null ? null : JSON.stringify(metadata), id]
+  )
+}
+
+export async function listMessagesWithStreamStatus(
+  status: string
+): Promise<Message[]> {
+  const messages = await db.select<Message>(
+    "SELECT * FROM messages WHERE role = 'assistant' AND metadata IS NOT NULL ORDER BY created_at ASC"
+  )
+
+  return messages.filter((message) => {
+    try {
+      const metadata = JSON.parse(message.metadata ?? '{}') as {
+        stream?: { status?: unknown }
+      }
+      return metadata.stream?.status === status
+    } catch {
+      return false
+    }
+  })
 }

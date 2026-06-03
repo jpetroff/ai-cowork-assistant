@@ -6,6 +6,7 @@ import {
   TrashIcon,
 } from '@phosphor-icons/react'
 import { useProjectStore } from '@/components/projects/projectStore'
+import { useBackgroundGenerationStore } from '@/components/chat/backgroundGenerationStore'
 import type { Project } from '@/lib/db/types'
 import {
   Card,
@@ -51,6 +52,9 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const operationState = useProjectStore((s) => s.operationStates[project.id])
   const deleteProject = useProjectStore((s) => s.delete)
   const setActive = useProjectStore((s) => s.setActive)
+  const hasBackgroundJob = useBackgroundGenerationStore((s) =>
+    Object.values(s.activeJobs).some((job) => job.projectId === project.id)
+  )
 
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -90,7 +94,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
             {(isDeleting || isRenaming) && <Spinner className='size-3' />}
           </CardTitle>
           <CardDescription>{formatDate(project.updated_at)}</CardDescription>
-          <CardAction>
+          <CardAction className='flex items-center gap-1'>
+            {hasBackgroundJob && (
+              <Spinner
+                className='size-icon-sm text-muted-foreground'
+                aria-label='Background job running'
+              />
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger
                 disabled={isBusy}

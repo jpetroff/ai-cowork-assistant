@@ -48,9 +48,9 @@ export interface SidecarWorkflowResult {
 /** @property onStep - called when generation step metadata changes */
 /** @property onMessageComplete - called when one assistant message is complete */
 interface SidecarStreamHandlers {
-  onChunk?: (chunk: string) => void
-  onArtifactChunk?: (chunk: string) => void
-  onStep?: (generation: GenerationMetadata) => void
+  onChunk?: (chunk: string) => void | Promise<void>
+  onArtifactChunk?: (chunk: string) => void | Promise<void>
+  onStep?: (generation: GenerationMetadata) => void | Promise<void>
   onMessageComplete?: (
     message: SidecarStreamMessageResult
   ) => string | null | void | Promise<string | null | void>
@@ -68,7 +68,7 @@ interface SidecarActions {
   sendChatRequest: (
     requestBody: ChatCompletionRequest,
     handlers?: SidecarStreamHandlers
-  ) => Promise<SidecarWorkflowResult | null>
+  ) => Promise<SidecarWorkflowResult>
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export const useSidecarStore = create<SidecarState & SidecarActions>(
       const { sidecarUrl } = get()
       if (!sidecarUrl) {
         console.warn('[SIDECAR_STORE] stream:skipped sidecar not connected')
-        return null
+        throw new Error('Sidecar is not connected')
       }
 
       console_if('SIDECAR_STORE').log('[SIDECAR_STORE] stream:start', {
@@ -134,7 +134,7 @@ export const useSidecarStore = create<SidecarState & SidecarActions>(
         return result
       } catch (err) {
         console.error('[SIDECAR_STORE] stream:error', err)
-        return null
+        throw err
       }
     },
   })
@@ -194,8 +194,8 @@ async function streamCompletion(
         reject(err)
       }
 
-      const emitGeneration = () => {
-        handlers.onStep?.(cloneGenerationMetadata(generation))
+      const emitGeneration = async () => {
+        await handlers.onStep?.(cloneGenerationMetadata(generation))
       }
 
       const resetMessageState = () => {
@@ -226,7 +226,7 @@ async function streamCompletion(
         activeStepId = null
       }
 
-      const startStep = (
+      const startStep = async (
         kind: GenerationStep['kind'],
         title: string,
         options: { content?: string; payload?: unknown } = {}
@@ -245,17 +245,17 @@ async function streamCompletion(
           ...generation,
           steps: [...generation.steps, step],
         }
-        emitGeneration()
+        await emitGeneration()
       }
 
-      const appendThinking = (content: string) => {
+      const appendThinking = async (content: string) => {
         if (!content) return
 
         const activeStep = generation.steps.find(
           (step) => step.id === activeStepId
         )
         if (!activeStep || activeStep.kind !== 'thinking') {
-          startStep('thinking', 'Thinking', { content })
+          await startStep('thinking', 'Thinking', { content })
           return
         }
 
@@ -267,7 +267,7 @@ async function streamCompletion(
               : step
           ),
         }
-        emitGeneration()
+        await emitGeneration()
       }
 
       const hasOpenMessageState = () =>
@@ -331,12 +331,12 @@ async function streamCompletion(
 
         const event = parseSidecarEvent(message)
         if (isThinkingEvent(event)) {
-          appendThinking(stringifyContent(event.content))
+          await appendThinking(stringifyContent(event.content))
           return
         }
 
         if (event.type === 'event') {
-          startStep('event', getEventStepTitle(event.payload), {
+          await startStep('event', getEventStepTitle(event.payload), {
             payload: sanitizeEventPayload(event.payload),
           })
           return
@@ -348,10 +348,10 @@ async function streamCompletion(
 
           if (event.content_type) {
             artifactContent += chunk
-            handlers.onArtifactChunk?.(chunk)
+            await handlers.onArtifactChunk?.(chunk)
           } else {
             messageContent += chunk
-            handlers.onChunk?.(chunk)
+            await handlers.onChunk?.(chunk)
           }
           return
         }
@@ -360,7 +360,7 @@ async function streamCompletion(
           const finalContent = stringifyContent(event.content)
           if (finalContent) {
             messageContent += finalContent
-            handlers.onChunk?.(finalContent)
+            await handlers.onChunk?.(finalContent)
           }
           await completeCurrentMessage()
           return

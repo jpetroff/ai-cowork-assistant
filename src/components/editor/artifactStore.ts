@@ -114,6 +114,11 @@ interface ArtifactActions {
     messageId: string,
     artifactId?: string
   ) => Promise<void>
+  /** Reflect a persisted streaming AI revision in the active editor when visible. */
+  upsertStreamingAiRevision: (
+    artifact: Artifact,
+    revision: ArtifactRevision
+  ) => void
   /**
    * Load a revision into the editor.
    * - Flushes any pending save and waits for it to complete.
@@ -821,6 +826,44 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] ai-revision:applied', {
         artifactId: targetArtifact.id,
         revisionId,
+      })
+    },
+
+    upsertStreamingAiRevision(targetArtifact, revision) {
+      const { artifact, revisions, loadedRevisionId } = get()
+      const isActiveArtifact = artifact?.id === targetArtifact.id
+      const updatedArtifact = {
+        ...targetArtifact,
+        current_revision_id: revision.id,
+        updated_at: Date.now(),
+      }
+      const nextRevisions = revisions.some((item) => item.id === revision.id)
+        ? revisions.map((item) => (item.id === revision.id ? revision : item))
+        : [...revisions, revision]
+
+      if (!isActiveArtifact) {
+        set({
+          artifactRevisionMetaByRevisionId: {
+            ...get().artifactRevisionMetaByRevisionId,
+            [revision.id]: buildRevisionMeta(updatedArtifact, revision),
+          },
+        })
+        return
+      }
+
+      set({
+        artifact: updatedArtifact,
+        headRevision: revision,
+        loadedRevisionId: revision.id,
+        editableRevisionId: revision.id,
+        loadedContent: revision.content,
+        editorKey:
+          loadedRevisionId === revision.id ? get().editorKey : revision.id,
+        revisions: nextRevisions,
+        artifactRevisionMetaByRevisionId: {
+          ...get().artifactRevisionMetaByRevisionId,
+          [revision.id]: buildRevisionMeta(updatedArtifact, revision),
+        },
       })
     },
 

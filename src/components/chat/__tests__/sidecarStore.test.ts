@@ -385,7 +385,7 @@ describe('useSidecarStore', () => {
     ).resolves.toEqual({ messages: [] })
   })
 
-  it('returns null when the websocket closes before the active message completes', async () => {
+  it('rejects when the websocket closes before the active message completes', async () => {
     useSidecarStore.setState({
       sidecarUrl: 'http://127.0.0.1:9720',
       isConnected: true,
@@ -397,7 +397,7 @@ describe('useSidecarStore', () => {
 
     await expect(
       useSidecarStore.getState().sendChatRequest(request)
-    ).resolves.toBeNull()
+    ).rejects.toThrow(/closed before message completion/)
   })
 
   it('accumulates mixed typed and untyped chunks into separate final content', async () => {
@@ -432,7 +432,7 @@ describe('useSidecarStore', () => {
     })
   })
 
-  it('returns null for Python error payloads', async () => {
+  it('rejects for Python error payloads', async () => {
     useSidecarStore.setState({
       sidecarUrl: 'http://127.0.0.1:9720',
       isConnected: true,
@@ -446,6 +446,6 @@ describe('useSidecarStore', () => {
 
     await expect(
       useSidecarStore.getState().sendChatRequest(request)
-    ).resolves.toBe(null)
+    ).rejects.toThrow('validation failed')
   })
 })

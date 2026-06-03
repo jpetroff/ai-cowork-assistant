@@ -29,9 +29,34 @@ export interface GenerationMetadata {
 }
 
 /** @property generation - assistant generation step timeline */
+/** @property stream - durable streaming lifecycle metadata */
 export interface MessageMetadata {
   generation?: GenerationMetadata
+  stream?: StreamMetadata
   [key: string]: unknown
+}
+
+export type StreamStatus = 'active' | 'complete' | 'interrupted' | 'error'
+
+/** @property status - durable lifecycle for a streamed assistant attempt */
+/** @property jobId - in-memory/background job identifier */
+/** @property sourceUserMessageId - user message that prompted this attempt */
+/** @property targetArtifactId - artifact receiving streamed AI revision output */
+/** @property artifactRevisionId - AI revision created for streamed artifact output */
+/** @property startedAt - epoch milliseconds when streaming began */
+/** @property updatedAt - epoch milliseconds when streaming last changed */
+/** @property completedAt - epoch milliseconds when streaming finished */
+/** @property error - user-visible stream failure reason */
+export interface StreamMetadata {
+  status: StreamStatus
+  jobId: string
+  sourceUserMessageId: string
+  targetArtifactId: string | null
+  artifactRevisionId?: string
+  startedAt: number
+  updatedAt: number
+  completedAt?: number
+  error?: string
 }
 
 export function parseMessageMetadata(metadata: string | null): MessageMetadata {
@@ -43,6 +68,15 @@ export function parseMessageMetadata(metadata: string | null): MessageMetadata {
   } catch {
     return {}
   }
+}
+
+export function getStreamMetadata(
+  metadata: string | null
+): StreamMetadata | null {
+  const stream = parseMessageMetadata(metadata).stream
+  if (!isStreamMetadata(stream)) return null
+
+  return stream
 }
 
 export function getGenerationMetadata(
@@ -70,6 +104,23 @@ export function formatGenerationDuration(durationMs: number | undefined) {
   }
 
   return `Thought for ${minutes} min ${seconds} sec`
+}
+
+function isStreamMetadata(value: unknown): value is StreamMetadata {
+  if (!isRecord(value)) return false
+
+  return (
+    (value.status === 'active' ||
+      value.status === 'complete' ||
+      value.status === 'interrupted' ||
+      value.status === 'error') &&
+    typeof value.jobId === 'string' &&
+    typeof value.sourceUserMessageId === 'string' &&
+    (typeof value.targetArtifactId === 'string' ||
+      value.targetArtifactId === null) &&
+    typeof value.startedAt === 'number' &&
+    typeof value.updatedAt === 'number'
+  )
 }
 
 function isGenerationMetadata(value: unknown): value is GenerationMetadata {

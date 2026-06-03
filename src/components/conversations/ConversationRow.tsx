@@ -8,6 +8,7 @@ import {
   XIcon,
 } from '@phosphor-icons/react'
 import { useConversationStore } from '@/components/conversations/conversationStore'
+import { useBackgroundGenerationStore } from '@/components/chat/backgroundGenerationStore'
 import type { Conversation } from '@/lib/db/types'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -56,6 +57,9 @@ export function ConversationRow({
   const deleteConversation = useConversationStore((s) => s.delete)
   const operationState = useConversationStore(
     (s) => s.operationStates[conversation.id]
+  )
+  const hasBackgroundJob = useBackgroundGenerationStore(
+    (s) => s.activeJobs[conversation.id] != null
   )
 
   const [renaming, setRenaming] = useState(false)
@@ -162,45 +166,53 @@ export function ConversationRow({
 
         {/* Hover-reveal action menu */}
         {!renaming && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              disabled={isBusy}
-              onClick={(e) => e.stopPropagation()}
-              render={
-                <Button
-                  variant='ghost'
-                  size='icon-sm'
-                  aria-label='Chat options'
-                  className='opacity-0 group-hover:opacity-100 transition-opacity'
-                  onClick={(e) => e.stopPropagation()}
-                />
-              }
-            >
-              <DotsThreeIcon weight='bold' />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation()
-                  startRename()
-                }}
+          <span className='flex items-center gap-1'>
+            {hasBackgroundJob && (
+              <Spinner
+                className='size-icon-sm text-muted-foreground'
+                aria-label='Background job running'
+              />
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={isBusy}
+                onClick={(e) => e.stopPropagation()}
+                render={
+                  <Button
+                    variant='ghost'
+                    size='icon-sm'
+                    aria-label='Chat options'
+                    className='opacity-0 group-hover:opacity-100 transition-opacity'
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                }
               >
-                <PencilSimpleIcon />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className='text-destructive focus:text-destructive'
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setDeleteOpen(true)
-                }}
-              >
-                <TrashIcon />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DotsThreeIcon weight='bold' />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    startRename()
+                  }}
+                >
+                  <PencilSimpleIcon />
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className='text-destructive focus:text-destructive'
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteOpen(true)
+                  }}
+                >
+                  <TrashIcon />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </span>
         )}
       </div>
 
