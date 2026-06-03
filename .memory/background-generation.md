@@ -60,6 +60,7 @@ Failure:
 sidecar error / websocket failure
   -> set metadata.stream.status = "error"
   -> keep partial message/revision content
+  -> notify if user is not viewing the failed chat
   -> clear active job
 ```
 
@@ -110,6 +111,24 @@ activeJobs: Record<conversationId, BackgroundGenerationJob>
 
 Multiple conversations may stream at once. A second submit for the same conversation throws `"This conversation is already generating a response."`
 
+## Status Indicators And Snackbars
+
+In-app status reporting has two layers:
+
+- Project cards and chat rows show `Spinner` beside their three-dot action menu when `activeJobs` contains a job for that project/conversation.
+- Job completion and failure use `useNotificationStore` snackbars when the user is not already looking at the affected chat page.
+
+Snackbar rules:
+
+- Successful off-chat completion pushes a `success` notification: `Background job finished` or `Background job finished in <chat title>`.
+- Failed off-chat completion pushes an `error` notification: `Background job failed` or `Background job failed in <chat title>`.
+- Error notifications include the raw error in `detail`, so timeout text such as `Operation timed out after 45.0 seconds...` is available from the toast details.
+- Both success and error snackbars include a `View` action that navigates to `/projects/:projectId/chats/:conversationId`.
+- Dismiss still closes the snackbar without navigation.
+- Notifications are suppressed when `isViewingChatRoute(projectId, conversationId)` is true because the user can see the result/error in-thread.
+
+Route presence is tracked by `src/lib/routePresence.ts`; `AppShell` updates it from `useLocation()`. This avoids importing the router into `backgroundGenerationStore.ts`.
+
 ## Debug Checklist
 
 Check these first:
@@ -118,6 +137,7 @@ Check these first:
 - Message stream state: inspect `messages.metadata.stream`
 - Partial assistant text: inspect `messages.content`
 - Partial artifact content: inspect `artifact_revisions.content`
+- Snackbar queue: `useNotificationStore.getState().notifications`
 - Sidecar transport errors: `sidecarStore.sendChatRequest()` now rejects instead of returning `null`.
 
 Common symptoms:
@@ -146,6 +166,6 @@ bunx vitest run
 
 Test intent:
 
-- `backgroundGenerationStore.test.ts`: durable message/revision streaming, multi-chat concurrency, recovery, regenerate.
+- `backgroundGenerationStore.test.ts`: durable message/revision streaming, multi-chat concurrency, completion/error snackbars, recovery, regenerate.
 - `chatSessionStore.test.ts`: route loading and submit delegation.
 - `sidecarStore.test.ts`: websocket parsing and rejected failure paths.
