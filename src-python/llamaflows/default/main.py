@@ -103,7 +103,7 @@ class SimpleQueryWorkflow(Workflow):
         streaming: Optional[bool] = True,
         user_timeout: Optional[float] = None,
     ) -> None:
-        super().__init__()
+        super().__init__(timeout=user_timeout)
         self._llm = llm
         self._user_timeout = user_timeout
         self._response_streaming = streaming

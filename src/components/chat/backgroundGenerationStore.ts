@@ -386,6 +386,12 @@ async function runJob(
     const message =
       err instanceof Error ? err.message : 'Generation failed while streaming.'
     await persistAssistantMessage(job, 'error', message)
+    await notifyJobError(job, message).catch((notificationErr) => {
+      console.error(
+        '[BACKGROUND_GENERATION] error notification failed',
+        notificationErr
+      )
+    })
   } finally {
     clearJob(job.conversationId)
   }
@@ -403,6 +409,26 @@ async function notifyJobComplete(job: BackgroundGenerationJob) {
   useNotificationStore.getState().push({
     kind: 'success',
     message,
+    action: {
+      label: 'View',
+      to: `/projects/${job.projectId}/chats/${job.conversationId}`,
+    },
+  })
+}
+
+async function notifyJobError(job: BackgroundGenerationJob, error: string) {
+  if (isViewingChatRoute(job.projectId, job.conversationId)) return
+
+  const conversation = await getConversation(job.conversationId)
+  const title = conversation?.title?.trim()
+  const message = title
+    ? `Background job failed in ${title}`
+    : 'Background job failed'
+
+  useNotificationStore.getState().push({
+    kind: 'error',
+    message,
+    detail: error,
     action: {
       label: 'View',
       to: `/projects/${job.projectId}/chats/${job.conversationId}`,

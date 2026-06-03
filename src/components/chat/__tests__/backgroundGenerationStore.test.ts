@@ -318,6 +318,56 @@ describe('useBackgroundGenerationStore', () => {
     expect(useNotificationStore.getState().notifications).toEqual([])
   })
 
+  it('pushes an error notification when a background job fails off-chat', async () => {
+    setCurrentRoutePathname('/projects/proj-1')
+    sidecarApi.sendChatRequest.mockRejectedValue(
+      new Error(
+        'Operation timed out after 45.0 seconds. Currently active steps: generate_artifact'
+      )
+    )
+
+    await useBackgroundGenerationStore.getState().startMessage({
+      projectId: 'proj-1',
+      conversationId: 'conv-1',
+      content: 'write',
+    })
+
+    await vi.waitFor(() => {
+      expect(useNotificationStore.getState().notifications).toHaveLength(1)
+    })
+
+    expect(useNotificationStore.getState().notifications[0]).toMatchObject({
+      kind: 'error',
+      message: 'Background job failed',
+      detail:
+        'Operation timed out after 45.0 seconds. Currently active steps: generate_artifact',
+      action: {
+        label: 'View',
+        to: '/projects/proj-1/chats/conv-1',
+      },
+    })
+
+    const assistant = messages.find((message) => message.role === 'assistant')
+    const metadata = JSON.parse(assistant?.metadata ?? '{}') as MessageMetadata
+    expect(metadata.stream?.status).toBe('error')
+  })
+
+  it('does not push an error notification for the currently open chat', async () => {
+    setCurrentRoutePathname('/projects/proj-1/chats/conv-1')
+    sidecarApi.sendChatRequest.mockRejectedValue(new Error('Timed out'))
+
+    await useBackgroundGenerationStore.getState().startMessage({
+      projectId: 'proj-1',
+      conversationId: 'conv-1',
+      content: 'write',
+    })
+
+    await vi.waitFor(() => {
+      expect(useBackgroundGenerationStore.getState().activeJobs).toEqual({})
+    })
+    expect(useNotificationStore.getState().notifications).toEqual([])
+  })
+
   it('supports active streams in multiple conversations', async () => {
     sidecarApi.sendChatRequest.mockImplementation(() => new Promise(() => {}))
 

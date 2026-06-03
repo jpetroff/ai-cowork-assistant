@@ -41,7 +41,7 @@ async def create_workflow(
         pass
 
     llm = create_llm(llm_provider, CallbackManager(callbacks))
-    w = SimpleQueryWorkflow(llm=llm)
+    w = SimpleQueryWorkflow(llm=llm, user_timeout=3600)
     handler = w.run(
         user_query=user_query,
         chat_history=list(chat_history or []),
