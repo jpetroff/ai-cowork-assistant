@@ -42,6 +42,7 @@ artifact chunk
   -> create AI artifact_revision on first chunk
   -> update artifact_revisions.content on later chunks
   -> artifactStore.upsertStreamingAiRevision() if artifact is open
+     (mirrors the sealed AI head as loaded but not editable)
 ```
 
 Completion:
@@ -51,6 +52,7 @@ completion.response
   -> persist final assistant content
   -> persist final generation metadata
   -> set metadata.stream.status = "complete"
+  -> editor leaves streaming/read-only mode without emitting a TipTap update
   -> clear active job for that conversation
 ```
 
@@ -137,6 +139,7 @@ Check these first:
 - Message stream state: inspect `messages.metadata.stream`
 - Partial assistant text: inspect `messages.content`
 - Partial artifact content: inspect `artifact_revisions.content`
+- Visible editor mirror: inspect `useArtifactStore.getState().loadedRevisionId`, `headRevision`, and `editableRevisionId`
 - Snackbar queue: `useNotificationStore.getState().notifications`
 - Sidecar transport errors: `sidecarStore.sendChatRequest()` now rejects instead of returning `null`.
 
@@ -144,6 +147,7 @@ Common symptoms:
 
 - Chat reopens with no visible progress: confirm `messageStore.loadForConversation()` loaded the assistant row and `metadata.stream.status` is `active`.
 - Editor does not update during artifact streaming: confirm `targetArtifactId` matches the active artifact and `artifactStore.upsertStreamingAiRevision()` is called.
+- Duplicate user revision appears after an AI artifact revision: confirm the AI head has `editableRevisionId === null`, and confirm `Editor` uses `editor.setEditable(!isStreaming, false)` so leaving read-only streaming mode does not fire `onUpdate`.
 - Stuck active stream after restart: confirm `App.tsx` calls `recoverInterruptedStreams()`.
 - Regenerate missing: confirm assistant message metadata has `stream.status` of `interrupted` or `error` and includes `sourceUserMessageId`.
 
@@ -167,5 +171,6 @@ bunx vitest run
 Test intent:
 
 - `backgroundGenerationStore.test.ts`: durable message/revision streaming, multi-chat concurrency, completion/error snackbars, recovery, regenerate.
+- `artifactStore.test.ts`: streamed AI revision mirror stays loaded but not editable; AI/sealed revisions do not become in-place editor targets.
 - `chatSessionStore.test.ts`: route loading and submit delegation.
 - `sidecarStore.test.ts`: websocket parsing and rejected failure paths.

@@ -67,6 +67,7 @@ interface ArtifactState {
   revisions: ArtifactRevision[]
   artifactRevisionMetaByRevisionId: Record<string, ArtifactRevisionMeta>
   isSaving: boolean
+  queuedSaveContent: string | null
   saveError: string | null
   externalChangeDetected: boolean
 }
@@ -194,6 +195,7 @@ const INITIAL_STATE: ArtifactState = {
   revisions: [],
   artifactRevisionMetaByRevisionId: {},
   isSaving: false,
+  queuedSaveContent: null,
   saveError: null,
   externalChangeDetected: false,
 }
@@ -213,6 +215,16 @@ function buildRevisionMeta(
     artifact,
     revision: toRevisionSummary(revision),
   }
+}
+
+function getEditableRevisionId(
+  revision: ArtifactRevision | null
+): string | null {
+  return revision && canEditInPlace(revision) ? revision.id : null
+}
+
+function hasMeaningfulContentChange(next: string, previous: string): boolean {
+  return next.trimEnd() !== previous.trimEnd()
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -314,7 +326,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
 
       set({
         loadedRevisionId: revision?.id ?? null,
-        editableRevisionId: isHead ? (revision?.id ?? null) : null,
+        editableRevisionId: isHead ? getEditableRevisionId(revision) : null,
         loadedContent: revision?.content ?? '',
         editorKey: revision
           ? isHead
@@ -408,17 +420,26 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       // Guard: drop saves during loading transitions (e.g. from editor unmount cleanup)
       if (status !== 'ready') return
 
-      // Guard: concurrent save already in flight
-      if (isSaving) return
-
       // Guard: no artifact to save to
       if (!artifact) return
 
       // Guard: empty editor updates should not create revisions
       if (content.trim() === '') return
 
-      // Guard: unchanged editor updates should not rewrite or fork revisions
-      if (content === loadedContent) return
+      // Guard: unchanged editor updates should not rewrite or fork revisions.
+      // TipTap/Markdown can normalize trailing whitespace on mount; that must not
+      // create a user draft when the visible head is a sealed AI revision.
+      if (!hasMeaningfulContentChange(content, loadedContent)) return
+
+      // Guard: concurrent save already in flight. Keep the latest editor state
+      // so rapid typing cannot lose the final update while SQLite is busy.
+      if (isSaving) {
+        console_if('ARTIFACT_STORE').log('[ARTIFACT_STORE] save:queued', {
+          contentLength: content.length,
+        })
+        set({ queuedSaveContent: content })
+        return
+      }
 
       set({ isSaving: true, saveError: null })
       try {
@@ -452,6 +473,14 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         set({ saveError: message })
       } finally {
         set({ isSaving: false })
+
+        const queuedContent = get().queuedSaveContent
+        if (queuedContent !== null) {
+          set({ queuedSaveContent: null })
+          if (hasMeaningfulContentChange(queuedContent, get().loadedContent)) {
+            await get().save(queuedContent)
+          }
+        }
       }
     },
 
@@ -600,6 +629,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       const sealed = { ...headRevision, message_id: messageId }
       set((s) => ({
         headRevision: sealed,
+        editableRevisionId: null,
         revisions: s.revisions.map((r) =>
           r.id === headRevision.id ? sealed : r
         ),
@@ -628,7 +658,8 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
       if (!target) return null
       set({
         loadedRevisionId: target.id,
-        editableRevisionId: target.id === headRevision?.id ? target.id : null,
+        editableRevisionId:
+          target.id === headRevision?.id ? getEditableRevisionId(target) : null,
       })
       return {
         artifactId: artifact.id,
@@ -672,7 +703,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         artifact: updatedArtifact,
         headRevision: newRevision,
         loadedRevisionId: revisionId,
-        editableRevisionId: revisionId,
+        editableRevisionId: getEditableRevisionId(newRevision),
         revisions: [...revisions, newRevision],
         artifactRevisionMetaByRevisionId: {
           ...get().artifactRevisionMetaByRevisionId,
@@ -814,7 +845,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         artifact: updatedArtifact,
         headRevision: newRevision,
         loadedRevisionId: revisionId,
-        editableRevisionId: revisionId,
+        editableRevisionId: getEditableRevisionId(newRevision),
         loadedContent: content,
         editorKey: revisionId,
         revisions: [...revisions, newRevision],
@@ -855,7 +886,7 @@ export const useArtifactStore = create<ArtifactState & ArtifactActions>(
         artifact: updatedArtifact,
         headRevision: revision,
         loadedRevisionId: revision.id,
-        editableRevisionId: revision.id,
+        editableRevisionId: getEditableRevisionId(revision),
         loadedContent: revision.content,
         editorKey:
           loadedRevisionId === revision.id ? get().editorKey : revision.id,

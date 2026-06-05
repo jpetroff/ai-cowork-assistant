@@ -99,6 +99,12 @@ function makeRevision(
   }
 }
 
+function getEditableRevisionId(revision: ArtifactRevision | undefined) {
+  return revision?.author === 'user' && revision.message_id === null
+    ? revision.id
+    : null
+}
+
 function seedStore(artifact: Artifact, revisions: ArtifactRevision[]) {
   const head =
     revisions.find((r) => r.id === artifact.current_revision_id) ?? revisions[0]
@@ -107,11 +113,12 @@ function seedStore(artifact: Artifact, revisions: ArtifactRevision[]) {
     artifact,
     headRevision: head ?? null,
     loadedRevisionId: head?.id ?? null,
-    editableRevisionId: head?.id ?? null,
+    editableRevisionId: getEditableRevisionId(head),
     loadedContent: head?.content ?? '',
     editorKey: head?.id ?? 'seed',
     revisions,
     isSaving: false,
+    queuedSaveContent: null,
     saveError: null,
     externalChangeDetected: false,
   })
@@ -143,13 +150,56 @@ describe('save chain', () => {
     expect(mockCreateRevision).not.toHaveBeenCalled()
   })
 
-  it('2: isSaving guard prevents concurrent save', async () => {
+  it('2: isSaving guard queues the latest concurrent save', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     seedStore(artifact, [rev])
     useArtifactStore.setState({ isSaving: true })
+
     await useArtifactStore.getState().save('new content')
+
     expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().queuedSaveContent).toBe('new content')
+  })
+
+  it('flushes the latest queued save after the active save finishes', async () => {
+    const artifact = makeArtifact()
+    const rev = makeRevision({ message_id: null, content: 'initial' })
+    seedStore(artifact, [rev])
+
+    let resolvePersist: () => void = () => undefined
+    mockUpdateRevisionContent.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePersist = resolve
+        })
+    )
+
+    const firstSave = useArtifactStore.getState().save('first')
+    await vi.waitFor(() => {
+      expect(useArtifactStore.getState().isSaving).toBe(true)
+    })
+
+    await useArtifactStore.getState().save('second')
+    await useArtifactStore.getState().save('final')
+
+    expect(useArtifactStore.getState().queuedSaveContent).toBe('final')
+    resolvePersist()
+    await firstSave
+
+    expect(mockUpdateRevisionContent).toHaveBeenNthCalledWith(
+      1,
+      'rev-1',
+      'first'
+    )
+    expect(mockUpdateRevisionContent).toHaveBeenNthCalledWith(
+      2,
+      'rev-1',
+      'final'
+    )
+    expect(mockUpdateRevisionContent).toHaveBeenCalledTimes(2)
+    expect(useArtifactStore.getState().loadedContent).toBe('final')
+    expect(useArtifactStore.getState().queuedSaveContent).toBeNull()
   })
 
   it('does not create a revision for empty editor content', async () => {
@@ -279,6 +329,25 @@ describe('save chain', () => {
     expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
   })
 
+  it('does not fork a sealed AI head for TipTap trailing-whitespace normalization', async () => {
+    const artifact = makeArtifact()
+    const aiRevision = makeRevision({
+      author: 'ai',
+      message_id: 'assistant-msg-1',
+      content: '# AI artifact\n\nGenerated content.\n',
+    })
+    seedStore(artifact, [aiRevision])
+
+    await useArtifactStore
+      .getState()
+      .save('# AI artifact\n\nGenerated content.  ')
+
+    expect(mockCreateRevision).not.toHaveBeenCalled()
+    expect(mockUpdateRevisionContent).not.toHaveBeenCalled()
+    expect(useArtifactStore.getState().loadedRevisionId).toBe(aiRevision.id)
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
+  })
+
   it('creates a new draft when saving from a loaded historical revision', async () => {
     const artifact = makeArtifact({ current_revision_id: 'rev-2' })
     const rev1 = makeRevision({
@@ -354,6 +423,7 @@ describe('sealForSend', () => {
     const result = await useArtifactStore.getState().sealForSend('user-msg-1')
     expect(mockSealRevision).toHaveBeenCalledWith('rev-1', 'user-msg-1')
     expect(result?.revisionId).toBe('rev-1')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
   })
 
   it('2: isDraft && !changed → _reuseLastSealed — no sealing work', async () => {
@@ -401,6 +471,7 @@ describe('sealForSend', () => {
       'user-msg-2'
     )
     expect(result?.revisionId).toBe('rev-new-sealed')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
   })
 
   it('4: !isDraft && !changed → _reuseCurrentHead — no sealing work', async () => {
@@ -566,7 +637,7 @@ describe('applyAiRevision', () => {
     expect(mockCreateRevision).not.toHaveBeenCalled()
   })
 
-  it('inserts ai revision, seals it with the assistant message, sets loaded/editable ids', async () => {
+  it('inserts ai revision, seals it with the assistant message, and detaches editing', async () => {
     const artifact = makeArtifact()
     const rev = makeRevision()
     seedStore(artifact, [rev])
@@ -582,7 +653,28 @@ describe('applyAiRevision', () => {
       'ai-msg-1'
     )
     expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-ai')
-    expect(useArtifactStore.getState().editableRevisionId).toBe('rev-ai')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
+  })
+
+  it('upserts streaming ai revision as the loaded head without making it editable', () => {
+    const artifact = makeArtifact()
+    const draft = makeRevision()
+    const aiRevision = makeRevision({
+      id: 'rev-ai-stream',
+      author: 'ai',
+      message_id: 'assistant-msg-1',
+      content: 'streaming ai content',
+    })
+    seedStore(artifact, [draft])
+
+    useArtifactStore.getState().upsertStreamingAiRevision(artifact, aiRevision)
+
+    expect(useArtifactStore.getState().headRevision?.id).toBe('rev-ai-stream')
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-ai-stream')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
+    expect(useArtifactStore.getState().loadedContent).toBe(
+      'streaming ai content'
+    )
   })
 })
 
@@ -603,6 +695,22 @@ describe('requestRevisionLoad', () => {
     expect(useArtifactStore.getState().editableRevisionId).toBe('rev-2')
     expect(useArtifactStore.getState().loadedContent).toBe('v2')
     expect(useArtifactStore.getState().status).toBe('ready')
+  })
+
+  it('loading a sealed head revision keeps it loaded but not editable', async () => {
+    const artifact = makeArtifact({ current_revision_id: 'rev-1' })
+    const sealedHead = makeRevision({
+      id: 'rev-1',
+      content: 'sealed head',
+      message_id: 'msg-1',
+    })
+    seedStore(artifact, [sealedHead])
+
+    await useArtifactStore.getState().requestRevisionLoad('rev-1')
+
+    expect(useArtifactStore.getState().loadedRevisionId).toBe('rev-1')
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
+    expect(useArtifactStore.getState().loadedContent).toBe('sealed head')
   })
 
   it('loading non-head revision keeps it loaded but detaches editing for a new draft', async () => {
@@ -773,6 +881,7 @@ describe('message anchor integration — send flow', () => {
     expect(useArtifactStore.getState().headRevision?.message_id).toBe(
       'user-msg-new'
     )
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
     expect(result?.revisionId).toBe('rev-1')
   })
 
@@ -816,6 +925,7 @@ describe('message anchor integration — send flow', () => {
     expect(useArtifactStore.getState().headRevision?.message_id).toBe(
       'assistant-msg-1'
     )
+    expect(useArtifactStore.getState().editableRevisionId).toBeNull()
   })
 
   it('9.12: loading a new empty document leaves it revisionless until save', async () => {

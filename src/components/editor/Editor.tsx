@@ -884,6 +884,13 @@ export function Editor({
   // The extension parses & normalizes content in onBeforeCreate, which triggers a doc
   // transaction that fires onUpdate synchronously before the editor is truly "ready".
   const isReady = useRef(false)
+  const renderCount = useRef(0)
+  renderCount.current += 1
+  console_if('EDITOR_RENDER').log('[EDITOR_RENDER] editor:render', {
+    renderCount: renderCount.current,
+    contentLength: content?.length ?? 0,
+    isStreaming,
+  })
 
   const editor = useEditor({
     extensions: [
@@ -957,7 +964,7 @@ export function Editor({
 
   // Sync editable state when isStreaming changes
   useEffect(() => {
-    editor?.setEditable(!isStreaming)
+    editor?.setEditable(!isStreaming, false)
   }, [editor, isStreaming])
 
   // While the sidecar streams artifact markdown, keep the read-only editor in

@@ -1,5 +1,6 @@
 import { useArtifactStore } from '@/components/editor/artifactStore'
 import { useChatSessionStore } from '@/components/chat/chatSessionStore'
+import { console_if } from '@/lib/logger'
 import { EditorSkeleton } from './EditorSkeleton'
 import { Editor } from './Editor'
 
@@ -10,6 +11,13 @@ export function EditorPanel() {
   const loadedContent = useArtifactStore((s) => s.loadedContent)
   const save = useArtifactStore((s) => s.save)
   const isStreaming = useChatSessionStore((s) => s.isAssistantStreaming)
+
+  console_if('EDITOR_RENDER').log('[EDITOR_RENDER] panel:render', {
+    artifactId: artifact?.id ?? null,
+    editorKey,
+    loadedContentLength: loadedContent.length,
+    isStreaming,
+  })
 
   // Editor is only mounted when status is 'ready' — loading/idle show skeleton
   if (editorKey == null) return <EditorSkeleton />

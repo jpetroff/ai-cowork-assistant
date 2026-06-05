@@ -501,6 +501,15 @@ async function persistArtifactRevision(job: BackgroundGenerationJob) {
   if (!artifact || !job.currentAssistantMessage) return
 
   const now = Date.now()
+  console_if('BACKGROUND_GENERATION').log(
+    '[BACKGROUND_GENERATION] artifact-revision:persist',
+    {
+      artifactId: artifact.id,
+      assistantMessageId: job.currentAssistantMessage.id,
+      existingRevisionId: job.artifactRevision?.id ?? null,
+      contentLength: job.artifactContent.length,
+    }
+  )
   if (!job.artifactRevision) {
     const revisionId = await createRevision({
       artifact_id: artifact.id,
@@ -517,6 +526,26 @@ async function persistArtifactRevision(job: BackgroundGenerationJob) {
       created_at: now,
       updated_at: now,
     }
+    console_if('BACKGROUND_GENERATION').log(
+      '[BACKGROUND_GENERATION] artifact-revision:created',
+      {
+        artifactId: artifact.id,
+        revisionId,
+        assistantMessageId: job.currentAssistantMessage.id,
+        contentLength: job.artifactContent.length,
+      }
+    )
+  } else if (job.artifactRevision.content === job.artifactContent) {
+    console_if('BACKGROUND_GENERATION').log(
+      '[BACKGROUND_GENERATION] artifact-revision:unchanged',
+      {
+        artifactId: artifact.id,
+        revisionId: job.artifactRevision.id,
+        assistantMessageId: job.currentAssistantMessage.id,
+        contentLength: job.artifactContent.length,
+      }
+    )
+    return
   } else {
     await updateRevisionContent(job.artifactRevision.id, job.artifactContent)
     job.artifactRevision = {
@@ -524,6 +553,15 @@ async function persistArtifactRevision(job: BackgroundGenerationJob) {
       content: job.artifactContent,
       updated_at: now,
     }
+    console_if('BACKGROUND_GENERATION').log(
+      '[BACKGROUND_GENERATION] artifact-revision:updated',
+      {
+        artifactId: artifact.id,
+        revisionId: job.artifactRevision.id,
+        assistantMessageId: job.currentAssistantMessage.id,
+        contentLength: job.artifactContent.length,
+      }
+    )
   }
 
   useArtifactStore

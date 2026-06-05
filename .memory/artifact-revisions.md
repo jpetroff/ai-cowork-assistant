@@ -23,6 +23,7 @@ flowchart TD
   Sidecar["sidecarStore AI artifact output"] --> AiRev["applyAiRevision(content)"]
   AssistantMsg["messageStore.finalizeStreaming"] --> AiRev
   AiRev --> AiAnchor["revision.message_id = assistant message id"]
+  AiRev --> Detached["editableRevisionId = null"]
 
   Save --> Noop["empty/unchanged content: no DB write"]
   Messages["MessageList"] --> Thread["buildThread hides system messages"]
@@ -35,6 +36,7 @@ flowchart TD
 - `editableRevisionId` means the revision safe to persist in place; `null` means the next save creates a user draft.
 - `loadedContent` is the last persisted editor content baseline; `save(content)` returns without writing when `content === loadedContent`.
 - Loading a historical revision keeps `loadedRevisionId` on that historical revision and sets `editableRevisionId` to `null`.
+- Loading a sealed head revision also keeps it visible via `loadedRevisionId`, but sets `editableRevisionId` to `null`. Sealed user revisions and AI revisions must never be edited in place.
 - `sealForSend()` sends the loaded historical revision when `editableRevisionId` is `null`, so chat submission follows the document the user opened rather than silently falling back to head.
 - When an unchanged draft reuses the last sealed revision, `loadedRevisionId` moves to that sealed revision so revision history matches the content actually sent.
 - `loadForConversation()` honors `conversations.active_artifact_id` before falling back to the newest artifact.
@@ -46,12 +48,15 @@ flowchart TD
 - First non-empty changed editor save creates a draft only. It does not create chat-visible artifact cards or system messages.
 - User revisions are sealed by linking `revision.message_id` to the persisted user message ID passed to `sealForSend(messageId)`.
 - AI revisions are created as sealed revisions via `applyAiRevision(content, messageId)` and link `revision.message_id` to the assistant message ID.
+- Background streaming persists AI revisions directly, then mirrors the persisted row into the open editor with `upsertStreamingAiRevision()`. That mirror updates `headRevision`, `loadedRevisionId`, and `loadedContent`, but leaves `editableRevisionId` as `null` because AI revisions are sealed.
+- `Editor` must call `editor.setEditable(!isStreaming, false)`. TipTap can emit update events from editable-state changes; suppressing them prevents streamed AI content from being normalized and saved back as a duplicate user draft.
 - Artifact revision system messages and `ArtifactRevisionCard` are removed from the visible chat flow.
 - `buildThread()` filters all system messages out of chat rendering.
 
 ## Key Files
 
 - `src/components/editor/artifactStore.ts`: lifecycle, save chain, seal chain, AI revisions, disk sync.
+- `src/components/editor/Editor.tsx`: TipTap editor update sink; suppresses update emission while toggling read-only streaming state.
 - `src/lib/revision-utils.ts`: pure helper logic and chat thread filtering.
 - `src/components/chat/messageStore.ts`: user/assistant message creation and streaming state.
 - `src/components/chat/chatSessionStore.ts`: coordinates user message creation, revision sealing, assistant streaming, and AI revision application.

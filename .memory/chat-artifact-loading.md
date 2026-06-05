@@ -65,7 +65,7 @@ flowchart TD
 `artifactStore._mountRevision(revision, isHead)` sets:
 
 - `loadedRevisionId`: revision currently shown in editor and highlighted in chat.
-- `editableRevisionId`: same as loaded revision only when safe to edit head.
+- `editableRevisionId`: same as loaded revision only when the head is an unsealed user draft (`author === "user"` and `message_id === null`); sealed user and AI heads stay loaded but detached from in-place editing.
 - `loadedContent`: content passed into the editor.
 - `editorKey`: remount key for fresh editor content.
 - `status: "ready"`.
