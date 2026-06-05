@@ -5,8 +5,6 @@ import {
   updateConversation,
   deleteConversation,
 } from '@/lib/db/repositories/conversations'
-import { createArtifact, updateArtifact } from '@/lib/db/repositories/documents'
-import { createRevision } from '@/lib/db/repositories/revisions'
 import { db } from '@/lib/db/sqlite'
 import type { Conversation } from '@/lib/db/types'
 import { useNotificationStore } from '@/components/ui/notificationStore'
@@ -96,27 +94,6 @@ export const useConversationStore = create<
         updated_at: Date.now(),
       }
       set((s) => ({ conversations: [conversation, ...s.conversations] }))
-
-      // Create the initial empty artifact + first revision for this conversation (FR-CHT-004)
-      try {
-        const artifactId = await createArtifact({ conversation_id: id })
-        await createRevision({
-          artifact_id: artifactId,
-          author: 'user',
-          content: '',
-        })
-        await updateArtifact(id, {}) // bump updated_at on conversation via artifact
-        await db.execute(
-          'UPDATE conversations SET active_artifact_id = $1, updated_at = $2 WHERE id = $3',
-          [artifactId, Date.now(), id]
-        )
-        conversation.active_artifact_id = artifactId
-      } catch (artifactErr) {
-        console.warn(
-          '[conversationStore] Could not create initial artifact:',
-          artifactErr instanceof Error ? artifactErr.message : artifactErr
-        )
-      }
 
       return conversation
     } catch (err) {

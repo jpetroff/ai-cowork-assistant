@@ -116,6 +116,7 @@ describe('create()', () => {
     expect(result).not.toBeNull()
     expect(result!.id).toBe(newId)
     expect(result!.project_id).toBe('proj-1')
+    expect(result!.active_artifact_id).toBeNull()
     const { conversations } = useConversationStore.getState()
     expect(conversations).toHaveLength(2)
     expect(conversations[0].id).toBe(newId)

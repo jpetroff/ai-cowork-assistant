@@ -1,6 +1,7 @@
 import { useProjectStore } from '@/components/projects/projectStore'
 import { ProjectHeader } from '@/components/projects/ProjectHeader'
 import { NewTaskInput } from '@/components/conversations/NewTaskInput'
+import { CreateEmptyChatButton } from '@/components/conversations/CreateEmptyChatButton'
 import { ConversationList } from '@/components/conversations/ConversationList'
 import { ArtifactsCard } from '@/components/projects/ArtifactsCard'
 import { FolderCard } from '@/components/projects/FolderCard'
@@ -25,6 +26,7 @@ export function ProjectPage() {
             {/* Left column — task input + conversation list */}
             <div className='flex-1 min-w-0 flex flex-col gap-section-gap'>
               <NewTaskInput projectId={project.id} />
+              <CreateEmptyChatButton projectId={project.id} />
               <ConversationList projectId={project.id} />
             </div>
 

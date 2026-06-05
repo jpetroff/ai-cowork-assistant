@@ -50,6 +50,14 @@ flowchart LR
 - `sidecarStore` accepts a prepared request plus stream callbacks and returns the final stream result. It no longer imports `messageStore`, `artifactStore`, or message repositories.
 - Debug labels added for important stages: `APP_STORE`, `CHAT_SESSION`, `MESSAGE_STORE`, `ARTIFACT_STORE`, and `SIDECAR_STORE`.
 
+## Current Status After Background Generation
+
+- `backgroundGenerationStore` now owns durable generation execution across route changes: it creates user messages, creates active assistant stream messages, persists assistant text, and persists AI artifact revisions.
+- `chatSessionStore.submitMessage()` delegates to `backgroundGenerationStore.startMessage()` after route context is loaded.
+- `NewTaskInput` on `ProjectPage` creates the conversation, calls `backgroundGenerationStore.startMessage({ artifactContext: null })`, then navigates to the chat route. It no longer passes router `initialMessage` state.
+- `CreateEmptyChatButton` creates a conversation and navigates without creating messages, artifacts, revisions, or generation jobs.
+- Artifact revision system cards are no longer part of the visible chat flow; `RevisionPicker` is the active revision-selection UI.
+
 ## Verification
 
 - `bunx tsc --noEmit`

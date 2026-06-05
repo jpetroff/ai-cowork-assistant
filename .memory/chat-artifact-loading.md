@@ -14,14 +14,7 @@ flowchart TD
   Artifact --> Head["artifact + revisions + headRevision"]
   Head --> Editor["loadedRevisionId / loadedContent / editorKey"]
 
-  Session --> Anchor["ensureDocumentThreadMessage()"]
-  Anchor --> SysMsg["system revision message if needed"]
-  Session --> Meta["loadArtifactRevisionMetas(thread refs)"]
-  Meta --> Cards["ArtifactRevisionCard titles"]
-
   Messages --> List["MessageList buildThread(messages)"]
-  List --> MetaEffect["effect: load missing revision metadata"]
-  MetaEffect --> Cards
 ```
 
 ## Trigger
@@ -47,18 +40,16 @@ flowchart TD
 3. Calls `artifactStore.loadForConversation(conversationId)`.
    - Resets artifact state.
    - Reads `listArtifacts(conversationId)` and `getConversation(conversationId)`.
-   - Creates an artifact if none exists.
+   - Creates an artifact if none exists, but does not create a revision.
    - Chooses `conversation.active_artifact_id`, else newest artifact.
    - Reads `listRevisions(artifact.id)`.
    - Sets `artifact`, `headRevision`, `revisions`, and metadata cache.
    - Calls `_mountRevision(headRevision, true)` to set editor state.
-4. Calls `artifactStore.ensureDocumentThreadMessage()`.
-   - Creates an empty draft if the artifact has no head revision.
-   - Ensures a system message anchors the document/revision in chat.
-5. Calls `artifactStore.loadArtifactRevisionMetas(getThreadRevisionReferences())`.
-   - Preloads all revision-card titles for the current thread.
-   - Skips cached metadata.
-6. Sets chat session `status: "ready"`.
+4. Sets chat session `status: "ready"`.
+
+Empty chats created from `CreateEmptyChatButton` load through the same route. They enter with no messages and `conversations.active_artifact_id === null`; the chat loader creates a revisionless artifact for the editor.
+
+Project-page task submissions do not use route state. `NewTaskInput` creates the conversation, starts `backgroundGenerationStore.startMessage({ artifactContext: null })`, and only then navigates to the chat route, where `messageStore.loadForConversation()` reads the already-created user/assistant rows.
 
 ## Editor State Side Effects
 
@@ -70,24 +61,10 @@ flowchart TD
 - `editorKey`: remount key for fresh editor content.
 - `status: "ready"`.
 
-## Thread Metadata Updates
-
-Two paths keep artifact card titles current:
-
-- On chat load: `chatSessionStore.loadChat()` calls `loadArtifactRevisionMetas()`.
-- While rendered: `MessageList` builds revision refs from `buildThread(messages)` and calls `loadArtifactRevisionMetas()` in an effect.
-
-`ArtifactRevisionCard` renders title from:
-
-`artifactStore.getArtifactRevisionMeta(artifactId, { revisionId })?.artifact.title ?? "Untitled"`
-
-The lookup checks active editor state first, then the thread metadata cache.
-
 ## Debug Checkpoints
 
 - Route not loading: inspect `src/router.tsx` chat loader.
 - Empty thread: inspect `messageStore.loadForConversation()` and `listMessages()`.
 - Editor shows wrong artifact: inspect `artifactStore.loadForConversation()` artifact selection and `conversations.active_artifact_id`.
 - Wrong active card: inspect `loadedRevisionId`.
-- Untitled revision cards: inspect `loadArtifactRevisionMetas()` cache and `ArtifactRevisionCard` lookup.
-- Missing revision cards: inspect system message metadata and `parseRevisionMetadata()` / `buildThread()`.
+- Missing generation progress after project-page task submit: inspect `backgroundGenerationStore.activeJobs`, the assistant message `metadata.stream`, and whether `NewTaskInput` called `startMessage()` before navigation.

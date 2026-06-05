@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowUpIcon } from '@phosphor-icons/react'
+import { useBackgroundGenerationStore } from '@/components/chat/backgroundGenerationStore'
 import { useConversationStore } from '@/components/conversations/conversationStore'
 import { Button } from '@/components/ui/button'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
@@ -21,15 +23,30 @@ export function NewTaskInput({ projectId }: NewTaskInputProps) {
 
   async function handleSubmit() {
     if (isEmpty || submitting) return
+    const content = value.trim()
     setSubmitting(true)
-    const conversation = await createConversation(projectId)
-    if (conversation) {
-      navigate(`/projects/${projectId}/chats/${conversation.id}`, {
-        state: { initialMessage: value.trim() },
+    try {
+      const conversation = await createConversation(projectId)
+      if (!conversation) return
+
+      await useBackgroundGenerationStore.getState().startMessage({
+        projectId,
+        conversationId: conversation.id,
+        content,
+        artifactContext: null,
       })
+
+      navigate(`/projects/${projectId}/chats/${conversation.id}`)
+      setValue('')
+    } catch (err) {
+      useNotificationStore.getState().push({
+        kind: 'error',
+        message: 'Could not start generation',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setSubmitting(false)
     }
-    setSubmitting(false)
-    setValue('')
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {

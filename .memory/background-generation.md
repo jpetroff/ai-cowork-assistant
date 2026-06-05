@@ -18,7 +18,7 @@ Related surfaces:
 
 ## Stream Lifecycle
 
-Submit flow:
+Submit flow from an open chat:
 
 ```text
 ChatInput
@@ -29,6 +29,31 @@ ChatInput
   -> create assistant message row with metadata.stream.status = "active"
   -> sidecarStore.sendChatRequest()
 ```
+
+Submit flow from the project page task input:
+
+```text
+NewTaskInput
+  -> conversationStore.create(projectId)
+  -> backgroundGenerationStore.startMessage({ artifactContext: null })
+  -> create user message row
+  -> create/select a target artifact for the new conversation
+  -> create assistant message row with metadata.stream.status = "active"
+  -> sidecarStore.sendChatRequest()
+  -> navigate to /projects/:projectId/chats/:conversationId
+```
+
+`NewTaskInput` starts durable background generation before navigation. It does not pass `initialMessage` router state, and `ChatColumn` does not replay route state into `messageStore.addUserMessage()`. Passing `artifactContext: null` is intentional: a new project-page task must not seal or send stale editor artifact state from a previously opened chat.
+
+Empty chat flow:
+
+```text
+CreateEmptyChatButton
+  -> conversationStore.create(projectId)
+  -> navigate to /projects/:projectId/chats/:conversationId
+```
+
+This creates a conversation only; it does not start generation, create messages, or create artifact revisions.
 
 During streaming:
 
@@ -171,6 +196,8 @@ bunx vitest run
 Test intent:
 
 - `backgroundGenerationStore.test.ts`: durable message/revision streaming, multi-chat concurrency, completion/error snackbars, recovery, regenerate.
+- `NewTaskInput.test.tsx`: project-page task submission creates a conversation, starts background generation with `artifactContext: null`, then navigates.
+- `CreateEmptyChatButton.test.tsx`: empty chat creation navigates without starting generation.
 - `artifactStore.test.ts`: streamed AI revision mirror stays loaded but not editable; AI/sealed revisions do not become in-place editor targets.
 - `chatSessionStore.test.ts`: route loading and submit delegation.
 - `sidecarStore.test.ts`: websocket parsing and rejected failure paths.

@@ -13,7 +13,7 @@ flowchart TD
   Shell --> Setup["SetupPage"]
 
   Home --> ProjectList["ProjectList -> ProjectCard"]
-  Project --> ProjectCards["ProjectHeader, NewTaskInput, ConversationList, Artifacts/Files/Folder/AiConfig cards"]
+  Project --> ProjectCards["ProjectHeader, NewTaskInput, CreateEmptyChatButton, ConversationList, Artifacts/Files/Folder/AiConfig cards"]
   Chat --> ChatLayout["ChatLayout"]
   ChatLayout --> ChatColumn["ChatColumn"]
   ChatLayout --> EditorSection["EditorSection"]
@@ -32,15 +32,17 @@ flowchart LR
   RouterLoaders --> MessageStore["messageStore"]
   RouterLoaders --> ArtifactStore["artifactStore"]
 
-  ChatInput --> MessageStore
+  ChatInput --> ChatSessionStore["chatSessionStore"]
+  NewTaskInput["NewTaskInput"] --> ConversationStore
+  NewTaskInput --> BackgroundGenerationStore["backgroundGenerationStore"]
+  EmptyChat["CreateEmptyChatButton"] --> ConversationStore
   ChatInput --> ArtifactStore
-  ChatInput --> SidecarStore["sidecarStore"]
-  SidecarStore --> MessageStore
-  SidecarStore --> ArtifactStore
+  ChatSessionStore --> BackgroundGenerationStore
+  BackgroundGenerationStore --> MessageStore
+  BackgroundGenerationStore --> ArtifactStore
+  BackgroundGenerationStore --> SidecarStore["sidecarStore"]
   EditorPanel --> ArtifactStore
   RevisionPicker["RevisionPicker"] --> ArtifactStore
-  MessageList --> ArtifactRevisionCard["ArtifactRevisionCard"]
-  ArtifactRevisionCard --> ArtifactStore
 ```
 
 ## Page Dependency Map
@@ -49,16 +51,18 @@ See `.memory/page-dependencies.md` for the page-by-page component/store/dependen
 
 - `AppShell`: `appStore` plus router navigation state.
 - `HomePage`: `ProjectList` over `projectStore`.
-- `ProjectPage`: `projectStore`, `conversationStore`, project settings, provider/model stores, and artifact preview repositories.
+- `ProjectPage`: `projectStore`, `conversationStore`, `backgroundGenerationStore` for task submission, project settings, provider/model stores, and artifact preview repositories.
 - `ChatPage`: `conversationStore`, `messageStore`, `artifactStore`, and `sidecarStore`.
 - `SetupPage`: setup wizard over app/provider/settings state.
 
 ## Chat and Artifact Coupling
 
 - There is no separate `ChatStore`; chat state is `messageStore` plus `sidecarStore`.
+- `backgroundGenerationStore` owns sidecar-backed generation jobs and durable user/assistant message setup.
+- Project-page task submission starts background generation before navigating; empty-chat creation only creates a conversation and navigates.
 - `artifactStore.loadedRevisionId` is the revision currently open in the editor and highlighted in chat/history.
 - `artifactStore.editableRevisionId` is the revision that can be saved in place; `null` means the next save creates a user draft.
-- Both `ArtifactRevisionCard` and `RevisionPicker` select revisions through `artifactStore.requestRevisionLoad(revisionId)`.
+- `RevisionPicker` selects revisions through `artifactStore.requestRevisionLoad(revisionId)`.
 - `artifactStore.loadForConversation()` honors `conversations.active_artifact_id` before falling back to the most recently updated artifact.
 
 ## Component Rules

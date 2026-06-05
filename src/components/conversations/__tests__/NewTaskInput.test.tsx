@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useConversationStore } from '@/components/conversations/conversationStore'
+import { useNotificationStore } from '@/components/ui/notificationStore'
 import type { Conversation } from '@/lib/db/types'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -18,12 +19,21 @@ vi.mock('@tauri-apps/plugin-sql', () => ({
 }))
 
 const mockCreateConversation = vi.fn()
+const mockStartMessage = vi.fn()
 
 vi.mock('@/lib/db/repositories/conversations', () => ({
   listConversations: vi.fn(async () => []),
   createConversation: (...args: unknown[]) => mockCreateConversation(...args),
   updateConversation: vi.fn(async () => {}),
   deleteConversation: vi.fn(async () => {}),
+}))
+
+vi.mock('@/components/chat/backgroundGenerationStore', () => ({
+  useBackgroundGenerationStore: {
+    getState: () => ({
+      startMessage: (...args: unknown[]) => mockStartMessage(...args),
+    }),
+  },
 }))
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
@@ -52,8 +62,11 @@ beforeEach(() => {
     error: null,
     operationStates: {},
   })
+  useNotificationStore.getState().dismissAll()
   mockNavigate.mockReset()
   mockCreateConversation.mockReset()
+  mockStartMessage.mockReset()
+  mockStartMessage.mockResolvedValue(undefined)
 })
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -90,7 +103,7 @@ describe('NewTaskInput — render', () => {
 })
 
 describe('NewTaskInput — submission', () => {
-  it('creates a conversation and navigates on Send button click', async () => {
+  it('creates a conversation, starts generation, and navigates on Send button click', async () => {
     const newConv = makeConversation('new-chat-id')
     mockCreateConversation.mockResolvedValue(newConv.id)
 
@@ -102,12 +115,18 @@ describe('NewTaskInput — submission', () => {
     expect(mockCreateConversation).toHaveBeenCalledWith({
       project_id: 'proj-1',
     })
+    expect(mockStartMessage).toHaveBeenCalledWith({
+      projectId: 'proj-1',
+      conversationId: 'new-chat-id',
+      content: 'Summarize my documents',
+      artifactContext: null,
+    })
     expect(mockNavigate).toHaveBeenCalledWith(
-      '/projects/proj-1/chats/new-chat-id',
-      expect.objectContaining({
-        state: { initialMessage: 'Summarize my documents' },
-      })
+      '/projects/proj-1/chats/new-chat-id'
     )
+    expect(
+      mockStartMessage.mock.invocationCallOrder[0]
+    ).toBeLessThan(mockNavigate.mock.invocationCallOrder[0])
   })
 
   it('plain Enter key inserts a newline, does not submit', async () => {
@@ -130,6 +149,12 @@ describe('NewTaskInput — submission', () => {
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
 
     expect(mockCreateConversation).toHaveBeenCalled()
+    expect(mockStartMessage).toHaveBeenCalledWith({
+      projectId: 'proj-1',
+      conversationId: 'ctrl-enter-chat',
+      content: 'Task description',
+      artifactContext: null,
+    })
   })
 
   it('does not submit when textarea is empty and Ctrl+Enter is pressed', async () => {
@@ -139,5 +164,28 @@ describe('NewTaskInput — submission', () => {
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
 
     expect(mockCreateConversation).not.toHaveBeenCalled()
+    expect(mockStartMessage).not.toHaveBeenCalled()
+  })
+
+  it('keeps the typed prompt and reports an error when generation startup fails', async () => {
+    const newConv = makeConversation('failed-chat-id')
+    mockCreateConversation.mockResolvedValue(newConv.id)
+    mockStartMessage.mockRejectedValueOnce(new Error('No model configured'))
+
+    render(<NewTaskInput projectId='proj-1' />)
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement
+    await userEvent.type(textarea, 'Draft the proposal')
+    await userEvent.click(screen.getByRole('button', { name: /start task/i }))
+
+    expect(mockNavigate).not.toHaveBeenCalled()
+    expect(textarea.value).toBe('Draft the proposal')
+    expect(useConversationStore.getState().conversations[0].id).toBe(
+      'failed-chat-id'
+    )
+    expect(useNotificationStore.getState().notifications[0]).toMatchObject({
+      kind: 'error',
+      message: 'Could not start generation',
+      detail: 'No model configured',
+    })
   })
 })

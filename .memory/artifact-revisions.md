@@ -16,7 +16,7 @@ flowchart TD
   Save --> Draft["create/update user draft"]
   Header["Editor header ArtifactMenu"] --> ArtifactLoad["requestArtifactLoad(artifactId)"]
   ArtifactLoad --> Latest["mount current/latest revision"]
-  ChatSend["ChatInput submit"] --> UserMsg["messageStore.addUserMessage"]
+  ChatSend["ChatInput/NewTaskInput submit"] --> UserMsg["backgroundGenerationStore creates user message"]
   UserMsg --> Seal["sealForSend(userMessageId)"]
   Seal --> Anchor["revision.message_id = user message id"]
 
@@ -43,12 +43,15 @@ flowchart TD
 - Loading or creating a different artifact updates `conversations.active_artifact_id`.
 - `requestArtifactLoad(artifactId)` loads that artifact, mounts its current revision if present, and falls back to an empty editor state for revisionless artifacts.
 - The editor header `ArtifactMenu` lists all artifacts in the active conversation. Selecting an artifact opens that artifact at its current/latest revision.
+- New empty conversations are allowed. `conversationStore.create(projectId)` creates only the conversation row and leaves `active_artifact_id` as `null`.
 - New empty artifacts stay revisionless until the editor saves non-empty changed content.
 - Empty editor content and unchanged editor content do not create, update, or fork revisions.
 - First non-empty changed editor save creates a draft only. It does not create chat-visible artifact cards or system messages.
 - User revisions are sealed by linking `revision.message_id` to the persisted user message ID passed to `sealForSend(messageId)`.
 - AI revisions are created as sealed revisions via `applyAiRevision(content, messageId)` and link `revision.message_id` to the assistant message ID.
 - Background streaming persists AI revisions directly, then mirrors the persisted row into the open editor with `upsertStreamingAiRevision()`. That mirror updates `headRevision`, `loadedRevisionId`, and `loadedContent`, but leaves `editableRevisionId` as `null` because AI revisions are sealed.
+- Project-page task submission calls `backgroundGenerationStore.startMessage({ artifactContext: null })` after creating the conversation. This prevents stale editor artifact state from being sealed or sent as context for a brand-new task.
+- The first AI artifact revision for a new task is created only when artifact output arrives from the sidecar, and it is linked to the assistant message ID.
 - `Editor` must call `editor.setEditable(!isStreaming, false)`. TipTap can emit update events from editable-state changes; suppressing them prevents streamed AI content from being normalized and saved back as a duplicate user draft.
 - Artifact revision system messages and `ArtifactRevisionCard` are removed from the visible chat flow.
 - `buildThread()` filters all system messages out of chat rendering.

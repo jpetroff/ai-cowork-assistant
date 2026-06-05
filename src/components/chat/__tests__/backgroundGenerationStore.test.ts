@@ -258,6 +258,34 @@ describe('useBackgroundGenerationStore', () => {
     expect(useBackgroundGenerationStore.getState().activeJobs).toEqual({})
   })
 
+  it('starts a new-task job without sealing stale editor artifact state', async () => {
+    artifactApi.createNewArtifact.mockResolvedValueOnce('new-art')
+    sidecarApi.sendChatRequest.mockImplementation(() => new Promise(() => {}))
+
+    await useBackgroundGenerationStore.getState().startMessage({
+      projectId: 'proj-1',
+      conversationId: 'new-conv',
+      content: 'start fresh',
+      artifactContext: null,
+    })
+
+    expect(artifactApi.sealForSend).not.toHaveBeenCalled()
+    expect(artifactApi.getArtifactContextForSend).not.toHaveBeenCalled()
+    expect(artifactApi.createNewArtifact).toHaveBeenCalledWith('new-conv')
+    expect(sidecarApi.sendChatRequest.mock.calls[0][0]).toMatchObject({
+      message: 'start fresh',
+      artifact: null,
+    })
+    expect(revisions).toHaveLength(0)
+    expect(
+      useBackgroundGenerationStore.getState().activeJobs['new-conv']
+        .targetArtifactId
+    ).toBe('new-art')
+    const assistant = messages.find((message) => message.role === 'assistant')
+    const metadata = JSON.parse(assistant?.metadata ?? '{}') as MessageMetadata
+    expect(metadata.stream?.targetArtifactId).toBe('new-art')
+  })
+
   it('pushes a completion notification when the completed chat is not open', async () => {
     setCurrentRoutePathname('/projects/proj-1')
     sidecarApi.sendChatRequest.mockImplementation(

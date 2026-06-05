@@ -28,16 +28,16 @@ This map documents the main object graph that drives each page and the cross-pag
 
 ## ProjectPage
 
-- Main components: `ProjectHeader`, `NewTaskInput`, `ConversationList`, `ArtifactsCard`, `FolderCard`, `FilesCard`, `AiConfigCard`.
-- Driving stores: `projectStore` for active project, `conversationStore` for chat list/create/active conversation, `projectSettingsStore` and `llmProviderStore` for AI config.
+- Main components: `ProjectHeader`, `NewTaskInput`, `CreateEmptyChatButton`, `ConversationList`, `ArtifactsCard`, `FolderCard`, `FilesCard`, `AiConfigCard`.
+- Driving stores: `projectStore` for active project, `conversationStore` for chat list/create/active conversation, `backgroundGenerationStore` for project-page task generation, `projectSettingsStore` and `llmProviderStore` for AI config.
 - External dependencies: artifact preview calls `listArtifactsByProject()` directly; AI config uses provider/model repositories through stores.
-- Needs from others: `NewTaskInput` creates a conversation, navigates to `ChatPage`, and passes `initialMessage` through router state for `ChatColumn`.
+- Needs from others: `NewTaskInput` creates a conversation, starts `backgroundGenerationStore.startMessage({ artifactContext: null })`, then navigates to `ChatPage`; `CreateEmptyChatButton` creates a conversation and navigates without messages or generation.
 - Architectural notes: `ArtifactsCard` has local fetching effects instead of a store-backed loader; acceptable now, but it is the main dashboard-side inconsistency.
 
 ## ChatPage
 
 - Main components: `ChatPage`, `ChatLayout`, `ChatColumn`, `MessageList`, `ChatInput`, `EditorSection`, `ArtifactTitleBar`, `EditorPanel`, `RevisionPicker`.
-- Driving stores: `conversationStore` owns active conversation; `messageStore` owns messages/streaming; `artifactStore` owns active artifact, revisions, editor content, loaded revision, and editable revision; `sidecarStore` streams AI responses.
+- Driving stores: `conversationStore` owns active conversation; `chatSessionStore` coordinates route loading and chat submits; `messageStore` owns visible messages; `artifactStore` owns active artifact, revisions, editor content, loaded revision, and editable revision; `backgroundGenerationStore` owns active generation jobs; `sidecarStore` handles transport parsing.
 - External dependencies: route loader sets active project/conversation and starts `messageStore.loadForConversation()` plus `artifactStore.loadForConversation()` independently; sidecar HTTP streaming persists assistant messages and AI revisions.
 - Needs from others: chat revision cards need `artifactStore.loadedRevisionId` to highlight the editor-open revision; editor and chat both call `artifactStore.requestRevisionLoad(revisionId)` to select a revision.
 - Architectural notes: `loadedRevisionId` is UI/open-document state, while `editableRevisionId` is save-chain state. Do not use editability state to highlight chat cards.
@@ -46,7 +46,7 @@ This map documents the main object graph that drives each page and the cross-pag
 
 - `artifactStore.loadForConversation(conversationId)` should honor `conversations.active_artifact_id`; if missing/stale, fall back to the most recently updated artifact.
 - `artifactStore.requestRevisionLoad(revisionId)` is the only revision-selection action used by chat cards and editor history.
-- Loading a head revision sets both `loadedRevisionId` and `editableRevisionId`.
+- Loading a head revision sets `loadedRevisionId`; `editableRevisionId` is set only for an unsealed user draft.
 - Loading a historical revision sets `loadedRevisionId` to the selected revision and `editableRevisionId` to `null`, so the next edit creates a user draft.
 - Chat send uses the loaded historical revision when editing is detached from head.
 - Loading or creating a different artifact persists `conversations.active_artifact_id` so reopening the chat restores the latest open document.
