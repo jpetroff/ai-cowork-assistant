@@ -5,9 +5,10 @@ export const SETTING_KEYS = {
   THEME: 'theme',
   APPROVAL_MODE: 'approval_mode',
   EDITOR_AUTOSAVE_INTERVAL_MS: 'editor_autosave_interval_ms',
+  WEB_RESEARCH_CONFIG: 'web_research_config',
 } as const
 
-export type SettingKey = typeof SETTING_KEYS[keyof typeof SETTING_KEYS]
+export type SettingKey = (typeof SETTING_KEYS)[keyof typeof SETTING_KEYS]
 
 /**
  * Get a single app setting by key

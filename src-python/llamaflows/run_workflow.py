@@ -15,6 +15,7 @@ from schemas import (
     ChatMessageBase,
     DefaultResponse,
     LlmProviderSettings,
+    WebResearchConfig,
 )
 import tiktoken
 
@@ -24,6 +25,7 @@ async def create_workflow(
     llm_provider: LlmProviderSettings,
     chat_history: Sequence[ChatMessageBase] | None = None,
     artifact: ChatCompletionArtifactContext | None = None,
+    web_research: WebResearchConfig | None = None,
 ):
     # 1. Initialize token counter
     # Note: Since Ollama runs local models (e.g., Llama3), it's best to
@@ -46,6 +48,7 @@ async def create_workflow(
         user_query=user_query,
         chat_history=list(chat_history or []),
         artifact=artifact,
+        web_research=web_research or WebResearchConfig(),
     )
 
     # now we handle events coming back from the workflow

@@ -91,6 +91,17 @@ vi.mock('../llmProviderSettings', () => ({
   }),
 }))
 
+vi.mock('@/components/settings/webResearchConfig', () => ({
+  loadWebResearchConfig: async () => ({
+    enabled: true,
+    search_provider: 'duckduckgo',
+    scraper_provider: 'jina',
+    max_results: 2,
+    search: { duckduckgo: { region: 'us-en' } },
+    scraping: { jina: { base_url: 'https://r.jina.ai' } },
+  }),
+}))
+
 vi.mock('@/components/editor/artifactStore', () => ({
   useArtifactStore: {
     getState: () => artifactApi,
@@ -275,6 +286,10 @@ describe('useBackgroundGenerationStore', () => {
     expect(sidecarApi.sendChatRequest.mock.calls[0][0]).toMatchObject({
       message: 'start fresh',
       artifact: null,
+      web_research: {
+        search_provider: 'duckduckgo',
+        scraper_provider: 'jina',
+      },
     })
     expect(revisions).toHaveLength(0)
     expect(

@@ -26,6 +26,7 @@ async def completion_websocket(websocket: WebSocket):
             llm_provider=request.llm_provider,
             chat_history=request.chat_history,
             artifact=request.artifact,
+            web_research=request.web_research,
         )
 
         async for response in handler:

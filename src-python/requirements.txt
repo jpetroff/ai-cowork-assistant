@@ -23,6 +23,8 @@ llama-index-tools-duckduckgo
 json-repair
 llama-index-postprocessor-colbert-rerank
 llama-index-storage-docstore-mongodb
+trafilatura
+crawl4ai
 
 # observability
 arize-phoenix
@@ -31,7 +33,6 @@ openinference-instrumentation-llama-index
 
 # typescript type generation
 pydantic-to-typescript>=2
-json2ts
 
 # utils
 black

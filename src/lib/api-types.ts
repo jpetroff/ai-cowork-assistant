@@ -9,357 +9,413 @@
  * Response type discriminator
  */
 export type Type =
-  | "error"
-  | "completion.response"
-  | "completion.chunk"
-  | "completion.chunk.thinking"
-  | "completion.usage"
-  | "completion.sources"
-  | "completion.hitl.request"
-  | "event"
-  | "confirmation"
-  | string;
+  | 'error'
+  | 'completion.response'
+  | 'completion.chunk'
+  | 'completion.chunk.thinking'
+  | 'completion.usage'
+  | 'completion.sources'
+  | 'completion.hitl.request'
+  | 'event'
+  | 'confirmation'
+  | string
 /**
  * Response content
  */
-export type Content = string | number | null;
+export type Content = string | number | null
 /**
  * Current artifact identifier
  */
-export type ArtifactId = string;
+export type ArtifactId = string
 /**
  * Current artifact revision content
  */
-export type Content1 = string;
+export type Content1 = string
 /**
  * Message role
  */
-export type MessageRole = "user" | "assistant" | "system";
+export type MessageRole = 'user' | 'assistant' | 'system'
 /**
  * Message content
  */
-export type Content2 = string;
+export type Content2 = string
 /**
  * Configured provider identifier
  */
-export type ProviderId = string;
+export type ProviderId = string
 /**
  * LlamaIndex provider constructor discriminator
  */
-export type ProviderType = "ollama" | "openai_like" | "openai" | "anthropic";
+export type ProviderType = 'ollama' | 'openai_like' | 'openai' | 'anthropic'
 /**
  * Provider display name
  */
-export type Name = string;
+export type Name = string
 /**
  * Provider API base URL
  */
-export type BaseUrl = string;
+export type BaseUrl = string
 /**
  * Model identifier
  */
-export type Model = string;
+export type Model = string
 /**
  * Provider thinking mode
  */
-export type Thinking = boolean | ("low" | "medium" | "high") | null;
+export type Thinking = boolean | ('low' | 'medium' | 'high') | null
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "MessageRole".
  */
-export type MessageRole1 = "user" | "assistant" | "system";
+export type MessageRole1 = 'user' | 'assistant' | 'system'
+/**
+ * Enable automatic web research
+ */
+export type Enabled = boolean
+/**
+ * Selected web search provider
+ */
+export type SearchProvider = 'searxng' | 'duckduckgo'
+/**
+ * Selected web scraping provider
+ */
+export type ScraperProvider = 'trafilatura' | 'jina' | 'crawl4ai'
+/**
+ * Maximum search results to scrape
+ */
+export type MaxResults = number
 /**
  * User message to process
  */
-export type Message = string;
+export type Message = string
 /**
  * Chat history for context
  */
-export type ChatHistory = ChatMessageBase[];
+export type ChatHistory = ChatMessageBase[]
 /**
  * List of file paths to process
  */
-export type FileUploads = string[] | null;
+export type FileUploads = string[] | null
 /**
  * Subset of documents in vector database
  */
-export type KnowledgeHubs = string[] | null;
+export type KnowledgeHubs = string[] | null
 /**
  * Health status
  */
-export type Status = "ok";
+export type Status = 'ok'
 /**
  * Workflow name identifier
  */
-export type Name1 = string;
+export type Name1 = string
 /**
  * Workflow description
  */
-export type Description = string;
+export type Description = string
 /**
  * Path to workflow file
  */
-export type Path = string;
+export type Path = string
 /**
  * File being processed
  */
-export type Filename = string;
+export type Filename = string
 /**
  * Processing progress percentage
  */
-export type Progress = number;
+export type Progress = number
 /**
  * Number of files processed
  */
-export type Processed = number;
+export type Processed = number
 /**
  * Total files to process
  */
-export type Total = number;
+export type Total = number
 /**
  * The highlighted content
  */
-export type Content3 = string;
+export type Content3 = string
 /**
  * Content format type
  */
-export type Type1 = "code" | "markdown" | "plain";
+export type Type1 = 'code' | 'markdown' | 'plain'
 /**
  * Unique artifact identifier
  */
-export type Id = string;
+export type Id = string
 /**
  * Artifact content
  */
-export type Content4 = string;
+export type Content4 = string
 /**
  * Storage type discriminator
  */
-export type Type2 = "VectorStore" | "DocumentStore";
+export type Type2 = 'VectorStore' | 'DocumentStore'
 /**
  * Vector store or document store ID
  */
-export type Id1 = string;
+export type Id1 = string
 /**
  * Storage client identifier
  */
-export type Client = "qdrant" | "mongodb" | string;
+export type Client = 'qdrant' | 'mongodb' | string
 
 export interface ApiSchemas {
-  [k: string]: unknown;
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "DefaultResponse".
  */
 export interface DefaultResponse {
-  type: Type;
-  payload?: unknown;
-  content?: Content;
+  type: Type
+  payload?: unknown
+  content?: Content
   /**
    * Optional MIME-style content marker for completion chunks
    */
-  content_type?: string | null;
+  content_type?: string | null
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "ChatCompletionArtifactContext".
  */
 export interface ChatCompletionArtifactContext {
-  artifact_id: ArtifactId;
+  artifact_id: ArtifactId
   /**
    * Current artifact revision identifier
    */
-  revision_id?: string | null;
-  content: Content1;
-  [k: string]: unknown;
+  revision_id?: string | null
+  content: Content1
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "ChatMessageBase".
  */
 export interface ChatMessageBase {
-  role: MessageRole;
-  content: Content2;
-  [k: string]: unknown;
+  role: MessageRole
+  content: Content2
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "LlmProviderSettings".
  */
 export interface LlmProviderSettings {
-  provider_id: ProviderId;
-  provider_type: ProviderType;
-  name: Name;
-  base_url: BaseUrl;
+  provider_id: ProviderId
+  provider_type: ProviderType
+  name: Name
+  base_url: BaseUrl
   /**
    * Provider API key
    */
-  api_key?: string | null;
-  model: Model;
+  api_key?: string | null
+  model: Model
   /**
    * Sampling temperature
    */
-  temperature?: number | null;
+  temperature?: number | null
   /**
    * Maximum output tokens
    */
-  max_tokens?: number | null;
+  max_tokens?: number | null
   /**
    * Request timeout in seconds
    */
-  timeout?: number | null;
+  timeout?: number | null
   /**
    * Context window
    */
-  context_window?: number | null;
+  context_window?: number | null
   /**
    * Whether OpenAI-like provider uses chat endpoint
    */
-  is_chat_model?: boolean | null;
+  is_chat_model?: boolean | null
   /**
    * Whether provider supports function calling
    */
-  is_function_calling_model?: boolean | null;
-  thinking?: Thinking;
+  is_function_calling_model?: boolean | null
+  thinking?: Thinking
   /**
    * OpenAI reasoning effort
    */
-  reasoning_effort?: string | null;
-  config?: Config;
+  reasoning_effort?: string | null
+  config?: Config
 }
 /**
  * Provider-specific constructor options
  */
 export interface Config {
-  [k: string]: unknown;
+  [k: string]: unknown
+}
+/**
+ * This interface was referenced by `ApiSchemas`'s JSON-Schema
+ * via the `definition` "WebResearchConfig".
+ */
+export interface WebResearchConfig {
+  enabled?: Enabled
+  search_provider?: SearchProvider
+  scraper_provider?: ScraperProvider
+  max_results?: MaxResults
+  search?: Search
+  scraping?: Scraping
+}
+/**
+ * Search provider configuration keyed by provider name
+ */
+export interface Search {
+  [k: string]: {
+    [k: string]: unknown
+  }
+}
+/**
+ * Scraper provider configuration keyed by provider name
+ */
+export interface Scraping {
+  [k: string]: {
+    [k: string]: unknown
+  }
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "ChatCompletionRequest".
  */
 export interface ChatCompletionRequest {
-  message: Message;
-  chat_history?: ChatHistory;
+  message: Message
+  chat_history?: ChatHistory
   /**
    * Current artifact revision context
    */
-  artifact?: ChatCompletionArtifactContext | null;
-  llm_provider: LlmProviderSettings1;
+  artifact?: ChatCompletionArtifactContext | null
+  llm_provider: LlmProviderSettings1
+  web_research?: WebResearchConfig1
   /**
    * Enable Phoenix observability for this request
    */
-  observability?: boolean | null;
-  file_uploads?: FileUploads;
+  observability?: boolean | null
+  file_uploads?: FileUploads
   /**
    * Working folder path
    */
-  working_folder?: string | null;
-  knowledge_hubs?: KnowledgeHubs;
-  [k: string]: unknown;
+  working_folder?: string | null
+  knowledge_hubs?: KnowledgeHubs
+  [k: string]: unknown
 }
 /**
  * Resolved LLM provider settings for this request
  */
 export interface LlmProviderSettings1 {
-  provider_id: ProviderId;
-  provider_type: ProviderType;
-  name: Name;
-  base_url: BaseUrl;
+  provider_id: ProviderId
+  provider_type: ProviderType
+  name: Name
+  base_url: BaseUrl
   /**
    * Provider API key
    */
-  api_key?: string | null;
-  model: Model;
+  api_key?: string | null
+  model: Model
   /**
    * Sampling temperature
    */
-  temperature?: number | null;
+  temperature?: number | null
   /**
    * Maximum output tokens
    */
-  max_tokens?: number | null;
+  max_tokens?: number | null
   /**
    * Request timeout in seconds
    */
-  timeout?: number | null;
+  timeout?: number | null
   /**
    * Context window
    */
-  context_window?: number | null;
+  context_window?: number | null
   /**
    * Whether OpenAI-like provider uses chat endpoint
    */
-  is_chat_model?: boolean | null;
+  is_chat_model?: boolean | null
   /**
    * Whether provider supports function calling
    */
-  is_function_calling_model?: boolean | null;
-  thinking?: Thinking;
+  is_function_calling_model?: boolean | null
+  thinking?: Thinking
   /**
    * OpenAI reasoning effort
    */
-  reasoning_effort?: string | null;
-  config?: Config;
+  reasoning_effort?: string | null
+  config?: Config
+}
+/**
+ * Resolved web research settings for this request
+ */
+export interface WebResearchConfig1 {
+  enabled?: Enabled
+  search_provider?: SearchProvider
+  scraper_provider?: ScraperProvider
+  max_results?: MaxResults
+  search?: Search
+  scraping?: Scraping
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "HealthResponse".
  */
 export interface HealthResponse {
-  status: Status;
-  [k: string]: unknown;
+  status: Status
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "WorkflowInfo".
  */
 export interface WorkflowInfo {
-  name: Name1;
-  description?: Description;
-  path: Path;
-  [k: string]: unknown;
+  name: Name1
+  description?: Description
+  path: Path
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "EmbeddingProgress".
  */
 export interface EmbeddingProgress {
-  filename: Filename;
-  progress: Progress;
-  processed: Processed;
-  total: Total;
+  filename: Filename
+  progress: Progress
+  processed: Processed
+  total: Total
   /**
    * Error message if processing failed
    */
-  error?: string | null;
-  [k: string]: unknown;
+  error?: string | null
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "TextHighlight".
  */
 export interface TextHighlight {
-  content: Content3;
-  type?: Type1;
-  [k: string]: unknown;
+  content: Content3
+  type?: Type1
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "Artifact".
  */
 export interface Artifact {
-  id?: Id;
-  content: Content4;
-  [k: string]: unknown;
+  id?: Id
+  content: Content4
+  [k: string]: unknown
 }
 /**
  * This interface was referenced by `ApiSchemas`'s JSON-Schema
  * via the `definition` "KnowledgeGraphOrStorage".
  */
 export interface KnowledgeGraphOrStorage {
-  type?: Type2;
-  id: Id1;
-  client: Client;
-  [k: string]: unknown;
+  type?: Type2
+  id: Id1
+  client: Client
+  [k: string]: unknown
 }

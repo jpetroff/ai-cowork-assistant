@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeftIcon, BotIcon, UserIcon } from 'lucide-react'
+import { ArrowLeftIcon, BotIcon, SearchIcon, UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PersonalSettingsSection } from '@/components/settings/PersonalSettingsSection'
 import { ProvidersSettingsSection } from '@/components/settings/ProvidersSettingsSection'
+import { WebResearchSettingsSection } from '@/components/settings/WebResearchSettingsSection'
 
-type SettingsSection = 'personal' | 'providers'
+type SettingsSection = 'personal' | 'providers' | 'web-research'
 
 const sections: Array<{
   id: SettingsSection
@@ -14,6 +15,7 @@ const sections: Array<{
 }> = [
   { id: 'personal', label: 'Personal', icon: UserIcon },
   { id: 'providers', label: 'Providers', icon: BotIcon },
+  { id: 'web-research', label: 'Web Research', icon: SearchIcon },
 ]
 
 export function SettingsPage() {
@@ -56,11 +58,9 @@ export function SettingsPage() {
         </aside>
 
         <section className='min-w-0 overflow-y-auto px-page-x py-page-y'>
-          {section === 'personal' ? (
-            <PersonalSettingsSection />
-          ) : (
-            <ProvidersSettingsSection />
-          )}
+          {section === 'personal' && <PersonalSettingsSection />}
+          {section === 'providers' && <ProvidersSettingsSection />}
+          {section === 'web-research' && <WebResearchSettingsSection />}
         </section>
       </div>
     </main>

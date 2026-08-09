@@ -21,6 +21,7 @@ import type { Artifact, ArtifactRevision, Message } from '@/lib/db/types'
 import type { SealResult } from '@/lib/types'
 import { console_if } from '@/lib/logger'
 import { isViewingChatRoute } from '@/lib/routePresence'
+import { loadWebResearchConfig } from '@/components/settings/webResearchConfig'
 import {
   getStreamMetadata,
   parseMessageMetadata,
@@ -250,6 +251,8 @@ async function prepareGeneration({
     await setConversationActiveArtifact(conversationId, targetArtifactId)
   }
 
+  const webResearch = await loadWebResearchConfig()
+
   return {
     targetArtifactId,
     nextSequenceOrder,
@@ -269,6 +272,7 @@ async function prepareGeneration({
             content: sealResult.content,
           }
         : null,
+      web_research: webResearch,
     },
   }
 }

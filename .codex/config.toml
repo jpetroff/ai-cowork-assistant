@@ -1,4 +1,3 @@
-model = "gpt-5.5"
 approval_policy = "untrusted"
 sandbox_mode    = "workspace-write"
 web_search = "cached"
@@ -14,3 +13,6 @@ args = ["@hypothesi/tauri-mcp-server"]
 
 [mcp_servers.serena]
 url = "http://localhost:9121/mcp"
+
+[sandbox_workspace_write]
+network_access = false

@@ -124,6 +124,29 @@ class LlmProviderSettings(BaseModel):
     )
 
 
+class WebResearchConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+    enabled: bool = Field(default=True, description="Enable automatic web research")
+    search_provider: Literal["searxng", "duckduckgo"] = Field(
+        default="duckduckgo", description="Selected web search provider"
+    )
+    scraper_provider: Literal["trafilatura", "jina", "crawl4ai"] = Field(
+        default="trafilatura", description="Selected web scraping provider"
+    )
+    max_results: int = Field(
+        default=5, ge=1, le=10, description="Maximum search results to scrape"
+    )
+    search: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Search provider configuration keyed by provider name",
+    )
+    scraping: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Scraper provider configuration keyed by provider name",
+    )
+
+
 class ChatCompletionRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -139,6 +162,11 @@ class ChatCompletionRequest(BaseModel):
     )
     llm_provider: LlmProviderSettings = Field(
         description="Resolved LLM provider settings for this request"
+    )
+    web_research: WebResearchConfig = Field(
+        default_factory=WebResearchConfig,
+        validation_alias="webResearch",
+        description="Resolved web research settings for this request",
     )
 
     observability: Optional[bool] = Field(
